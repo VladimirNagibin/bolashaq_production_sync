@@ -44,7 +44,6 @@ services:
       - redis-data:/data
 
   rabbitmq:
-    # container_name: rabbitmq
     hostname: rabbitmq
     image: rabbitmq:3.12-management
     environment:

@@ -1,6 +1,6 @@
 services:
   bp_sync:
-    image: vlnag/bp_sync
+    image: vlnag/bolashaq_sync
     env_file:
       - .env
     volumes:
@@ -13,7 +13,7 @@ services:
         condition: service_healthy
 
   bp_sync-migrations:
-    image: vlnag/bp_sync
+    image: vlnag/bolashaq_sync
     env_file:
       - .env
     restart: no
@@ -45,7 +45,6 @@ services:
       - redis-data:/data
 
   rabbitmq:
-    container_name: rabbitmq
     hostname: rabbitmq
     image: rabbitmq:3.12-management
     environment:
