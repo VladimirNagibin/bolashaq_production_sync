@@ -1,0 +1,25 @@
+services:
+  bp_sync:
+    volumes:
+      - ./bp_sync/src:/opt/app
+      - code-data:/opt/app/data
+    env_file:
+      - ./.env
+    ports:
+     - 8000:8000
+
+  bp_sync-migrations:
+    volumes:
+      - ./bp_sync/src:/opt/app
+    env_file:
+      - ./.env
+
+  db:
+    ports:
+     - 5442:5432
+    env_file:
+      - ./.env
+
+  redis:
+    ports:
+      - 6379:6379

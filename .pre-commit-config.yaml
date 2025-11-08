@@ -1,0 +1,45 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-yaml          # Проверка синтаксиса YAML
+      - id: end-of-file-fixer   # Убедиться в наличии пустой строки в конце файла
+        exclude: \.(log|bin|png|jpg|pdf|log.*)$
+      - id: trailing-whitespace # Удалить пробелы в конце строк
+        exclude: \.(log|bin|png|jpg|pdf|log.*)$
+
+  - repo: https://github.com/psf/black
+    rev: 25.1.0
+    hooks:
+      - id: black                # Автоматическое форматирование кода (Python)
+        args: [--line-length=79] # Для Black тоже настройте длину строки
+
+  - repo: https://github.com/pycqa/isort
+    rev: 6.0.1                  # Укажите актуальную версию
+    hooks:
+      - id: isort
+        name: isort (python)
+        args: [--profile=black,
+               --line-length=79,
+               --multi-line=3,     # Стиль переноса импортов
+               --trailing-comma,   # Добавлять запятую после последнего импорта
+               #--force-sort-within-sections=false,  # Сортировка внутри секций
+               --skip=__init__.py  # Игнорировать файлы
+        ]
+
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.1.2
+    hooks:
+      - id: flake8               # Линтинг кода (Python)
+        args:
+          - --max-line-length=79
+          - --ignore=E203,W503   # Игнорируем ошибки
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.15.0  # Укажите актуальную версию
+    hooks:
+      - id: mypy
+        args: [--strict, --ignore-missing-imports, --show-error-codes]  # --strict
+        # additional_dependencies:
+        #  - "types-aiofiles"  # Установите пакет с типами
+        # additional_dependencies: [types-requests]  # Опциональные зависимости для типов
