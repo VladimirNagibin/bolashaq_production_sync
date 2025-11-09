@@ -26,6 +26,7 @@ openpyxl = "^3.1.5"
 types-pytz = "^2025.2.0.20250809"
 requests = "^2.32.5"
 types-requests = "^2.32.4.20250913"
+typer = "^0.20.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.10.0"

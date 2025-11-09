@@ -26,8 +26,8 @@ class Settings(BaseSettings):  # type: ignore
     PASS_ADMIN: str = "pass"
     TOKEN_EXPIRY_MINUTES: int = 60
 
-    BITRIX_LOGIN: str = ""
-    BITRIX_PASS: str = ""
+    # BITRIX_LOGIN: str = ""
+    # BITRIX_PASS: str = ""
     BITRIX_CLIENT_ID: str = ""
     BITRIX_CLIENT_SECRET: str = ""
     BITRIX_PORTAL: str = ""
@@ -54,14 +54,13 @@ class Settings(BaseSettings):  # type: ignore
     WEB_HOOK_KEY: str = ""
     ENDPOINT_SEND_FAIL_INVOICE: str = ""
     ENDPOINT_SEND_DEAL_STATUS: str = ""
-    WEB_HOOK_DEAL_UPDATE_TOKEN: str = "token"
+
     WEB_HOOK_TEST: bool = True
     DEAL_ID_TEST: int = 1
 
-    BOLASHAQ_BITRIX_PORTAL: str = "bolashaq"
-    BOLASHAQ_WEB_HOOK_PRODUCT_UPDATE_TOKEN: str = "token"
-    BOLASHAQ_WEB_HOOK_TOKEN: str = "/rest/token/"
-
+    WEB_HOOK_TOKEN: str = "/rest/token/"
+    WEB_HOOK_PRODUCT_UPDATE_TOKEN: str = "token"
+    WEB_HOOK_DEAL_UPDATE_TOKEN: str = "token"
     WEB_HOOK_COMPANY_UPDATE_TOKEN: str = "company_update_token"
     WEB_HOOK_CONTACT_UPDATE_TOKEN: str = "contact_update_token"
     WEB_HOOK_USER_UPDATE_TOKEN: str = "user_update_token"
@@ -147,6 +146,16 @@ class Settings(BaseSettings):  # type: ignore
                 "ONCRMINVOICEUPDATE",
                 "ONCRMINVOICEADD",
                 "ONCRMINVOICEDELETE",
+            },
+        )
+
+    @property
+    def web_hook_config_product(self) -> dict[str, Any]:
+        return self.web_hook_config_entity(
+            self.WEB_HOOK_PRODUCT_UPDATE_TOKEN,
+            {
+                "ONCRMPRODUCTUPDATE",
+                "ONCRMPRODUCTADD",
             },
         )
 
