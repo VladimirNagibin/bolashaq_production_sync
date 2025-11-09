@@ -5,6 +5,8 @@ WORKDIR /opt/app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
+# Install netcat for waiting services
+RUN apt-get update && apt-get install -y netcat-openbsd && rm -rf /var/lib/apt/lists/*
 
 COPY ./pyproject.toml /opt/app
 
@@ -15,4 +17,12 @@ RUN python -m pip install --no-cache-dir poetry==2.2.1 \
 
 COPY ./src /opt/app
 
-CMD ["python3", "/opt/app/main.py"]
+COPY ./entrypoint.sh /opt/app
+# Make entrypoint executable
+RUN chmod +x /opt/app/entrypoint.sh
+
+# Create non-root user
+RUN useradd --create-home --shell /bin/bash app
+USER app
+
+ENTRYPOINT ["/opt/app/entrypoint.sh"]

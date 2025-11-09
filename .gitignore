@@ -213,3 +213,4 @@ logs/
 data/
 
 .env_
+.env.mail

@@ -45,6 +45,9 @@ class Settings(BaseSettings):  # type: ignore
     RABBIT_PORT: int = 5672
     RABBIT_USER: str = "admin"
     RABBIT_PASSWORD: str = "zxcvbn"
+    RABBIT_VHOST: str = "/"
+    RABBIT_EMAIL_QUEUE: str = "email_messages"
+    RABBIT_EXCHANGE: str = "email_exchange"
 
     BASE_DIR: str = str(Path(__file__).resolve().parent.parent)
     LOGGING_FILE_MAX_BYTES: int = 500_000
