@@ -28,6 +28,12 @@ jobs:
           context: ./bp_sync/
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/bolashaq_sync:latest
+      - name: Push to DockerHub email worker
+        uses: docker/build-push-action@v4
+        with:
+          context: ./email_worker/
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/bolashaq_email_worker:latest
 
   deploy:
     runs-on: ubuntu-latest

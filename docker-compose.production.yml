@@ -62,6 +62,17 @@ services:
       retries: 3
       start_period: 30s
 
+  email-worker:
+    image: vlnag/bolashaq_email_worker
+    restart: unless-stopped
+    environment:
+      - LOG_LEVEL=INFO
+    env_file:
+      - .env.mail
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
 volumes:
   db_data:
   redis-data:
