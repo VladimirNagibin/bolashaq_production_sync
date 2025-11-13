@@ -8,6 +8,8 @@ ENV PYTHONUNBUFFERED=1
 # Install netcat for waiting services
 RUN apt-get update && apt-get install -y netcat-openbsd && rm -rf /var/lib/apt/lists/*
 
+RUN mkdir -p /opt/app/logs && chmod 755 /opt/app/logs
+
 COPY ./pyproject.toml /opt/app
 
 RUN python -m pip install --no-cache-dir poetry==2.2.1 \
