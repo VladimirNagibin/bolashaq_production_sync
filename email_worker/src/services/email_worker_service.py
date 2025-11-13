@@ -4,15 +4,18 @@ from typing import Any
 
 from core.logger import logger
 from core.settings import settings
+from schemas.email_schemas import EVENT_ROUTING, EmailMessage, TypeEvent
 
-from .email_client import EmailClient
+from .email_checker import EmailChecker
+from .parser_service import RequestParserService
 from .rabbitmq_client import RabbitMQClient
 
 
 class EmailWorkerService:
     def __init__(self) -> None:
-        self.email_client = EmailClient()
+        self.email_client = EmailChecker()
         self.rabbitmq_client = RabbitMQClient()
+        self.parser_service = RequestParserService()
         self.is_running = False
         self.processed_count = 0
         self.error_count = 0
@@ -20,10 +23,6 @@ class EmailWorkerService:
     async def initialize(self) -> None:
         """Инициализирует сервис"""
         logger.info("Initializing Email Worker Service...")
-
-        # Подключаемся к почте
-        if not self.email_client.connect():
-            raise RuntimeError("Failed to connect to email server")
 
         # Подключаемся к RabbitMQ
         if not await self.rabbitmq_client.startup():
@@ -49,7 +48,7 @@ class EmailWorkerService:
 
             if success:
                 # Помечаем письмо как прочитанное
-                self.email_client.mark_as_read(email_msg.message_id)
+                self.email_client.mark_as_read(str(email_msg.message_id))
 
                 self.processed_count += 1
                 logger.info(
@@ -85,7 +84,7 @@ class EmailWorkerService:
 
             # Получаем новые письма
             new_emails = self.email_client.get_new_emails(
-                since_minutes=settings.EMAIL_CHECK_INTERVAL // 60
+                since_minutes=settings.EMAIL_CHECK_INTERVAL // 60 + 1
             )
 
             if not new_emails:
@@ -97,6 +96,13 @@ class EmailWorkerService:
             # Обрабатываем каждое письмо
             processed_count = 0
             for email_msg in new_emails:
+                type_event = self._get_type_event(email_msg)
+                email_msg.type_event = type_event
+                body = email_msg.body
+                if parsed_body := self.parser_service.parse_request(
+                    body, type_event
+                ):
+                    email_msg.parsed_body = parsed_body
                 if await self.process_email(email_msg):
                     processed_count += 1
 
@@ -104,15 +110,18 @@ class EmailWorkerService:
                 f"Successfully processed {processed_count} out of "
                 f"{len(new_emails)} emails"
             )
-
         except Exception as e:
             logger.error(f"Error in email check cycle: {e}")
+        finally:
+            self.email_client.disconnect()
+
+    def _get_type_event(self, email_msg: EmailMessage) -> TypeEvent | None:
+        return EVENT_ROUTING.get(email_msg.subject)
 
     async def run(self) -> None:
         """Запускает основной цикл работы сервиса"""
         self.is_running = True
         logger.info("Email Worker Service started")
-
         try:
             await self.initialize()
 
@@ -142,7 +151,7 @@ class EmailWorkerService:
         self.is_running = False
         logger.info("Shutting down Email Worker Service...")
 
-        self.email_client.disconnect()
+        # self.email_client.disconnect()
         await self.rabbitmq_client.shutdown()
 
         logger.info(

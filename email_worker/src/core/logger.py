@@ -22,12 +22,12 @@ LOGGING: dict[str, Any] = {  # noqa: WPS407
     "formatters": {
         "verbose": {"format": LOG_FORMAT},
         "default": {
-            "()": "uvicorn.logging.DefaultFormatter",
+            # "()": "uvicorn.logging.DefaultFormatter",
             "fmt": "%(levelprefix)s %(message)s",
             "use_colors": None,
         },
         "access": {  # noqa: WPS226
-            "()": "uvicorn.logging.AccessFormatter",
+            # "()": "uvicorn.logging.AccessFormatter",
             "fmt": (
                 "%(levelprefix)s %(client_addr)s - '%(request_line)s' "
                 "%(status_code)s"
@@ -56,14 +56,14 @@ LOGGING: dict[str, Any] = {  # noqa: WPS407
             "handlers": LOG_DEFAULT_HANDLERS,
             "level": "INFO",  # noqa: WPS226
         },
-        "uvicorn.error": {
-            "level": "INFO",
-        },
-        "uvicorn.access": {
-            "handlers": ["access"],
-            "level": "INFO",
-            "propagate": False,
-        },
+        # "uvicorn.error": {
+        #    "level": "INFO",
+        # },
+        # "uvicorn.access": {
+        #    "handlers": ["access"],
+        #    "level": "INFO",
+        #    "propagate": False,
+        # },
     },
     "root": {
         "level": "INFO",

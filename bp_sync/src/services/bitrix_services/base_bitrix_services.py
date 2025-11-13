@@ -209,12 +209,12 @@ class BaseBitrixEntityClient(Generic[SchemaTypeCreate, SchemaTypeUpdate]):
             entity_type_id,
             crm,
         )
-        return self.create_schema(**result)
+        return self.create_schema(**result)  # type: ignore[no-any-return]
 
     @handle_bitrix_errors()
     async def update(
         self,
-        data: SchemaTypeUpdate,
+        data: SchemaTypeUpdate | SchemaTypeCreate,
         entity_type_id: int | None = None,
         crm: bool = True,
     ) -> bool:

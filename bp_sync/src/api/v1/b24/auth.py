@@ -2,10 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 
 from core.logger import logger
-from services.bitrix_services.bitrix_oauth_client import (
-    BitrixOAuthClient,
-    get_oauth_client,
-)
+from services.bitrix_services.bitrix_oauth_client import BitrixOAuthClient
+from services.dependencies import get_oauth_client
 from services.exceptions import BitrixAuthError
 
 auth_router = APIRouter()

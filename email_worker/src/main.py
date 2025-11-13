@@ -26,7 +26,6 @@ async def main() -> None:
         SystemExit: При возникновении критических ошибок
     """
     logger.info("Starting Email Worker Service...")
-
     service = EmailWorkerService()
 
     # Обработка сигналов для graceful shutdown

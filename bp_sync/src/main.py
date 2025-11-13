@@ -14,7 +14,8 @@ from core.logger import LOGGING, logger
 from core.settings import settings
 from db.postgres import engine
 from db.redis import close_redis, init_redis
-from services.rabbitmq_client import get_rabbitmq
+from services.dependencies import initialize_container, shutdown_container
+from services.rabbitmq_client import get_rabbitmq  # type: ignore[attr-defined]
 
 
 async def _init_rabbitmq() -> None:
@@ -31,9 +32,11 @@ async def _shutdown_rabbitmq() -> None:
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await init_redis()
     await _init_rabbitmq()
+    await initialize_container()
     yield
     await close_redis()
     await _shutdown_rabbitmq()
+    await shutdown_container()
 
 
 def setup_routes(app: FastAPI) -> None:
