@@ -19,12 +19,14 @@ async def check(
     redis: Redis = Depends(get_redis_session),
     contact_client: ContactBitrixClient = Depends(get_contact_bitrix_client),
 ) -> JSONResponse:
-
-    result = await contact_client.get(21)
-    print(result)
+    try:
+        result = await contact_client.get(21)
+        result_ = result.model_dump_json()
+    except Exception as e:
+        result_ = str(e)
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
-            "status": await redis.info(),
+            "status": result_,
         },
     )
