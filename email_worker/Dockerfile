@@ -24,10 +24,10 @@ COPY ./src /opt/app
 
 COPY ./entrypoint.sh /opt/app
 # Make entrypoint executable
-USER appuser
 
 RUN chmod +x /opt/app/entrypoint.sh
 
+USER appuser
 # Create non-root user
 # RUN useradd --create-home --shell /bin/bash app
 # USER app
