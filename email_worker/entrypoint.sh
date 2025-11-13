@@ -5,8 +5,8 @@ set -e
 echo "Starting Email Worker Service..."
 
 # Wait for RabbitMQ to be ready
-echo "Waiting for RabbitMQ at ${RABBITMQ_HOST}:${RABBITMQ_PORT}..."
-while ! nc -z ${RABBITMQ_HOST} ${RABBITMQ_PORT}; do
+echo "Waiting for RabbitMQ at ${RABBIT_HOST}:${RABBIT_PORT}..."
+while ! nc -z ${RABBIT_HOST} ${RABBIT_PORT}; do
   sleep 1
 done
 echo "RabbitMQ is ready!"
