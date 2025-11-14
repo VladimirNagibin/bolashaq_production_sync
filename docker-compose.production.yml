@@ -1,19 +1,19 @@
 services:
   bp_sync:
-    image: vlnag/bp_sync
+    image: vlnag/bolashaq_sync
     env_file:
       - .env
     volumes:
       - code-data:/opt/app/data
       - logs-data:/opt/app/logs
     ports:
-     - 8000:8000
+     - 8080:8080
     depends_on:
       db:
         condition: service_healthy
 
   bp_sync-migrations:
-    image: vlnag/bp_sync
+    image: vlnag/bolashaq_sync
     env_file:
       - .env
     restart: no
@@ -45,7 +45,6 @@ services:
       - redis-data:/data
 
   rabbitmq:
-    container_name: rabbitmq
     hostname: rabbitmq
     image: rabbitmq:3.12-management
     environment:
@@ -62,6 +61,17 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+
+  email-worker:
+    image: vlnag/bolashaq_email_worker
+    restart: unless-stopped
+    environment:
+      - LOG_LEVEL=INFO
+    env_file:
+      - .env.mail
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
 
 volumes:
   db_data:

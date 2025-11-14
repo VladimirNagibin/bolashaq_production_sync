@@ -23,3 +23,7 @@ services:
   redis:
     ports:
       - 6379:6379
+
+  email-worker:
+    volumes:
+      - ./email_worker/src:/opt/app

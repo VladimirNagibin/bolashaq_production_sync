@@ -1,32 +1,17 @@
 [tool.poetry]
-name = "bp_sync"
+name = "email_worker"
 version = "0.1.0"
-description = "bitrix production sync"
+description = "receiving and processing e-mai"
 authors = ["VlNagibin"]
 readme = "README.md"
 package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.11"
-fastapi = "^0.115.11"
-orjson = "^3.10.15"
-asyncpg = "^0.30.0"
-pydantic-settings = "^2.6.1"
-uvicorn = "^0.34.0"
-SQLAlchemy = {version = "^2.0.37", extras = ["asyncio"]}
-Alembic = "^1.14.0"
-sqladmin = "^0.20.1"
-pandas = "^2.2.3"
-redis = "^6.2.0"
-cryptography = "^45.0.4"
-python-jose = {extras = ["cryptography"], version = "^3.4.0"}
-itsdangerous = "^2.2.0"
 aio-pika = "^9.5.7"
-openpyxl = "^3.1.5"
-types-pytz = "^2025.2.0.20250809"
-requests = "^2.32.5"
-types-requests = "^2.32.4.20250913"
-typer = "^0.20.0"
+pydantic-settings = "^2.6.1"
+imaplib2 = "^3.6"
+cryptography = "^45.0.4"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.10.0"

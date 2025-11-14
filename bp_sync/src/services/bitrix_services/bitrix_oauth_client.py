@@ -18,19 +18,19 @@ class BitrixOAuthClient(BaseBitrixClient):
 
     def __init__(
         self,
-        portal_domain: str,
-        client_id: str,
-        client_secret: str,
-        redirect_uri: str,
         token_storage: TokenStorage,
+        portal_domain: str | None = None,
+        client_id: str | None = None,
+        client_secret: str | None = None,
+        redirect_uri: str | None = None,
         timeout: float = DEFAULT_TIMEOUT,
     ):
         super().__init__(timeout)
-        self.portal_domain = portal_domain
-        self.client_id = client_id
-        self.client_secret = client_secret
-        self.redirect_uri = redirect_uri
-        self.token_url = f"{portal_domain}{TOKEN_ENDPOINT}"
+        self.portal_domain = portal_domain or settings.BITRIX_PORTAL
+        self.client_id = client_id or settings.BITRIX_CLIENT_ID
+        self.client_secret = client_secret or settings.BITRIX_CLIENT_SECRET
+        self.redirect_uri = redirect_uri or settings.BITRIX_REDIRECT_URI
+        self.token_url = f"{self.portal_domain}{TOKEN_ENDPOINT}"
         self.token_storage = token_storage
 
     async def get_valid_token(self) -> str:
@@ -197,9 +197,5 @@ def get_oauth_client(
         Экземпляр BitrixOAuthClient
     """
     return BitrixOAuthClient(
-        portal_domain=settings.BITRIX_PORTAL,
-        client_id=settings.BITRIX_CLIENT_ID,
-        client_secret=settings.BITRIX_CLIENT_SECRET,
-        redirect_uri=settings.BITRIX_REDIRECT_URI,
         token_storage=token_storade,
     )

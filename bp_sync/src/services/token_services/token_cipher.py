@@ -18,7 +18,7 @@ from ..exceptions import (
 class TokenCipher:
     """Сервис для симметричного шифрования токенов с использованием Fernet."""
 
-    def __init__(self, encryption_key: str):
+    def __init__(self, encryption_key: str | None = None):
         """
         Инициализация шифровальщика.
 
@@ -28,6 +28,7 @@ class TokenCipher:
         Raises:
             InvalidEncryptionKeyError: Если ключ некорректен
         """
+        encryption_key = encryption_key or settings.ENCRYPTION_KEY
 
         if not encryption_key:
             raise InvalidEncryptionKeyError("Encryption key cannot be empty")
@@ -172,8 +173,5 @@ def get_token_cipher() -> TokenCipher:
     Raises:
         InvalidEncryptionKeyError: Если ключ шифрования некорректен
     """
-    if not settings.ENCRYPTION_KEY:
-        logger.critical("Encryption key is not configured")
-        raise InvalidEncryptionKeyError("ENCRYPTION_KEY is not set")
 
-    return TokenCipher(settings.ENCRYPTION_KEY)
+    return TokenCipher()

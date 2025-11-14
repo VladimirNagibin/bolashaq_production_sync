@@ -44,7 +44,6 @@ services:
       - redis-data:/data
 
   rabbitmq:
-    # container_name: rabbitmq
     hostname: rabbitmq
     image: rabbitmq:3.12-management
     environment:
@@ -59,6 +58,18 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+
+  email-worker:
+    build: ./email_worker
+    container_name: email_worker_service
+    restart: unless-stopped
+    environment:
+      - LOG_LEVEL=INFO
+    env_file:
+      - .env.mail
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
 
 volumes:
   db_data:

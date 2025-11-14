@@ -14,14 +14,8 @@ from core.logger import LOGGING, logger
 from core.settings import settings
 from db.postgres import engine
 from db.redis import close_redis, init_redis
-from services.rabbitmq_client import get_rabbitmq
-
-# from cryptography.fernet import Fernet
-# new_key = Fernet.generate_key()
-
-# Преобразовать в строку для хранения
-# key_str = new_key.decode('utf-8')
-# print("Сгенерированный ключ:", key_str)
+from services.dependencies import initialize_container, shutdown_container
+from services.rabbitmq_client import get_rabbitmq  # type: ignore[attr-defined]
 
 
 async def _init_rabbitmq() -> None:
@@ -38,9 +32,11 @@ async def _shutdown_rabbitmq() -> None:
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await init_redis()
     await _init_rabbitmq()
+    await initialize_container()
     yield
     await close_redis()
     await _shutdown_rabbitmq()
+    await shutdown_container()
 
 
 def setup_routes(app: FastAPI) -> None:
