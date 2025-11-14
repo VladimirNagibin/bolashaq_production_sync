@@ -27,3 +27,7 @@ services:
   email-worker:
     volumes:
       - ./email_worker/src:/opt/app
+
+  message-to-deal-worker:
+    volumes:
+      - ./message_to_deal_worker/src:/opt/app
