@@ -73,6 +73,8 @@ class Settings(BaseSettings):  # type: ignore
     CHAT_SUPERVISOR: int = 115
     TYPE_CHAT_SUPERVISOR: bool = False
 
+    MANAGERS: set[int] = {33, 35}
+
     @property
     def dsn(self) -> str:
         return (

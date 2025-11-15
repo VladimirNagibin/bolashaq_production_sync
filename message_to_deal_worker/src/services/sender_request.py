@@ -73,14 +73,16 @@ class SiteRequestService:
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
 
         try:
+            headers: dict[str, Any] = {}
 
-            # Добавляем API ключ если есть
-            # if self.api_key:
-            #    params['api_key'] = self.api_key
+            if self.api_key:
+                headers["X-API-Key"] = self.api_key
 
             logger.info(f"Отправка запроса к {url} с параметрами: {params}")
 
-            async with self.session.get(url, params=params) as response:
+            async with self.session.get(
+                url, params=params, headers=headers
+            ) as response:
                 response_text = await response.text()
 
                 if response.status == HTTPStatus.OK:
