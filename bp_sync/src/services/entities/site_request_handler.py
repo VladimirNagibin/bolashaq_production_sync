@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import HTTPException, status
 
 from core.logger import logger
+from core.settings import settings
 from schemas.deal_schemas import DealUpdate
 from schemas.enums import EntityTypeAbbr, StageSemanticEnum
 from schemas.product_schemas import ListProductEntity, ProductEntityCreate
@@ -13,7 +14,6 @@ from ..exceptions import BitrixApiError
 if TYPE_CHECKING:
     from .entities_bitrix_services import EntitiesBitrixClient
 
-MANAGERS = {33, 35, 13, 37}  # Maylen, Azamat
 DEFAULT_DEAL_TITLE = "Запрос цены с сайта"
 
 
@@ -28,7 +28,11 @@ class SiteRequestHandler:
     - Обработку ошибок и логирование
     """
 
-    def __init__(self, entities_bitrix_client: "EntitiesBitrixClient"):
+    def __init__(
+        self,
+        entities_bitrix_client: "EntitiesBitrixClient",
+        managers: set[int] | None = None,
+    ):
         """
         Инициализация обработчика.
 
@@ -36,6 +40,7 @@ class SiteRequestHandler:
             entities_bitrix_client: Клиент для работы с сущностями Bitrix24
         """
         self.entities_bitrix_client = entities_bitrix_client
+        self.managers = managers or settings.MANAGERS
 
     async def handle_request_price(
         self,
@@ -289,13 +294,13 @@ class SiteRequestHandler:
         Raises:
             ValueError: Если нет доступных менеджеров
         """
-        if not MANAGERS:
+        if not self.managers:
             raise ValueError("Список менеджеров пуст")
 
         # Получаем все активные сделки для указанных менеджеров
         filter_entity: dict[str, Any] = {
             "STAGE_SEMANTIC_ID": StageSemanticEnum.PROSPECTIVE.value,
-            "ASSIGNED_BY_ID": list(MANAGERS),
+            "ASSIGNED_BY_ID": list(self.managers),
         }
         select = ["ID", "ASSIGNED_BY_ID"]
 
@@ -311,11 +316,11 @@ class SiteRequestHandler:
 
             for deal in deals_response.result:
                 manager_id = getattr(deal, "assigned_by_id", None)
-                if manager_id and manager_id in MANAGERS:
+                if manager_id and manager_id in self.managers:
                     manager_deal_count[manager_id] += 1
 
             # Добавляем менеджеров без сделок (счетчик = 0)
-            for manager_id in MANAGERS:
+            for manager_id in self.managers:
                 if manager_id not in manager_deal_count:
                     manager_deal_count[manager_id] = 0
 
@@ -348,7 +353,7 @@ class SiteRequestHandler:
                 extra={"error": str(e)},
                 exc_info=True,
             )
-        return next(iter(MANAGERS))
+        return next(iter(self.managers))
 
     async def _get_assigned_contact(self, contact_id: int) -> int:
         """

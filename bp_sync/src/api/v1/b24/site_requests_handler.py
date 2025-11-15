@@ -4,6 +4,8 @@ from fastapi.responses import JSONResponse
 from services.dependencies_entity import get_entity_bitrix_client
 from services.entities.entities_bitrix_services import EntitiesBitrixClient
 
+from ..deps import verify_api_key
+
 site_requests_router = APIRouter(prefix="/site_request")
 
 
@@ -20,6 +22,7 @@ async def site_request(
     comment: str | None = None,
     message_id: str | None = None,
     entity_client: EntitiesBitrixClient = Depends(get_entity_bitrix_client),
+    verify_api_key: str = Depends(verify_api_key),
 ) -> JSONResponse:
     try:
         result = await entity_client.handle_request_price(

@@ -34,6 +34,12 @@ jobs:
           context: ./email_worker/
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/bolashaq_email_worker:latest
+      - name: Push to DockerHub message handler worker
+        uses: docker/build-push-action@v4
+        with:
+          context: ./message_to_deal_worker/
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/bolashaq_message_to_deal_worker:latest
 
   deploy:
     runs-on: ubuntu-latest

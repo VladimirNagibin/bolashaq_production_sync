@@ -9,6 +9,7 @@ from sqladmin import Admin
 from admin.admin_models import register_models
 from admin.authenticate import BasicAuthBackend
 from api.v1.b24.b24_router import b24_router
+from api.v1.health_checker import healht_router
 from api.v1.test import test_router
 from core.logger import LOGGING, logger
 from core.settings import settings
@@ -43,6 +44,7 @@ def setup_routes(app: FastAPI) -> None:
     """Настройка маршрутов приложения."""
     app.include_router(b24_router, prefix="/api/v1/b24", tags=["b24"])
     app.include_router(test_router, prefix="/api/v1/test", tags=["test"])
+    app.include_router(healht_router, prefix="/api/v1", tags=["health"])
 
 
 def setup_admin_panel(app: FastAPI) -> None:
