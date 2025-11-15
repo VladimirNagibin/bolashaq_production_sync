@@ -76,7 +76,7 @@ services:
     env_file:
       - .env.mail
     volumes:
-      - logs-data:/opt/app/logs
+      - logs-email:/opt/app/logs
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -89,7 +89,7 @@ services:
     env_file:
       - .env.mess
     volumes:
-      - logs-data:/opt/app/logs
+      - logs-mess:/opt/app/logs
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -101,4 +101,6 @@ volumes:
   redis-data:
   code-data:
   logs-data:
+  logs-email:
+  logs-mess:
   rabbitmq-data:
