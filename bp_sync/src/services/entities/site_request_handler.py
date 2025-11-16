@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from .entities_bitrix_services import EntitiesBitrixClient
 
 DEFAULT_DEAL_TITLE = "Запрос цены с сайта"
+TAX_RATE_DEFAULT = 12
 
 
 class SiteRequestHandler:
@@ -558,6 +559,8 @@ class SiteRequestHandler:
                 "product_name": product_name,
                 "quantity": quantity,
                 "price": price,
+                "tax_included": True,
+                "tax_rate": TAX_RATE_DEFAULT,
             }
             if discount is not None:
                 product_data["discount_sum"] = discount
