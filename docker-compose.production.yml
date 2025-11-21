@@ -3,6 +3,7 @@ services:
     image: vlnag/bolashaq_sync
     env_file:
       - .env
+    restart: unless-stopped
     volumes:
       - code-data:/opt/app/data
       - logs-data:/opt/app/logs
@@ -17,6 +18,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
 
   bp_sync-migrations:
     image: vlnag/bolashaq_sync
@@ -30,7 +33,7 @@ services:
 
   db:
     image: postgres:17.4-bookworm
-    restart: always
+    restart: unless-stopped
     env_file:
       - .env
     volumes:
@@ -49,6 +52,14 @@ services:
     command: redis-server --requirepass ${REDIS_PASSWORD} --save 60 1 --appendonly yes
     volumes:
       - redis-data:/data
+    healthcheck:
+        test: |
+          redis-cli -a ${REDIS_PASSWORD} ping | grep PONG
+        interval: 10s
+        timeout: 5s
+        retries: 5
+        start_period: 20s
+    restart: unless-stopped
 
   rabbitmq:
     hostname: rabbitmq
@@ -67,6 +78,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    restart: unless-stopped
 
   email-worker:
     image: vlnag/bolashaq_email_worker

@@ -5,7 +5,7 @@ from pydantic import Field, field_validator
 
 from .base_schemas import BaseCreateSchema, BaseUpdateSchema
 from .bitrix_validators import BitrixValidators
-from .enums import StageSemanticEnum
+from .enums import DealStatusEnum, StageSemanticEnum
 
 
 class BaseDeal:
@@ -70,10 +70,16 @@ class BaseDeal:
     wz_maxid: str | None = Field(None, alias="UF_CRM_6909F9E9994A9")
 
     # Вспомогательные флаги
-    # is_frozen: bool | None = Field(default=None)
-    # is_setting_source: bool | None = Field(default=None)
+    without_offer: bool | None = Field(default=None, alias="UF_CRM_1763633586")
+    without_contract: bool | None = Field(
+        default=None, alias="UF_CRM_1763633629"
+    )
 
-    # moved_date: Optional[datetime] = Field(default=None)
+    offer_link: str | None = Field(None, alias="UF_CRM_1763483026")
+    date_answer_client: datetime | None = Field(
+        default=None, alias="UF_CRM_1763626692"
+    )
+    moved_date: datetime | None = Field(default=None)
 
     @field_validator("external_id", mode="before")  # type: ignore[misc]
     @classmethod
@@ -114,6 +120,10 @@ class DealCreate(BaseCreateSchema, BaseDeal):
     stage_id: str = Field(..., alias="STAGE_ID")
     category_id: int = Field(..., alias="CATEGORY_ID")
 
+    status_deal: DealStatusEnum = Field(
+        DealStatusEnum.NOT_DEFINE, alias="UF_CRM_1763479557"
+    )
+
     @field_validator("stage_semantic_id", mode="before")  # type: ignore[misc]
     @classmethod
     def convert_stage_semantic_id(cls, v: Any) -> StageSemanticEnum:
@@ -127,6 +137,13 @@ class DealCreate(BaseCreateSchema, BaseDeal):
         if value is None:
             return datetime.now(timezone.utc)
         return value
+
+    @field_validator("status_deal", mode="before")  # type: ignore[misc]
+    @classmethod
+    def convert_status_deal(cls, v: Any) -> DealStatusEnum:
+        return BitrixValidators.convert_enum(
+            v, DealStatusEnum, DealStatusEnum.NOT_DEFINE
+        )
 
 
 class DealUpdate(BaseUpdateSchema, BaseDeal):
@@ -165,9 +182,20 @@ class DealUpdate(BaseUpdateSchema, BaseDeal):
     stage_id: str | None = Field(default=None, alias="STAGE_ID")
     category_id: int | None = Field(default=None, alias="CATEGORY_ID")
 
+    status_deal: DealStatusEnum | None = Field(
+        default=None, alias="UF_CRM_1763479557"
+    )
+
     @field_validator("stage_semantic_id", mode="before")  # type: ignore[misc]
     @classmethod
     def convert_stage_semantic_id(cls, v: Any) -> StageSemanticEnum:
         return BitrixValidators.convert_enum(
             v, StageSemanticEnum, StageSemanticEnum.PROSPECTIVE
+        )
+
+    @field_validator("status_deal", mode="before")  # type: ignore[misc]
+    @classmethod
+    def convert_status_deal(cls, v: Any) -> DealStatusEnum:
+        return BitrixValidators.convert_enum(
+            v, DealStatusEnum, DealStatusEnum.NOT_DEFINE
         )

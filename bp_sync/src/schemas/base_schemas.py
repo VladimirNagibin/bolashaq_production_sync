@@ -13,9 +13,8 @@ from pydantic import (
 from typing_extensions import Self
 
 from .bitrix_validators import BitrixValidators
+from .enums import CURRENCY
 from .fields import FIELDS_BY_TYPE, FIELDS_BY_TYPE_ALT
-
-CURRENCY = "KZT"
 
 
 class CommonFieldMixin(BaseModel):  # type: ignore[misc]
@@ -31,6 +30,7 @@ class CommonFieldMixin(BaseModel):  # type: ignore[misc]
         "created_at",
         "updated_at",
         "is_deleted_in_bitrix",
+        "moved_date",
     }
     internal_id: UUID | None = Field(
         default=None,
@@ -427,8 +427,8 @@ class EntityAwareSchema(BaseModel):  # type: ignore[misc]
         Args:
             alias_choice (int, optional): Выбор схемы алиасов.
                 Возможные значения:
-                1 - алиасы для базовых сущностей (по умолчанию)
-                2 - алиасы для обобщённых сущностей (item)
+                1 - алиасы для базовых сущностей (по умолчанию, первые)
+                2 - алиасы для обобщённых сущностей (item, вторые)
                 <1 - преобразуется в 1
                 >2 - преобразуется в 2
                 Default: 1.

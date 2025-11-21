@@ -5,11 +5,12 @@ from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from db.postgres import Base
+from schemas.enums import CommunicationType, EntityType
 
-from .bases import CommunicationType, EntityType, IntIdEntity
+from .bases import IntIdEntity
 
 
-class CommunicationChannelType(Base):
+class CommunicationChannelType(Base):  # type: ignore[misc]
     """Типы коммуникационных каналов."""
 
     __tablename__ = "communication_channel_types"

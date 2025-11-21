@@ -33,6 +33,7 @@ FIELDS_BY_TYPE: dict[str, Any] = {
         "UF_CRM_6909F9E9A38DA",  # wz_telegram_username
         "UF_CRM_6909F9E9ADB80",  # wz_telegram_id
         "UF_CRM_1760952984",  # contract
+        "UF_CRM_1763483026",  # offer_link
         # lead
         "NAME",  # "name:",
         "SECOND_NAME",  # "second_name:",
@@ -159,6 +160,8 @@ FIELDS_BY_TYPE: dict[str, Any] = {
     ],
     "bool_none": [  # 1 / 0
         # deal
+        "UF_CRM_1763633586",  # without_offer
+        "UF_CRM_1763633629",  # without_contract
         # lead
         "UF_CRM_1623830089",  # "is_shipment_approved"
         # contact
@@ -178,6 +181,7 @@ FIELDS_BY_TYPE: dict[str, Any] = {
         "LAST_ACTIVITY_TIME",  # "last_activity_time",
         "LAST_COMMUNICATION_TIME",  # "last_communication_time",
         "MOVED_TIME",  # "moved_time",
+        "UF_CRM_1763626692",  # date_answer_client
         # lead
         "BIRTHDATE",  # "birthdate"
         "DATE_CLOSED",  # "date_closed"
@@ -199,6 +203,7 @@ FIELDS_BY_TYPE: dict[str, Any] = {
     "enums": [
         # deal
         "STAGE_SEMANTIC_ID",  # "stage_semantic_id",
+        "UF_CRM_1763479557",  # status_deal
         # lead
         "STATUS_SEMANTIC_ID",  # "status_semantic_id",
     ],
@@ -257,6 +262,7 @@ FIELDS_BY_TYPE_ALT: dict[str, Any] = {
         "location_id",
         "repeat_sale_segment_id",
         "contract",
+        "offer_link",
         # lead
         "name:",
         "second_name:",
@@ -336,6 +342,8 @@ FIELDS_BY_TYPE_ALT: dict[str, Any] = {
     ],
     "bool_none": [  # 1 / 0
         # deal
+        "without_offer",
+        "without_contract",
     ],
     "datetime": [
         # deal
@@ -349,6 +357,7 @@ FIELDS_BY_TYPE_ALT: dict[str, Any] = {
         "last_activity_time",
         "last_communication_time",
         "moved_time",
+        "date_answer_client",
         # lead
         "birthdate",
         "date_closed",
@@ -364,6 +373,7 @@ FIELDS_BY_TYPE_ALT: dict[str, Any] = {
     "enums": [
         # deal
         "stage_semantic_id",
+        "status_deal",
         # lead
         "status_semantic_id",
     ],
@@ -466,3 +476,69 @@ FIELDS_PRODUCT_ALT: dict[str, Any] = {
         "store_id",
     ],
 }
+
+FIELDS_USER: dict[str, Any] = {
+    "str_none": [
+        "NAME",  # "name",
+        "SECOND_NAME",  # "second_name",
+        "LAST_NAME",  # "last_name",
+        "XML_ID",  # "xml_id",
+        "PERSONAL_GENDER",  # "personal_gender",
+        "WORK_POSITION",  # "work_position",
+        "USER_TYPE",  # "user_type",
+        "TIME_ZONE",  # "time_zone",
+        "PERSONAL_CITY",  # "personal_city",
+        "EMAIL",  # "email",
+        "PERSONAL_MOBILE",  # "personal_mobile",
+        "WORK_PHONE",  # "work_phone",
+        "PERSONAL_WWW",  # "personal_www",
+    ],
+    "datetime_none": [
+        "LAST_LOGIN",  # "last_login",
+        "DATE_REGISTER",  # "date_register",
+        "PERSONAL_BIRTHDAY",  # "personal_birthday",
+        "UF_EMPLOYMENT_DATE",  # "employment_date",
+        "UF_USR_1699347879988",  # "date_new",
+    ],
+    "bool": [  # Y / N
+        "ACTIVE",  # "active",
+        "IS_ONLINE",  # "is_online",
+    ],
+    "list_in_int": [
+        "UF_DEPARTMENT",  # "department_id",
+    ],
+}
+
+FIELDS_USER_ALT: dict[str, Any] = {
+    "str_none": [
+        "name",
+        "second_name",
+        "last_name",
+        "xml_id",
+        "personal_gender",
+        "work_position",
+        "user_type",
+        "time_zone",
+        "personal_city",
+        "email",
+        "personal_mobile",
+        "work_phone",
+        "personal_www",
+    ],
+    "datetime_none": [
+        "last_login",
+        "date_register",
+        "personal_birthday",
+        "employment_date",
+        "date_new",
+    ],
+    "bool": [  # Y / N
+        "active",
+        "is_online",
+    ],
+    "list_in_int": [
+        "department_id",
+    ],
+}
+
+FIELDS_TIMELINE_COMMENT: dict[str, Any] = {}
