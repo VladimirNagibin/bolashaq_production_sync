@@ -4,11 +4,16 @@ from sqlalchemy import DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from db.postgres import Base
+from schemas.enums import EntityType
 from schemas.user_schemas import ManagerCreate, UserCreate
 
-from .bases import EntityType, IntIdEntity
-
-# from typing import TYPE_CHECKING
+from .bases import IntIdEntity
+from .company_models import Company
+from .contact_models import Contact
+from .deal_models import Deal
+from .department_models import Department
+from .lead_models import Lead
+from .timeline_comment_models import TimelineComment
 
 
 class User(IntIdEntity):
@@ -106,7 +111,6 @@ class User(IntIdEntity):
         comment="Домашняя страничка"
     )  # PERSONAL_WWW : Домашняя страничка
 
-    """
     # Связи с другими сущностями
     department_id: Mapped[int | None] = mapped_column(
         ForeignKey("departments.external_id")
@@ -212,49 +216,18 @@ class User(IntIdEntity):
         back_populates="last_activity_user",
         foreign_keys="[Company.last_activity_by]",
     )
-
-    assigned_invoices: Mapped[list["Invoice"]] = relationship(
-        "Invoice",
-        back_populates="assigned_user",
-        foreign_keys="[Invoice.assigned_by_id]",
-    )
-    created_invoices: Mapped[list["Invoice"]] = relationship(
-        "Invoice",
-        back_populates="created_user",
-        foreign_keys="[Invoice.created_by_id]",
-    )
-    modify_invoices: Mapped[list["Invoice"]] = relationship(
-        "Invoice",
-        back_populates="modify_user",
-        foreign_keys="[Invoice.modify_by_id]",
-    )
-    moved_invoices: Mapped[list["Invoice"]] = relationship(
-        "Invoice",
-        back_populates="moved_user",
-        foreign_keys="[Invoice.moved_by_id]",
-    )
-    last_activity_invoices: Mapped[list["Invoice"]] = relationship(
-        "Invoice",
-        back_populates="last_activity_user",
-        foreign_keys="[Invoice.last_activity_by]",
-    )
-    delivery_notes: Mapped[list["DeliveryNote"]] = relationship(
-        "DeliveryNote",
-        back_populates="assigned_user",
-        foreign_keys="[DeliveryNote.assigned_by_id]",
-    )
     timeline_comments: Mapped[list["TimelineComment"]] = relationship(
         "TimelineComment",
         back_populates="author",
         foreign_keys="[TimelineComment.author_id]",
     )
-    """
+
     manager: Mapped["Manager"] = relationship(
         back_populates="user", uselist=False
     )
 
 
-class Manager(Base):
+class Manager(Base):  # type: ignore[misc]
     """
     Менеджеры
     """
@@ -274,11 +247,5 @@ class Manager(Base):
     is_active: Mapped[bool] = mapped_column(
         default=False, comment="Менеджер активный"
     )
-    # default_company_id: Mapped[int | None] = mapped_column(
-    #    ForeignKey("companies.external_id")
-    # )
-    # default_company: Mapped["Company"] = relationship(
-    #    "Company", back_populates="default_manager"
-    # )
     disk_id: Mapped[int | None] = mapped_column(comment="ИД диска")
     chat_id: Mapped[int | None] = mapped_column(comment="ИД служебного чата")

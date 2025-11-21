@@ -1,5 +1,4 @@
 from datetime import datetime
-from enum import StrEnum, auto
 from typing import TYPE_CHECKING, Any, ClassVar, Type, TypeVar
 
 from sqlalchemy import DateTime, ForeignKey
@@ -13,50 +12,16 @@ from sqlalchemy.orm import (
 
 from db.postgres import Base
 from schemas.base_schemas import CommonFieldMixin
+from schemas.enums import CommunicationType, EntityType
 
 if TYPE_CHECKING:
     from .communications import CommunicationChannel
     from .user_models import User
 
-
-class EntityType(StrEnum):
-    """Типы сущностей в системе."""
-
-    CONTACT = "Contact"
-    COMPANY = "Company"
-    LEAD = "Lead"
-    DEAL = "Deal"
-    USER = "User"
-    INVOICE = "Invoice"
-
-
-class CommunicationType(StrEnum):
-    """Типы коммуникационных каналов."""
-
-    PHONE = auto()
-    EMAIL = auto()
-    WEB = auto()
-    IM = auto()
-    LINK = auto()
-
-    @staticmethod
-    def has_value(value: str) -> bool:
-        """Проверяет, существует ли значение в перечислении."""
-        return value in CommunicationType.__members__
-
-
-COMMUNICATION_TYPES = {
-    "phone": CommunicationType.PHONE,
-    "email": CommunicationType.EMAIL,
-    "web": CommunicationType.WEB,
-    "im": CommunicationType.IM,
-    "link": CommunicationType.LINK,
-}
-
 T = TypeVar("T", bound=CommonFieldMixin)
 
 
-class IntIdEntity(Base):
+class IntIdEntity(Base):  # type: ignore[misc]
     """Базовый класс для сущностей с внешними ID"""
 
     __abstract__ = True
@@ -95,9 +60,9 @@ class IntIdEntity(Base):
 
     def to_pydantic(
         self,
-        schema_class: Type[T] | None = None,
+        schema_class: Type[CommonFieldMixin] | None = None,
         exclude_relationships: bool = True,
-    ) -> T:
+    ) -> CommonFieldMixin:
         """
         Преобразует объект SQLAlchemy в Pydantic схему
 
@@ -161,7 +126,7 @@ class NameIntIdEntity(IntIdEntity):
         return str(self.name)
 
 
-class NameStrIdEntity(Base):
+class NameStrIdEntity(Base):  # type: ignore[misc]
     """Базовый класс для сущностей со строчным внешними ID и name"""
 
     __abstract__ = True
@@ -437,8 +402,8 @@ class BusinessEntityCore(
     IntIdEntity,
     TimestampsMixin,
     UserRelationsMixin,
-    MarketingMixin,
-    SocialProfilesMixin,
+    # MarketingMixin,
+    # SocialProfilesMixin,
 ):
     """Базовый класс для бизнес-сущностей."""
 
@@ -450,12 +415,6 @@ class BusinessEntityCore(
     source_description: Mapped[str | None] = mapped_column(
         comment="Описание источника"
     )  # SOURCE_DESCRIPTION : Дополнительно об источнике
-    source_external: Mapped[str | None] = mapped_column(
-        comment="Внешний источник"
-    )  # UF_CRM_DCT_SOURCE : Источник внешний
-    city: Mapped[str | None] = mapped_column(
-        comment="Город"
-    )  # UF_CRM_DCT_CITY : Город (населённый пункт)
     opened: Mapped[bool] = mapped_column(
         default=True, comment="Доступна для всех"
     )  # OPENED : Доступен для всех (Y/N)
