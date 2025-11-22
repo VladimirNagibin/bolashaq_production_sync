@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
 from services.deals.deal_bitrix_services import DealBitrixClient
-from services.dependencies_entity import get_deal_bitrix_client
+from services.dependencies_bitrix_entity import get_deal_bitrix_client
 
 deals_router = APIRouter(prefix="/deals")
 
