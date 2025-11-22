@@ -6,7 +6,7 @@ from .bitrix_services.bitrix_api_client import BitrixAPIClient
 from .companies.company_bitrix_services import CompanyBitrixClient
 from .contacts.contact_bitrix_services import ContactBitrixClient
 from .deals.deal_bitrix_services import DealBitrixClient
-from .dependencies import dependency_container, get_api_client
+from .dependencies_bitrix import dependency_container, get_api_client
 from .entities.entities_bitrix_services import EntitiesBitrixClient
 from .users.user_bitrix_services import UserBitrixClient
 

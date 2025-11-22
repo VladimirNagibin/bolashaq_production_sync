@@ -5,7 +5,7 @@ from redis.asyncio import Redis
 from db.redis import get_redis_session
 from services.contacts.contact_bitrix_services import ContactBitrixClient
 from services.deals.deal_bitrix_services import DealBitrixClient
-from services.dependencies_entity import (
+from services.dependencies_bitrix_entity import (
     get_contact_bitrix_client,
     get_deal_bitrix_client,
     get_user_bitrix_client,
