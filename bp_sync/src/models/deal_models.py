@@ -271,3 +271,33 @@ class AdditionalInfo(Base):  # type: ignore[misc]
     comment: Mapped[str] = mapped_column(
         default="", comment="Дополнительная информация"
     )
+
+
+class ProductAgreementSupervisor(Base):  # type: ignore[misc]
+    """
+    Товары из согласованного КП
+    """
+
+    __tablename__ = "product_agreement_supervisor"
+    # _schema_class = ManagerCreate
+
+    def __str__(self) -> str:
+        return str(self.deal.title)
+
+    deal_id: Mapped[int] = mapped_column(
+        ForeignKey("deals.external_id"),
+        unique=True,
+        comment="ID сделки",
+    )
+    deal: Mapped["Deal"] = relationship("Deal", back_populates="add_info")
+    product_id: Mapped[int] = mapped_column(comment="ИД товара")
+    status_deal: Mapped[DealStatusEnum] = mapped_column(
+        PgEnum(
+            DealStatusEnum,
+            name="deal_status_enum",
+            create_type=False,
+            default=DealStatusEnum.NOT_DEFINE,
+            server_default=0,
+        ),
+        comment="Статус обработки",
+    )

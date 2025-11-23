@@ -76,7 +76,26 @@ class UserUpdate(BaseUser):
     is_online: bool | None = Field(None, alias="IS_ONLINE")
 
 
-class ManagerCreate:
-    """Manager create schema"""
+class BaseManager(CommonFieldMixin):
+    """
+    Общие поля создания и обновления с алиасами для соответствия
+    SQLAlchemy модели
+    """
 
-    ...
+    default_company_id: int | None = Field(default=None)
+    disk_id: int | None = Field(default=None)
+    chat_id: int | None = Field(default=None)
+
+
+class ManagerCreate(BaseManager):
+    """Модель для создания менеджеров"""
+
+    user_id: int
+    is_active: bool = Field(default=False)
+
+
+class ManagerUpdate(BaseManager):
+    """Модель для частичного обновления менеджеров"""
+
+    user_id: int | None = Field(default=None)
+    is_active: bool | None = Field(default=None)

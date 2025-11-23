@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 
-from services.dependencies_bitrix_entity import get_entity_bitrix_client
+from services.dependencies.dependencies_bitrix_entity import (
+    get_entity_bitrix_client,
+)
 from services.entities.entities_bitrix_services import EntitiesBitrixClient
 
 from ..deps import verify_api_key

@@ -297,7 +297,7 @@ class BaseRepository(
         self, model: Type[Base], **filters: Any
     ) -> bool:
         """Проверяет существование объекта в БД с кэшированием результатов"""
-        from ..dependencies_repo import get_exists_cache
+        from ..dependencies.dependencies_repo import get_exists_cache
 
         # Создаем уникальный ключ для кэша
         cache_key = (model, tuple(sorted(filters.items())))
@@ -428,7 +428,7 @@ class BaseRepository(
         additional_checks: dict[str, tuple[Any, Any, bool]] | None = None,
         create: bool | None = False,
     ) -> None:
-        from ..dependencies_repo import (
+        from ..dependencies.dependencies_repo import (
             get_creation_cache,
             get_exists_cache,
             get_update_needed_cache,

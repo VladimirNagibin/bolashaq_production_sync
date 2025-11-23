@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -8,12 +9,14 @@ from schemas.enums import EntityType
 from schemas.user_schemas import ManagerCreate, UserCreate
 
 from .bases import IntIdEntity
-from .company_models import Company
-from .contact_models import Contact
-from .deal_models import Deal
-from .department_models import Department
-from .lead_models import Lead
-from .timeline_comment_models import TimelineComment
+
+if TYPE_CHECKING:
+    from .company_models import Company
+    from .contact_models import Contact
+    from .deal_models import Deal
+    from .department_models import Department
+    from .lead_models import Lead
+    from .timeline_comment_models import TimelineComment
 
 
 class User(IntIdEntity):

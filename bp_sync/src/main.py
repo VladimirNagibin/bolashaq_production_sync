@@ -15,7 +15,7 @@ from core.logger import LOGGING, logger
 from core.settings import settings
 from db.postgres import engine
 from db.redis import close_redis, init_redis
-from services.dependencies_bitrix import (
+from services.dependencies.dependencies_bitrix import (
     initialize_container,
     shutdown_container,
 )

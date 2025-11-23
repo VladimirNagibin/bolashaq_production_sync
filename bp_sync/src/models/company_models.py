@@ -1,3 +1,5 @@
+from typing import TYPE_CHECKING
+
 from sqlalchemy.orm import (
     Mapped,
     mapped_column,
@@ -8,7 +10,9 @@ from schemas.company_schemas import CompanyCreate
 from schemas.enums import EntityType
 
 from .bases import CommunicationIntIdEntity
-from .deal_models import Deal
+
+if TYPE_CHECKING:
+    from .deal_models import Deal
 
 
 class Company(CommunicationIntIdEntity):
