@@ -32,8 +32,12 @@ class Contact(CommunicationIntIdEntity):
     def tablename(self) -> str:
         return self.__tablename__
 
-    def __str__(self) -> str:
+    @property
+    def full_name(self) -> str:
         return f"{self.name} {self.second_name} {self.last_name}"
+
+    def __str__(self) -> str:
+        return self.full_name
 
     # Идентификаторы и основные данные
     name: Mapped[str | None] = mapped_column(

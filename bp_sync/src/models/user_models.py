@@ -146,11 +146,6 @@ class User(IntIdEntity):
         back_populates="last_activity_user",
         foreign_keys="[Deal.last_activity_by]",
     )
-    defect_deals: Mapped[list["Deal"]] = relationship(
-        "Deal",
-        back_populates="defect_expert",
-        foreign_keys="[Deal.defect_expert_id]",
-    )
 
     assigned_leads: Mapped[list["Lead"]] = relationship(
         "Lead",

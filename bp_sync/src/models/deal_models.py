@@ -254,6 +254,14 @@ class Deal(BusinessEntity):
         comment="Дата перемещения (резервное поле)",
     )
 
+    products_agreement_supervisor: Mapped[
+        list["ProductAgreementSupervisor"]
+    ] = relationship(
+        "ProductAgreementSupervisor",
+        back_populates="deal",
+        foreign_keys="[ProductAgreementSupervisor.deal_id]",
+    )
+
 
 class AdditionalInfo(Base):  # type: ignore[misc]
     """
@@ -289,7 +297,9 @@ class ProductAgreementSupervisor(Base):  # type: ignore[misc]
         unique=True,
         comment="ID сделки",
     )
-    deal: Mapped["Deal"] = relationship("Deal", back_populates="add_info")
+    deal: Mapped["Deal"] = relationship(
+        "Deal", back_populates="products_agreement_supervisor"
+    )
     product_id: Mapped[int] = mapped_column(comment="ИД товара")
     status_deal: Mapped[DealStatusEnum] = mapped_column(
         PgEnum(
