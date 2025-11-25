@@ -15,8 +15,11 @@ from core.logger import LOGGING, logger
 from core.settings import settings
 from db.postgres import engine
 from db.redis import close_redis, init_redis
-from services.dependencies import initialize_container, shutdown_container
-from services.rabbitmq_client import get_rabbitmq  # type: ignore[attr-defined]
+from services.dependencies.dependencies_bitrix import (
+    initialize_container,
+    shutdown_container,
+)
+from services.rabbitmq_client import get_rabbitmq
 
 
 async def _init_rabbitmq() -> None:

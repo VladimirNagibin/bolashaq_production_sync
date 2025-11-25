@@ -335,7 +335,7 @@ class WebhookService:
             return False
 
         expected_domain = self.expected_tokens.get(auth.application_token)
-        is_valid = expected_domain == auth.domain
+        is_valid = bool(expected_domain == auth.domain)
 
         if not is_valid:
             logger.debug(

@@ -3,6 +3,14 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any
 
+COLUMN_LABELS: dict[str, str] = {  # Надписи полей в списке
+    "external_id": "Внешний код",
+    "name": "Название",
+    "created_at": "Дата создания",
+    "updated_at": "Дата изменения",
+    "is_deleted_in_bitrix": "Удалён в Б24",
+}
+
 
 class AdminListAndDetailMixin:
     """

@@ -1,12 +1,8 @@
-from typing import TYPE_CHECKING
-
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .bases import NameIntIdEntity
-
-if TYPE_CHECKING:
-    from .user_models import User
+from .user_models import User
 
 
 class Department(NameIntIdEntity):
@@ -34,6 +30,6 @@ class Department(NameIntIdEntity):
         foreign_keys="[Department.parent_id]",
         remote_side="[Department.external_id]",
     )
-    users: Mapped[list["User"]] = relationship(
+    users: Mapped[list[User]] = relationship(
         "User", back_populates="department"
     )

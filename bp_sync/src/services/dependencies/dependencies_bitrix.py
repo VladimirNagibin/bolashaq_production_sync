@@ -5,11 +5,11 @@ from redis.asyncio import Redis
 from db.redis import get_redis as get_redis_client
 from schemas.base_schemas import CommonFieldMixin
 
-from .bitrix_services.base_bitrix_services import BaseBitrixEntityClient
-from .bitrix_services.bitrix_api_client import BitrixAPIClient
-from .bitrix_services.bitrix_oauth_client import BitrixOAuthClient
-from .token_services.token_cipher import TokenCipher
-from .token_services.token_storage import TokenStorage
+from ..bitrix_services.base_bitrix_services import BaseBitrixEntityClient
+from ..bitrix_services.bitrix_api_client import BitrixAPIClient
+from ..bitrix_services.bitrix_oauth_client import BitrixOAuthClient
+from ..token_services.token_cipher import TokenCipher
+from ..token_services.token_storage import TokenStorage
 
 SchemaTypeCreate = TypeVar("SchemaTypeCreate", bound=CommonFieldMixin)
 SchemaTypeUpdate = TypeVar("SchemaTypeUpdate", bound=CommonFieldMixin)
