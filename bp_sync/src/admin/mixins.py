@@ -25,22 +25,26 @@ class AdminListAndDetailMixin:
     CURRENCY_DECIMALS = 2
     NUMBER_DECIMALS = 2
 
+    @staticmethod
     def _get_attribute_value(
-        self, model: Any, attribute: str, default: Any = None
+        model: Any, attribute: str, default: Any = None
     ) -> Any:
         """Safely get attribute value from model with default fallback."""
         return getattr(model, attribute, default)
 
-    def format_title(self, model: Any, attribute: str) -> str:
+    @staticmethod
+    def format_title(model: Any, attribute: str) -> str:
         """Format title with ellipsis if exceeds max length."""
-        title = str(self._get_attribute_value(model, attribute, ""))
+        title = str(
+            AdminListAndDetailMixin._get_attribute_value(model, attribute, "")
+        )
 
-        if len(title) > self.TITLE_MAX_LENGTH:
-            return title[: self.TITLE_MAX_LENGTH] + "..."
+        if len(title) > AdminListAndDetailMixin.TITLE_MAX_LENGTH:
+            return title[: AdminListAndDetailMixin.TITLE_MAX_LENGTH] + "..."
         return title
 
+    @staticmethod
     def format_currency(
-        self,
         model: Any,
         attribute: str,
         currency_symbol: str = "",
@@ -48,9 +52,11 @@ class AdminListAndDetailMixin:
     ) -> str:
         """Format numeric value as currency."""
         if decimals is None:
-            decimals = self.CURRENCY_DECIMALS
+            decimals = AdminListAndDetailMixin.CURRENCY_DECIMALS
 
-        value = self._get_attribute_value(model, attribute, 0)
+        value = AdminListAndDetailMixin._get_attribute_value(
+            model, attribute, 0
+        )
 
         # Handle different numeric types
         if isinstance(value, (int, float, Decimal)):
@@ -67,28 +73,29 @@ class AdminListAndDetailMixin:
             return f"{formatted_value} {currency_symbol}".strip()
         return formatted_value
 
+    @staticmethod
     def format_enum_display(
-        self,
         enum_class: Any,
         model: Any,
         attribute: str,
         default_display: str = "Не указано",
     ) -> str:
         """Format enum values for display."""
-        value = self._get_attribute_value(model, attribute)
+        value = AdminListAndDetailMixin._get_attribute_value(model, attribute)
 
         if not value:
             return default_display
 
-        display_name = self._get_enum_display_name(enum_class, value)
+        display_name = AdminListAndDetailMixin._get_enum_display_name(
+            enum_class, value
+        )
         if display_name:
             return display_name
 
         return str(value) or default_display
 
-    def _get_enum_display_name(
-        self, enum_class: Any, value: Any
-    ) -> str | None:
+    @staticmethod
+    def _get_enum_display_name(enum_class: Any, value: Any) -> str | None:
         """
         Helper method to get display name from enum with proper type handling.
         """
@@ -134,8 +141,8 @@ class AdminListAndDetailMixin:
 
         return None
 
+    @staticmethod
     def format_number(
-        self,
         model: Any,
         attribute: str,
         decimals: int | None = None,
@@ -143,9 +150,11 @@ class AdminListAndDetailMixin:
     ) -> str:
         """Format numeric value with specified decimal places."""
         if decimals is None:
-            decimals = self.NUMBER_DECIMALS
+            decimals = AdminListAndDetailMixin.NUMBER_DECIMALS
 
-        value = self._get_attribute_value(model, attribute, default_value)
+        value = AdminListAndDetailMixin._get_attribute_value(
+            model, attribute, default_value
+        )
 
         if not value:
             return f"{default_value:,.{decimals}f}"
@@ -156,18 +165,20 @@ class AdminListAndDetailMixin:
         except (ValueError, TypeError):
             return f"{default_value:,.{decimals}f}"
 
-    def format_opportunity(self, model: Any, attribute: str) -> str:
+    @staticmethod
+    def format_opportunity(model: Any, attribute: str) -> str:
         """Format opportunity amount (alias for format_number)."""
-        return self.format_number(model, attribute)
+        return AdminListAndDetailMixin.format_number(model, attribute)
 
+    @staticmethod
     def format_date(
-        self, model: Any, attribute: str, date_format: str | None = None
+        model: Any, attribute: str, date_format: str | None = None
     ) -> str:
         """Format date/datetime object."""
         if date_format is None:
-            date_format = self.DATE_FORMAT
+            date_format = AdminListAndDetailMixin.DATE_FORMAT
 
-        value = self._get_attribute_value(model, attribute)
+        value = AdminListAndDetailMixin._get_attribute_value(model, attribute)
 
         if not value:
             return "-"
@@ -189,15 +200,17 @@ class AdminListAndDetailMixin:
 
         return "-"
 
+    @staticmethod
     def format_boolean(
-        self,
         model: Any,
         attribute: str,
         true_display: str = "Да",
         false_display: str = "Нет",
     ) -> str:
         """Format boolean value for display."""
-        value = self._get_attribute_value(model, attribute, False)
+        value = AdminListAndDetailMixin._get_attribute_value(
+            model, attribute, False
+        )
 
         # Handle various boolean representations
         if isinstance(value, bool):
@@ -213,11 +226,14 @@ class AdminListAndDetailMixin:
 
         return false_display
 
+    @staticmethod
     def format_percentage(
-        self, model: Any, attribute: str, decimals: int = 1
+        model: Any, attribute: str, decimals: int = 1
     ) -> str:
         """Format value as percentage."""
-        value = self._get_attribute_value(model, attribute, 0)
+        value = AdminListAndDetailMixin._get_attribute_value(
+            model, attribute, 0
+        )
 
         try:
             numeric_value = float(value) * 100
@@ -225,9 +241,12 @@ class AdminListAndDetailMixin:
         except (ValueError, TypeError):
             return f"0.{'0' * decimals}%"
 
-    def format_phone_number(self, model: Any, attribute: str) -> str:
+    @staticmethod
+    def format_phone_number(model: Any, attribute: str) -> str:
         """Format phone number for display."""
-        phone = str(self._get_attribute_value(model, attribute, ""))
+        phone = str(
+            AdminListAndDetailMixin._get_attribute_value(model, attribute, "")
+        )
 
         # Remove all non-digit characters
         digits = "".join(filter(str.isdigit, phone))

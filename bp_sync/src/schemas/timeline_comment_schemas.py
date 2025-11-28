@@ -57,3 +57,33 @@ class TimelineCommentUpdate(
         if isinstance(v, str):
             v = v.capitalize()
         return BitrixValidators.convert_enum(v, EntityType, EntityType.DEAL)
+
+    def to_create(
+        self, entity_id: int, entity_type: EntityType
+    ) -> TimelineCommentCreate:
+        """
+        Преобразует Update схему в Create схему
+
+        Args:
+            entity_id: ID сущности (обязательный параметр)
+            entity_type: Тип сущности (обязательный параметр)
+
+        Returns:
+            TimelineCommentCreate: Схема для создания
+        """
+        if not entity_id or not entity_type:
+            raise ValueError(
+                "entity_id and entity_type are required for conversion"
+            )
+
+        data = self.model_dump(exclude_unset=True, exclude_none=True)
+        data.update(
+            {
+                "entity_id": entity_id,
+                "entity_type": entity_type,
+                "ENTITY_ID": entity_id,
+                "ENTITY_TYPE": entity_type,
+            }
+        )
+
+        return TimelineCommentCreate(**data)

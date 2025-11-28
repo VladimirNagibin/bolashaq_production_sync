@@ -19,6 +19,8 @@ SchemaTypeUpdate = TypeVar("SchemaTypeUpdate", bound=CommonFieldMixin)
 ModelType = TypeVar("ModelType", bound=IntIdEntity | NameStrIdEntity)
 ExternalIdType = TypeVar("ExternalIdType", int, str)
 
+RETRY_COUNT = 3
+
 
 class BaseRepository(
     Generic[ModelType, SchemaTypeCreate, SchemaTypeUpdate, ExternalIdType]
@@ -39,6 +41,7 @@ class BaseRepository(
 
     def __init__(self, session: AsyncSession):
         self.session = session
+        self._operation_retry_count = RETRY_COUNT
 
     async def _exists(self, external_id: ExternalIdType) -> bool:
         """Проверяет существование сущности по external_id"""
@@ -51,13 +54,23 @@ class BaseRepository(
                 try:
                     external_id = int(external_id)  # type: ignore[assignment]
                 except ValueError:
+                    logger.warning(
+                        f"Invalid external_id format: {external_id}"
+                    )
                     return False
 
             stmt = select(
                 exists().where(self.model.external_id == external_id)
             )
             result = await self.session.execute(stmt)
-            return bool(result.scalar())
+            exists_flag = bool(result.scalar())
+
+            logger.debug(
+                f"Existence check for {self.model.__name__} "
+                f"{external_id}: {exists_flag}"
+            )
+            return exists_flag
+
         except SQLAlchemyError as e:
             logger.exception(
                 "Database error checking entity existence "
@@ -111,19 +124,25 @@ class BaseRepository(
             )
             raise self._conflict_exception(external_id)
         try:
-            obj = self.model(**data.model_dump_db())
+            db_data: dict[str, Any] = data.model_dump_db()
+            logger.debug(f"Creating entity with data: {db_data}")
+
+            obj = self.model(**db_data)
             self.session.add(obj)
 
             if pre_commit_hook:
+                logger.debug("Executing pre-commit hook")
                 await pre_commit_hook(obj, data)
 
             await self.session.flush()
 
             if post_commit_hook:
+                logger.debug("Executing post-commit hook")
                 await post_commit_hook(obj, data)
 
             await self.session.commit()
             await self.session.refresh(obj)
+
             logger.info(f"{self.model.__name__} created: ID={external_id}")
             return obj  # type: ignore[no-any-return]
         except IntegrityError as e:
@@ -208,10 +227,19 @@ class BaseRepository(
             raise self._not_found_exception(external_id)
 
         try:
+            update_data: dict[str, Any] = data.model_dump_db(
+                exclude_unset=True
+            )
+            logger.debug(f"Updating entity with data: {update_data}")
+
+            if not update_data:
+                logger.warning("No data to update")
+                raise ValueError("No data provided for update")
+
             stmt = (
                 update(self.model)
                 .where(self.model.external_id == external_id)
-                .values(data.model_dump_db(exclude_unset=True))
+                .values(update_data)
                 .returning(self.model)
             )
 
@@ -219,12 +247,15 @@ class BaseRepository(
             obj = result.scalar_one()
 
             if pre_commit_hook:
+                logger.debug("Executing pre-commit hook")
                 await pre_commit_hook(obj, data)
 
             if post_commit_hook:
+                logger.debug("Executing post-commit hook")
                 await post_commit_hook(obj, data)
 
             await self.session.commit()
+
             logger.info(f"{self.model.__name__} updated: ID={external_id}")
             return obj  # type: ignore[no-any-return]
         except NoResultFound:
@@ -294,29 +325,36 @@ class BaseRepository(
             ) from e
 
     async def _check_object_exists(
-        self, model: Type[Base], **filters: Any
+        self,
+        model: Type[Base],
+        **filters: Any,
     ) -> bool:
         """Проверяет существование объекта в БД с кэшированием результатов"""
         from ..dependencies.dependencies_repo import get_exists_cache
 
-        # Создаем уникальный ключ для кэша
         cache_key = (model, tuple(sorted(filters.items())))
-
-        # Получаем кэш из контекста запроса
         cache = get_exists_cache()
 
         # Если результат уже в кэше - возвращаем его
         if cache_key in cache:
+            logger.debug(f"Cache hit for existence check: {cache_key}")
             return cache[cache_key]
 
         # Выполняем запрос, если нет в кэше
-        stmt = select(model).filter_by(**filters).limit(1)
-        result = await self.session.execute(stmt)
-        exists = result.scalar_one_or_none() is not None
+        try:
+            stmt = select(model).filter_by(**filters).limit(1)
+            result = await self.session.execute(stmt)
+            exists_flag = result.scalar_one_or_none() is not None
 
-        # Сохраняем результат в кэш
-        cache[cache_key] = exists
-        return exists
+            # Сохраняем результат в кэш
+            cache[cache_key] = exists_flag
+            logger.debug(
+                f"Existence check result for {cache_key}: {exists_flag}"
+            )
+            return exists_flag
+        except SQLAlchemyError as e:
+            logger.error(f"Database error in existence check: {str(e)}")
+            return False
 
     async def set_deleted_in_bitrix(
         self, external_id: ExternalIdType, is_deleted: bool = True
@@ -447,7 +485,6 @@ class BaseRepository(
 
         for field_name, (client, model, required) in checks.items():
             value = getattr(data, field_name, None)
-
             if not value:
                 if required and create:
                     errors.append(f"Missing required field: {field_name}")
@@ -471,14 +508,14 @@ class BaseRepository(
                     if entity_key in creation_cache.keys():
                         update_needed_cache.add(entity_key)
                         raise CyclicCallException
-                    await client.import_from_bitrix(value)  # ================
+                    await client.import_from_bitrix(value)
                     cache = get_exists_cache()
                     if cache_key in cache:
                         del cache[cache_key]
                 else:
                     if entity_key in creation_cache.keys():
                         continue
-                    await client.refresh_from_bitrix(value)  # ===============
+                    await client.refresh_from_bitrix(value)
                     updated_cache.add(entity_key)
                 creation_cache[entity_key] = True
             except CyclicCallException:
@@ -493,3 +530,15 @@ class BaseRepository(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=", ".join(errors),
             )
+
+    async def create_or_update(
+        self,
+        data: SchemaTypeCreate,
+        pre_commit_hook: Callable[..., Awaitable[None]] | None = None,
+        post_commit_hook: Callable[..., Awaitable[None]] | None = None,
+    ) -> ModelType:
+        """Создает новую Сущность либо обновляет если существует"""
+        try:
+            return await self.create(data, pre_commit_hook, post_commit_hook)
+        except ConflictException:
+            return await self.update(data, pre_commit_hook, post_commit_hook)

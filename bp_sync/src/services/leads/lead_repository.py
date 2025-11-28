@@ -3,10 +3,10 @@ from typing import TYPE_CHECKING, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.logger import logger
-from models.contact_models import Contact as ContactDB
+from models.lead_models import Lead as LeadDB
 from models.user_models import User as UserDB
-from schemas.contact_schemas import ContactCreate, ContactUpdate
 from schemas.enums import EntityType
+from schemas.lead_schemas import LeadCreate, LeadUpdate
 
 from ..base_repositories.base_communication_repo import (
     EntityWithCommunicationsRepository,
@@ -17,15 +17,12 @@ if TYPE_CHECKING:
     from ..users.user_services import UserClient
 
 
-class ContactRepository(
-    EntityWithCommunicationsRepository[
-        ContactDB, ContactCreate, ContactUpdate, int
-    ]
+class LeadRepository(
+    EntityWithCommunicationsRepository[LeadDB, LeadCreate, LeadUpdate, int]
 ):
-    """Contact repository with lazy UserClient loading"""
 
-    model = ContactDB
-    entity_type = EntityType.CONTACT
+    model = LeadDB
+    entity_type = EntityType.LEAD
 
     def __init__(
         self,
@@ -39,21 +36,21 @@ class ContactRepository(
         """Устанавливает UserClient после создания репозитория"""
         self._user_client = user_client
         self._user_client_initialized = True
-        logger.debug("UserClient set for ContactRepository")
+        logger.debug("UserClient set for LeadRepository")
 
     @property
     def user_client(self) -> Optional["UserClient"]:
         """Ленивое свойство для доступа к UserClient"""
         if not self._user_client_initialized and self._user_client is None:
             logger.warning(
-                "UserClient not initialized in ContactRepository. "
+                "UserClient not initialized in LeadRepository. "
                 "Call set_user_client() first or use methods "
                 "that don't require UserClient."
             )
         return self._user_client
 
-    async def create_entity(self, data: ContactCreate) -> ContactDB:
-        """Создает новый контакт с проверкой связанных объектов"""
+    async def create_entity(self, data: LeadCreate) -> LeadDB:
+        """Создает новый лид с проверкой связанных объектов"""
         await self._check_related_objects(data)
         try:
             await self._create_or_update_related(data)
@@ -62,13 +59,11 @@ class ContactRepository(
                 logger.error("Update failed: Missing ID")
                 raise ValueError("ID is required for update")
             external_id = data.external_id
-            data = ContactCreate.get_default_entity(int(external_id))
+            data = LeadCreate.get_default_entity(int(external_id))
         return await self.create(data=data)
 
-    async def update_entity(
-        self, data: ContactCreate | ContactUpdate
-    ) -> ContactDB:
-        """Обновляет существующий контакт"""
+    async def update_entity(self, data: LeadUpdate | LeadCreate) -> LeadDB:
+        """Обновляет существующий лид"""
         await self._check_related_objects(data)
         await self._create_or_update_related(data)
         return await self.update(data=data)
@@ -79,5 +74,6 @@ class ContactRepository(
             "assigned_by_id": (self.user_client, UserDB, True),
             "created_by_id": (self.user_client, UserDB, True),
             "modify_by_id": (self.user_client, UserDB, False),
+            "moved_by_id": (self.user_client, UserDB, False),
             "last_activity_by": (self.user_client, UserDB, False),
         }

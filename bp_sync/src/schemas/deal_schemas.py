@@ -3,7 +3,7 @@ from typing import Any
 
 from pydantic import Field, field_validator
 
-from .base_schemas import BaseCreateSchema, BaseUpdateSchema
+from .base_schemas import BaseCreateSchema, BaseUpdateSchema, CommonFieldMixin
 from .bitrix_validators import BitrixValidators
 from .enums import DealStatusEnum, StageSemanticEnum
 
@@ -199,3 +199,17 @@ class DealUpdate(BaseUpdateSchema, BaseDeal):
         return BitrixValidators.convert_enum(
             v, DealStatusEnum, DealStatusEnum.NOT_DEFINE
         )
+
+
+class AddInfoCreate(CommonFieldMixin):
+    """Модель для создания менеджеров"""
+
+    deal_id: int
+    comment: str
+
+
+class AddInfoUpdate(CommonFieldMixin):
+    """Модель для частичного обновления менеджеров"""
+
+    deal_id: int | None = Field(default=None)
+    comment: str | None = Field(default=None)

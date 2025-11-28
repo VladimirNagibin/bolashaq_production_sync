@@ -238,7 +238,6 @@ class BaseEntityClient(ABC, Generic[T, R, C]):
     ) -> tuple[Any, Any, dict[str, dict[str, Any]] | None]:
         schema_b24 = await self.bitrix_client.get(entity_id, entity_type_id)
         schema_db = await self.repo.get(entity_id)
-
         if schema_db is None:
             return schema_b24, schema_db, None
 

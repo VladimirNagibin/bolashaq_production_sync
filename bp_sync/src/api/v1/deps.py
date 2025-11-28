@@ -1,14 +1,10 @@
-from fastapi import Depends, HTTPException, status  # APIRouter
+from fastapi import Depends, HTTPException, status
 from fastapi.security import APIKeyHeader
 
 from core.settings import settings
 
-# from services.dependencies import request_context
-
-# upload_codes_router = APIRouter(dependencies=[Depends(request_context)])
-
 API_KEY_NAME = "X-API-Key"
-API_KEY = settings.BITRIX_CLIENT_SECRET  # "your-api-key-here"
+API_KEY = settings.BITRIX_CLIENT_SECRET
 
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 

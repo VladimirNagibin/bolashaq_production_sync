@@ -6,10 +6,10 @@ from sqlalchemy.orm import selectinload
 
 from core.logger import logger
 from db.postgres import Base
-from models.bases import EntityType
 from models.department_models import Department
 from models.user_models import Manager as ManagerDB
 from models.user_models import User as UserDB
+from schemas.enums import EntityType
 from schemas.user_schemas import (
     ManagerCreate,
     ManagerUpdate,
@@ -27,11 +27,15 @@ class UserRepository(BaseRepository[UserDB, UserCreate, UserUpdate, int]):
 
     async def create_entity(self, data: UserCreate) -> UserDB:
         """Создает нового пользователя с проверкой связанных объектов"""
+        logger.info(f"Creating user entity: {data.external_id}")
+
         await self._check_related_objects(data)
         return await self.create(data=data)
 
     async def update_entity(self, data: UserCreate | UserUpdate) -> UserDB:
         """Обновляет существующего пользователя"""
+        logger.info(f"Updating user entity: {data.external_id}")
+
         await self._check_related_objects(data)
         return await self.update(data=data)
 
@@ -44,6 +48,8 @@ class UserRepository(BaseRepository[UserDB, UserCreate, UserUpdate, int]):
 
     async def get_manager(self, user_id: int) -> ManagerDB | None:
         """Получить менеджера по user_id"""
+        logger.debug(f"Fetching manager for user_id: {user_id}")
+
         try:
             query = (
                 select(ManagerDB)
@@ -53,7 +59,13 @@ class UserRepository(BaseRepository[UserDB, UserCreate, UserUpdate, int]):
                 )
             )
             result = await self.session.execute(query)
-            return result.scalar_one_or_none()
+            manager = result.scalar_one_or_none()
+
+            if not manager:
+                logger.debug(f"Manager not found for user_id: {user_id}")
+
+            return manager
+
         except SQLAlchemyError as e:
             logger.error(
                 f"Database error getting manager by user_id {user_id}: {e}"
@@ -198,20 +210,6 @@ class UserRepository(BaseRepository[UserDB, UserCreate, UserUpdate, int]):
             )
         except (ValueError, RuntimeError) as e:
             logger.error(f"Error setting activity for manager {user_id}: {e}")
-            raise
-
-    async def set_default_company_manager(
-        self, user_id: int, company_id: int | None
-    ) -> ManagerDB | None:
-        """Установить компанию по умолчанию для менеджера"""
-        try:
-            return await self.update_manager(
-                user_id, ManagerUpdate(default_company_id=company_id)
-            )
-        except (ValueError, RuntimeError) as e:
-            logger.error(
-                f"Error setting default company for manager {user_id}: {e}"
-            )
             raise
 
     async def set_disk_id_manager(
