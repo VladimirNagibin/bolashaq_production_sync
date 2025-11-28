@@ -6,11 +6,11 @@ from services.bitrix_services.bitrix_oauth_client import BitrixOAuthClient
 from services.dependencies.dependencies_bitrix import get_oauth_client
 from services.exceptions import BitrixAuthError
 
-auth_router = APIRouter()
+auth_router = APIRouter(prefix="/auth")
 
 
 @auth_router.get(
-    "/auth/callback", summary="OAuth 2.0 Callback Handler"
+    "/callback", summary="OAuth 2.0 Callback Handler"
 )  # type: ignore
 async def handle_auth_callback(
     code: str | None = None,

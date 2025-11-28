@@ -6,6 +6,7 @@ from sqlalchemy.orm import selectinload
 
 from models.communications import CommunicationChannel
 from models.company_models import Company
+from schemas.enums import CURRENCY
 
 from .base_admin import BaseAdmin
 from .mixins import AdminListAndDetailMixin
@@ -52,11 +53,13 @@ class CompanyAdmin(
     @staticmethod
     def _format_revenue(model: Company, attribute: str) -> str:
         """Форматирование суммы"""
-        return AdminListAndDetailMixin.format_currency(model, attribute, "KZT")
+        return AdminListAndDetailMixin.format_currency(
+            model, attribute, CURRENCY
+        )
 
     # Форматирование значений
     column_formatters: dict[str, Any] = {
-        "title": AdminListAndDetailMixin.format_title,
+        # "title": AdminListAndDetailMixin.format_title,
         "revenue": _format_revenue,
         # "date_last_shipment": AdminListAndDetailMixin.format_date,
     }

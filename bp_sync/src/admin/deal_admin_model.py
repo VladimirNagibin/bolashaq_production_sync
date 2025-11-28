@@ -38,14 +38,14 @@ class DealAdmin(
         """Форматирование семантики стадии"""
         return AdminListAndDetailMixin.format_enum_display(
             StageSemanticEnum, model, attribute
-        )  # type: ignore[call-arg]
+        )
 
     @staticmethod
     def _format_status(model: Deal, attribute: str) -> str:
-        """Форматирование типа оплаты"""
+        """Форматирование статуса сделки"""
         return AdminListAndDetailMixin.format_enum_display(
             DealStatusEnum, model, attribute
-        )  # type: ignore[call-arg]
+        )
 
     # Форматирование значений
     column_formatters: dict[str, Any] = {
@@ -64,11 +64,11 @@ class DealAdmin(
         "external_id": "Внешний код",
         "title": "Название",
         "opportunity": "Сумма",
-        "category": "Воронка",
+        "category_id": "Воронка",
         "stage": "Стадия",
-        "type": "Тип",
+        "type_id": "Тип",
         "creation_source": "Источник сводно",
-        "source": "Источник",
+        "source_id": "Источник",
         "status_deal": "Статус сделки",
         "is_deleted_in_bitrix": "Удалён в Б24",
         "assigned_user": "Ответственный",
@@ -114,10 +114,10 @@ class DealAdmin(
         "external_id",
         "title",
         "opportunity",
-        "category",
+        "category_id",
         "stage",
-        "type",
-        "source",
+        "type_id",
+        "source_id",
         "status_deal",
         "is_deleted_in_bitrix",
         "assigned_user",

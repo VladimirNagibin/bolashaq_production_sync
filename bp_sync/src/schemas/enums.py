@@ -50,6 +50,8 @@ class DealStatusEnum(IntEnum):
     OFFER_SENT_CLIENT = 57
     OFFER_APPROVED_CLIENT = 59
     OFFER_DISMISSED_CLIENT = 61
+    DEAL_LOSE = 63
+    DEAL_WON = 65
 
     NOT_DEFINE = 0
 
@@ -66,6 +68,8 @@ class DealStatusEnum(IntEnum):
             57: "КП - отправлен клиенту",
             59: "КП - согласован с клиентом",
             61: "КП - отклонён клиентом",
+            63: "Сделка провалена",
+            65: "Сделка успешна",
             0: "Не определено",
         }
         return display_name_map.get(value, "Неизвестно")
@@ -80,6 +84,7 @@ class EntityType(StrEnum):
     DEAL = "Deal"
     USER = "User"
     INVOICE = "Invoice"
+    TIMELINE_COMMENT = "TimelineComment"
 
 
 class CommunicationType(StrEnum):
@@ -104,3 +109,10 @@ COMMUNICATION_TYPES = {
     "im": CommunicationType.IM,
     "link": CommunicationType.LINK,
 }
+
+
+class DealStagesEnum(IntEnum):
+    """Стадии сделки."""
+
+    INITIAL_SORT_ORDER = 1
+    SECOND_SORT_ORDER = 2

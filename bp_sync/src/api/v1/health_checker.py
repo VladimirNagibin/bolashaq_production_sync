@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-healht_router = APIRouter()  # dependencies=[Depends(request_context)])
+healht_router = APIRouter()
 
 
 @healht_router.get(

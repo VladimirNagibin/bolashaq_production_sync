@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
 DEFAULT_DEAL_TITLE = "Запрос цены с сайта"
 TAX_RATE_DEFAULT = 12
+SITE_SOURCE = "WEB"
 
 
 class SiteRequestHandler:
@@ -180,6 +181,7 @@ class SiteRequestHandler:
                 entity_type: entity_id,
                 "assigned_by_id": assigned_id,
                 "comments": comment,
+                "source_id": SITE_SOURCE,
             }
             deal_update = DealUpdate(**deal_data)
             deal_client = self.entities_bitrix_client.deal_bitrix_client

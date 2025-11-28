@@ -2,6 +2,7 @@ from typing import Any, AsyncGenerator, Type, TypeVar
 
 from redis.asyncio import Redis
 
+from core.logger import logger
 from db.redis import get_redis as get_redis_client
 from schemas.base_schemas import CommonFieldMixin
 
@@ -31,17 +32,50 @@ class DependencyContainer:
             Type[BaseBitrixEntityClient[Any, Any]],
             BaseBitrixEntityClient[Any, Any],
         ] = {}
+        self._initialized = False
+
+    async def initialize(self) -> None:
+        """Инициализация контейнера с обработкой ошибок"""
+        if self._initialized:
+            return
+
+        logger.info("Initializing dependency container")
+
+        try:
+            # Предварительная загрузка основных зависимостей
+            await self.get_redis()
+            await self.get_api_client()
+            self._initialized = True
+            logger.info("Dependency container initialized successfully")
+
+        except Exception as e:
+            logger.error(
+                f"Failed to initialize dependency container: {str(e)}"
+            )
+            raise
 
     async def get_redis(self) -> Redis:
         """Получает Redis клиент"""
         if self._redis is None:
-            self._redis = await get_redis_client()
+            try:
+                self._redis = await get_redis_client()
+                # Проверяем соединение
+                await self._redis.ping()
+                logger.debug("Redis client initialized and connected")
+            except Exception as e:
+                logger.error(f"Failed to initialize Redis client: {str(e)}")
+                raise
         return self._redis
 
     async def get_token_cipher(self) -> TokenCipher:
         """Получает шифровальщик токенов"""
         if self._token_cipher is None:
-            self._token_cipher = TokenCipher()
+            try:
+                self._token_cipher = TokenCipher()
+                logger.debug("Token cipher initialized")
+            except Exception as e:
+                logger.error(f"Failed to initialize token cipher: {str(e)}")
+                raise
         return self._token_cipher
 
     async def get_token_storage(self) -> TokenStorage:
@@ -71,6 +105,7 @@ class DependencyContainer:
         if entity_class not in self._entity_clients:
             api_client = await self.get_api_client()
             self._entity_clients[entity_class] = entity_class(api_client)
+            logger.debug(f"Entity client initialized: {entity_class.__name__}")
         return self._entity_clients[entity_class]  # type: ignore
 
     async def shutdown(self) -> None:

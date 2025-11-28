@@ -315,7 +315,7 @@ class BaseBitrixEntityClient(Generic[SchemaTypeCreate, SchemaTypeUpdate]):
         start: int = 0,
         entity_type_id: int | None = None,
         crm: bool = True,
-    ) -> ListResponseSchema:
+    ) -> ListResponseSchema[SchemaTypeUpdate]:
         """Список сущностей с фильтрацией
 
         Получает список сущностей из Bitrix24 с возможностью фильтрации,

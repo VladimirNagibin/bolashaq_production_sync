@@ -3,9 +3,9 @@ from typing import TYPE_CHECKING, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.logger import logger
-from models.contact_models import Contact as ContactDB
+from models.company_models import Company as CompanyDB
 from models.user_models import User as UserDB
-from schemas.contact_schemas import ContactCreate, ContactUpdate
+from schemas.company_schemas import CompanyCreate, CompanyUpdate
 from schemas.enums import EntityType
 
 from ..base_repositories.base_communication_repo import (
@@ -17,15 +17,14 @@ if TYPE_CHECKING:
     from ..users.user_services import UserClient
 
 
-class ContactRepository(
+class CompanyRepository(
     EntityWithCommunicationsRepository[
-        ContactDB, ContactCreate, ContactUpdate, int
+        CompanyDB, CompanyCreate, CompanyUpdate, int
     ]
 ):
-    """Contact repository with lazy UserClient loading"""
 
-    model = ContactDB
-    entity_type = EntityType.CONTACT
+    model = CompanyDB
+    entity_type = EntityType.COMPANY
 
     def __init__(
         self,
@@ -39,20 +38,20 @@ class ContactRepository(
         """Устанавливает UserClient после создания репозитория"""
         self._user_client = user_client
         self._user_client_initialized = True
-        logger.debug("UserClient set for ContactRepository")
+        logger.debug("UserClient set for CompanyRepository")
 
     @property
     def user_client(self) -> Optional["UserClient"]:
         """Ленивое свойство для доступа к UserClient"""
         if not self._user_client_initialized and self._user_client is None:
             logger.warning(
-                "UserClient not initialized in ContactRepository. "
+                "UserClient not initialized in CompanyRepository. "
                 "Call set_user_client() first or use methods "
                 "that don't require UserClient."
             )
         return self._user_client
 
-    async def create_entity(self, data: ContactCreate) -> ContactDB:
+    async def create_entity(self, data: CompanyCreate) -> CompanyDB:
         """Создает новый контакт с проверкой связанных объектов"""
         await self._check_related_objects(data)
         try:
@@ -62,16 +61,20 @@ class ContactRepository(
                 logger.error("Update failed: Missing ID")
                 raise ValueError("ID is required for update")
             external_id = data.external_id
-            data = ContactCreate.get_default_entity(int(external_id))
-        return await self.create(data=data)
+            data = CompanyCreate.get_default_entity(int(external_id))
+        return await self.create(
+            data=data,
+        )
 
     async def update_entity(
-        self, data: ContactCreate | ContactUpdate
-    ) -> ContactDB:
+        self, data: CompanyCreate | CompanyUpdate
+    ) -> CompanyDB:
         """Обновляет существующий контакт"""
         await self._check_related_objects(data)
         await self._create_or_update_related(data)
-        return await self.update(data=data)
+        return await self.update(
+            data=data,
+        )
 
     async def _get_related_create(self) -> dict[str, tuple[Any, Any, bool]]:
         """Возвращает кастомные проверки для дочерних классов"""

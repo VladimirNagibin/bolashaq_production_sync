@@ -92,6 +92,36 @@ class DealProcessingError(Exception):
         )
 
 
+class DealNotFoundError(DealProcessingError):
+    """Исключение, когда сделка не найдена в Bitrix24."""
+
+    pass
+
+
+class DealNotInMainFunnelError(DealProcessingError):
+    """Исключение, когда сделка не находится в основной воронке."""
+
+    pass
+
+
+class DealSyncError(DealProcessingError):
+    """Исключение, возникающее при ошибке синхронизации данных сделки."""
+
+    pass
+
+
+class InvalidDealStateError(DealProcessingError):
+    """Исключение для некорректного состояния сделки, требующего отката."""
+
+    pass
+
+
+class ExternalServiceError(DealProcessingError):
+    """Ошибка внешнего сервиса"""
+
+    pass
+
+
 class WebhookValidationError(Exception):
     """Кастомное исключение для ошибок валидации вебхуков."""
 
@@ -233,3 +263,30 @@ class TokenDecryptionError(TokenCipherError):
     """Ошибка при дешифровании токена."""
 
     pass
+
+
+class ValidationError(Exception):
+    """Кастомное исключение для ошибок валидации"""
+
+    def __init__(
+        self,
+        message: str,
+        field: str | None = None,
+        value: Any | None = None,
+    ):
+        self.message = message
+        self.field = field
+        self.value = value
+        super().__init__(self.message)
+
+
+class EntityNotFoundException(Exception):
+    """Не найдена сущность в БД"""
+
+    ...
+
+
+class DatabaseConnectionError(Exception):
+    """Ошибка соединения с БД"""
+
+    ...

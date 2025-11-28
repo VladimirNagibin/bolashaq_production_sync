@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Generic, TypeVar
 from uuid import UUID
 
 from pydantic import (
@@ -12,9 +12,13 @@ from pydantic import (
 )
 from typing_extensions import Self
 
+from core.logger import logger
+
 from .bitrix_validators import BitrixValidators
 from .enums import CURRENCY
 from .fields import FIELDS_BY_TYPE, FIELDS_BY_TYPE_ALT
+
+T = TypeVar("T", bound="CommonFieldMixin")
 
 
 class CommonFieldMixin(BaseModel):  # type: ignore[misc]
@@ -37,6 +41,7 @@ class CommonFieldMixin(BaseModel):  # type: ignore[misc]
         exclude=True,
         init_var=False,
         description="Внутренний UUID идентификатор",
+        examples=["123e4567-e89b-12d3-a456-426614174000"],
     )
     created_at: datetime | None = Field(
         default=None,
@@ -80,7 +85,9 @@ class CommonFieldMixin(BaseModel):  # type: ignore[misc]
         self.internal_id = value
 
     def get_changes(
-        self, entity: Self, exclude_fields: set[str] | None = None
+        self,
+        entity: Self,
+        exclude_fields: set[str] | None = None,
     ) -> dict[str, dict[str, Any]]:
         """
         Сравнивает две сущности и возвращает различия.
@@ -98,6 +105,10 @@ class CommonFieldMixin(BaseModel):  # type: ignore[misc]
             >>> print(changes)
             {'name': {'internal': 'Old', 'external': 'New'}}
         """
+        logger.debug(
+            f"Comparing entities: {self.__class__.__name__} "
+            f"(ID: {self.internal_id})"
+        )
         if exclude_fields is None:
             exclude_fields = self.EXCLUDED_FIELDS
 
@@ -109,21 +120,38 @@ class CommonFieldMixin(BaseModel):  # type: ignore[misc]
         for field_name in fields:
             if field_name in exclude_fields:
                 continue
+            try:
+                old_value = getattr(self, field_name)
+                new_value = getattr(entity, field_name)
 
-            old_value = getattr(self, field_name)
-            new_value = getattr(entity, field_name)
+                if not self._are_values_equal(
+                    field_name, old_value, new_value
+                ):
+                    differences[field_name] = {
+                        "internal": old_value,
+                        "external": new_value,
+                    }
+                    logger.debug(
+                        f"Field '{field_name}' changed: "
+                        f"{old_value} -> {new_value}"
+                    )
+            except AttributeError as e:
+                logger.warning(
+                    f"Field '{field_name}' not found during comparison: "
+                    f"{str(e)}"
+                )
+                continue
 
-            # Сравниваем значения
-            if not self._are_values_equal(field_name, old_value, new_value):
-                differences[field_name] = {
-                    "internal": old_value,
-                    "external": new_value,
-                }
-
+        logger.info(
+            f"Found {len(differences)} changes in {self.__class__.__name__}"
+        )
         return differences
 
     def _are_values_equal(
-        self, field_name: str, value1: Any, value2: Any
+        self,
+        field_name: str,
+        value1: Any,
+        value2: Any,
     ) -> bool:
         """
         Сравнивает два значения с учетом специальных типов данных.
@@ -136,33 +164,41 @@ class CommonFieldMixin(BaseModel):  # type: ignore[misc]
         Returns:
             True если значения равны, иначе False
         """
-        # Оба значения None
-        if value1 is None and value2 is None:
-            return True
+        try:
+            # Оба значения None
+            if value1 is None and value2 is None:
+                return True
 
-        if self._handle_special_fields(field_name, value1, value2):
-            return True
+            if self._handle_special_fields(field_name, value1, value2):
+                return True
 
-        # Одно из значений None
-        if value1 is None or value2 is None:
-            return False
+            # Одно из значений None
+            if value1 is None or value2 is None:
+                return False
 
-        # Для Enum сравниваем значения
-        if isinstance(value1, Enum) and isinstance(value2, Enum):
-            return bool(value1.value == value2.value)
+            # Для Enum сравниваем значения
+            if isinstance(value1, Enum) and isinstance(value2, Enum):
+                return bool(value1.value == value2.value)
 
-        # Для Pydantic моделей рекурсивно сравниваем все поля
-        if isinstance(value1, BaseModel) and isinstance(value2, BaseModel):
-            return bool(value1.model_dump() == value2.model_dump())
+            # Для Pydantic моделей рекурсивно сравниваем все поля
+            if isinstance(value1, BaseModel) and isinstance(value2, BaseModel):
+                return bool(value1.model_dump() == value2.model_dump())
 
-        # Для списков и словарей сравниваем содержимое
-        if isinstance(value1, (list, dict)) and isinstance(
-            value2, (list, dict)
-        ):
+            # Для списков и словарей сравниваем содержимое
+            if isinstance(value1, (list, dict)) and isinstance(
+                value2, (list, dict)
+            ):
+                return bool(value1 == value2)
+
+            # Стандартное сравнение
             return bool(value1 == value2)
 
-        # Стандартное сравнение
-        return bool(value1 == value2)
+        except Exception as e:
+            logger.error(
+                f"Error comparing field '{field_name}': {str(e)}. "
+                f"Values: {value1}, {value2}"
+            )
+            return False
 
     def _handle_special_fields(
         self, field_name: str, value1: Any, value2: Any
@@ -185,7 +221,7 @@ class CommonFieldMixin(BaseModel):  # type: ignore[misc]
         return value1 in (0, None) and value2 in (0, None)
 
 
-class ListResponseSchema(BaseModel):  # type: ignore[misc]
+class ListResponseSchema(BaseModel, Generic[T]):  # type: ignore[misc]
     """
     Схема для ответа со списком сущностей.
 
@@ -195,8 +231,8 @@ class ListResponseSchema(BaseModel):  # type: ignore[misc]
         next: Идентификатор для пагинации (следующая страница)
     """
 
-    result: list[CommonFieldMixin] = Field(
-        default_factory=list[CommonFieldMixin], description="Список сущностей"
+    result: list[T] = Field(
+        default_factory=list[T], description="Список сущностей"
     )
     total: int = Field(ge=0, description="Общее количество сущностей")
     next: int | None = Field(
