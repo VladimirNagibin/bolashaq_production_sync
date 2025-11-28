@@ -30,7 +30,7 @@ class DealHandler:
         DealStatusEnum.ACCEPTED: "_handle_deal_in_accepted_status",
     }
 
-    def __init__(self, deal_client: "DealClient"):
+    def __init__(self, deal_client: "DealClient") -> None:
         self.deal_client = deal_client
 
     async def handle_deal(
@@ -121,7 +121,7 @@ class DealHandler:
             )
         repo = self.deal_client.repo
         initial_stage_id = await repo.get_external_id_by_sort_order_stage(
-            DealStagesEnum.INITIAL_SORT_ORDER,
+            DealStagesEnum.NEW,
         )
         if deal_b24.stage_id != initial_stage_id:
             self.deal_client.update_tracker.update_field(
@@ -185,7 +185,7 @@ class DealHandler:
             deal_b24.stage_id
         )
 
-        if stage_number and stage_number > DealStagesEnum.INITIAL_SORT_ORDER:
+        if stage_number and stage_number > DealStagesEnum.NEW:
             logger.debug(
                 "Deal stage advanced beyond initial",
                 extra={
@@ -193,9 +193,9 @@ class DealHandler:
                     "stage_number": stage_number,
                 },
             )
-            if stage_number > DealStagesEnum.SECOND_SORT_ORDER:
+            if stage_number > DealStagesEnum.NEEDS_IDENTIFICATION:
                 second_stage = await repo.get_external_id_by_sort_order_stage(
-                    DealStagesEnum.SECOND_SORT_ORDER
+                    DealStagesEnum.NEEDS_IDENTIFICATION
                 )
                 self.deal_client.update_tracker.update_field(
                     "stage_id", second_stage, deal_b24
@@ -209,3 +209,33 @@ class DealHandler:
             logger.info(
                 f"Deal {deal_b24.external_id} status updated to ACCEPTED."
             )
+
+    async def _handle_deal_in_accepted_status(
+        self,
+        deal_b24: DealCreate,
+        deal_db: DealCreate | None,
+        changes: dict[str, dict[str, Any]] | None,
+    ) -> None:
+        """Обработка сделки, которая находится в статусе 'Новая'."""
+        logger.info(
+            f"Handling deal in 'ACCEPTED' status: {deal_b24.external_id}"
+        )
+        repo = self.deal_client.repo
+        stage_number = await repo.get_sort_order_by_external_id_stage(
+            deal_b24.stage_id
+        )
+        available_stage_number = DealStagesEnum.NEEDS_IDENTIFICATION
+
+        if deal_b24.company_id and await self._check_products(deal_b24):
+            available_stage_number = DealStagesEnum.OFFER_PREPARE
+        if stage_number != available_stage_number:
+            available_stage = await repo.get_external_id_by_sort_order_stage(
+                available_stage_number
+            )
+            self.deal_client.update_tracker.update_field(
+                "stage_id", available_stage, deal_b24
+            )
+
+    async def _check_products(self, deal_b24: DealCreate) -> bool:
+
+        return True
