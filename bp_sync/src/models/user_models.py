@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from .deal_models import Deal
     from .department_models import Department
     from .lead_models import Lead
+    from .product_models import Product
     from .timeline_comment_models import TimelineComment
 
 
@@ -222,6 +223,18 @@ class User(IntIdEntity):
 
     manager: Mapped["Manager"] = relationship(
         back_populates="user", uselist=False
+    )
+
+    modified_products: Mapped[list["Product"]] = relationship(
+        "Product",
+        back_populates="modified_user",
+        foreign_keys="[Product.modified_by]",
+    )
+
+    created_products: Mapped[list["Product"]] = relationship(
+        "Product",
+        back_populates="created_user",
+        foreign_keys="[Product.created_by]",
     )
 
 

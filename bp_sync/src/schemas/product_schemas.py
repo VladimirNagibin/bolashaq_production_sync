@@ -8,6 +8,7 @@ from pydantic import (
     Field,
     field_validator,
 )
+from pydantic.fields import FieldInfo
 
 from .base_schemas import CommonFieldMixin, EntityAwareSchema
 from .enums import EntityTypeAbbr
@@ -22,6 +23,7 @@ class BaseProductEntity(CommonFieldMixin):
     """
 
     FIELDS_BY_TYPE: ClassVar[dict[str, str]] = FIELDS_PRODUCT
+    FIELDS_BY_TYPE_ALT: ClassVar[dict[str, str]] = FIELDS_PRODUCT_ALT
     _EXCLUDED_FIELDS = FIELDS_PRODUCT_ALT["exclude_b24"]
 
     # Идентификаторы и основные данные
@@ -165,6 +167,52 @@ class ListProductEntity(BaseModel):  # type: ignore[misc]
         return len(self.result)
 
 
+class FieldText(BaseModel):  # type: ignore[misc]
+    text_field: str | None = Field(
+        None, validation_alias=AliasChoices("TEXT", "text")
+    )  # TEXT
+    type_field: str | None = Field(
+        "HTML", validation_alias=AliasChoices("TYPE", "type")
+    )  # TYPE (HTML/TEXT)
+
+    def to_bitrix_dict(self, alias_choice: int) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+
+        for field_name, field_info in self.__class__.model_fields.items():
+            value = getattr(self, field_name, None)
+            if value is None:
+                continue
+
+            # Получаем финальный алиас для поля на основе alias_choice
+            field_alias = self._get_field_alias(field_info, alias_choice)
+
+            result[field_alias] = value
+
+        return result
+
+    def _get_field_alias(
+        self, field_info: FieldInfo, alias_choice: int
+    ) -> str:
+        """
+        Вспомогательный метод для получения алиаса поля из FieldInfo.
+        """
+        validation_alias = field_info.validation_alias
+        if isinstance(validation_alias, AliasChoices):
+            # Безопасный выбор алиаса с проверкой границ
+            choice_index = max(
+                0, min(alias_choice - 1, len(validation_alias.choices) - 1)
+            )
+            return validation_alias.choices[choice_index]  # type: ignore
+
+        # Если AliasChoices не используется, пробуем получить обычный алиас
+        return field_info.alias or field_info.name  # type: ignore
+
+
+class FieldValue(BaseModel):  # type: ignore[misc]
+    value_id: int = Field(..., alias="valueId")  # id value
+    value: str | FieldText = Field(..., alias="value")  # value
+
+
 class BaseProduct(CommonFieldMixin):
     """
     Общие поля создания и обновления с алиасами для соответствия
@@ -172,6 +220,7 @@ class BaseProduct(CommonFieldMixin):
     """
 
     FIELDS_BY_TYPE: ClassVar[dict[str, str]] = FIELDS_PRODUCT
+    FIELDS_BY_TYPE_ALT: ClassVar[dict[str, str]] = FIELDS_PRODUCT_ALT
 
     code: str | None = Field(
         None, validation_alias=AliasChoices("CODE", "code")
@@ -192,7 +241,7 @@ class BaseProduct(CommonFieldMixin):
     )  # Дата создания
     date_modify: datetime | None = Field(
         None,
-        validation_alias=AliasChoices("TIMESTAMP_X", "TIMESTAMP_X"),
+        validation_alias=AliasChoices("TIMESTAMP_X", "timestampX"),
     )  # Дата изменения
     modified_by: int | None = Field(
         None,
@@ -230,57 +279,61 @@ class BaseProduct(CommonFieldMixin):
         None,
         validation_alias=AliasChoices("MEASURE", "measure"),
     )  # Единица измерения
-    article: str | None = Field(
+    description: str | None = Field(
+        None, validation_alias=AliasChoices("DESCRIPTION", "detailText")
+    )  # DESCRIPTION
+    description_type: str | None = Field(
         None,
-        validation_alias=AliasChoices("PROPERTY_109", "property109"),
-    )  # Артикул
-    remains_spb: float | None = Field(
+        validation_alias=AliasChoices("DESCRIPTION_TYPE", "detailTextType"),
+    )  # DESCRIPTION_TYPE
+    link: FieldValue | None = Field(
+        None,
+        validation_alias=AliasChoices("PROPERTY_111", "property111"),
+    )  # Ссылка
+    additional_description: FieldValue | None = Field(
         None,
         validation_alias=AliasChoices("PROPERTY_113", "property113"),
-    )  # Остаток СПб
-    remains_kdr: float | None = Field(
+    )  # Доп описание
+    original_name: FieldValue | None = Field(
         None,
         validation_alias=AliasChoices("PROPERTY_115", "property115"),
-    )  # Остаток Кдр
-    remains_msk: float | None = Field(
+    )  # Оригинальное название
+    standards: FieldValue | None = Field(
         None,
         validation_alias=AliasChoices("PROPERTY_117", "property117"),
-    )  # Остаток Мск
-    remains_nsk: float | None = Field(
+    )  # Стандарты
+    article: FieldValue | None = Field(
         None,
         validation_alias=AliasChoices("PROPERTY_119", "property119"),
-    )  # Остаток Нск
-    price_distributor: float | None = Field(
+    )  # Артикул
+    characteristics: FieldValue | None = Field(
         None,
         validation_alias=AliasChoices("PROPERTY_121", "property121"),
-    )  # Цена Дистр
-    price_minimal: float | None = Field(
+    )  # Технические характеристики
+    characteristics_for_print: FieldValue | None = Field(
         None,
         validation_alias=AliasChoices("PROPERTY_123", "property123"),
-    )  # Цена Мин
-    manufacturer: str | None = Field(
+    )  # Тех характеристики для печати
+    complect_for_print: FieldValue | None = Field(
+        None,
+        validation_alias=AliasChoices("PROPERTY_125", "property125"),
+    )  # Комплект поставки для печати
+    complect: FieldValue | None = Field(
         None,
         validation_alias=AliasChoices("PROPERTY_127", "property127"),
-    )  # Производитель
-    country: str | None = Field(
+    )  # Комплект поставки
+    description_for_print: FieldValue | None = Field(
         None,
         validation_alias=AliasChoices("PROPERTY_129", "property129"),
-    )  # Страна
-    brand: str | None = Field(
+    )  # Описание для документов
+    standards_for_print: FieldValue | None = Field(
         None,
         validation_alias=AliasChoices("PROPERTY_131", "property131"),
-    )  # Бренд
-    incentive_tier: int | None = Field(
-        None,
-        validation_alias=AliasChoices("PROPERTY_151", "property151"),
-    )  # Группы товара для мотивации продаж
-    # 75:A, 77:B, 79:C, 81:Товар месяца, 83:Не товар, 85:Искл
+    )  # Стандарты для печати
 
-    @field_validator(  # type: ignore[misc]
-        "price", "price_distributor", "price_minimal", mode="before"
-    )
+    @field_validator("price", mode="before")  # type: ignore[misc]
     @classmethod
-    def clean_other_numeric_fields(cls, v: Any) -> float | None:
+    def clean_numeric_fields(cls, v: Any) -> float | None:
         return parse_numeric_string(v)
 
 
@@ -290,6 +343,15 @@ class ProductCreate(BaseProduct, EntityAwareSchema):
     name: str = Field(
         ..., validation_alias=AliasChoices("NAME", "name")
     )  # Название
+
+    @classmethod
+    def get_default_entity(cls, external_id: int) -> "ProductCreate":
+        product_data: dict[str, Any] = {
+            "name": f"Deleted Product {external_id}",
+            "external_id": external_id,
+            "is_deleted_in_bitrix": True,
+        }
+        return ProductCreate(**product_data)
 
 
 class ProductUpdate(BaseProduct):

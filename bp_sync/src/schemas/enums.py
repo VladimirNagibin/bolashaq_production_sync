@@ -85,6 +85,7 @@ class EntityType(StrEnum):
     USER = "User"
     INVOICE = "Invoice"
     TIMELINE_COMMENT = "TimelineComment"
+    PRODUCT = "Product"
 
 
 class CommunicationType(StrEnum):

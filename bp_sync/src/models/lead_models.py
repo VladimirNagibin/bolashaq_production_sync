@@ -9,6 +9,8 @@ from schemas.enums import EntityType, StageSemanticEnum
 from schemas.lead_schemas import LeadCreate
 
 from .bases import CommunicationIntIdEntity
+
+# from .product_models import ProductEntity
 from .user_models import User
 
 if TYPE_CHECKING:
@@ -97,6 +99,13 @@ class Lead(CommunicationIntIdEntity):
     deals: Mapped[list["Deal"]] = relationship(
         "Deal", back_populates="lead", foreign_keys="[Deal.lead_id]"
     )
+
+    # Связь с товарами
+    # product_entities: Mapped[list["ProductEntity"]] = relationship(
+    #     "ProductEntity",
+    #     back_populates="lead",
+    #     foreign_keys="[ProductEntity.lead_id]",
+    # )
 
     currency_id: Mapped[str | None] = mapped_column(
         comment="Ид валюты"

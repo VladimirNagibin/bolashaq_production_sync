@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import Any, ClassVar, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, ClassVar, Generic, TypeVar
 from uuid import UUID
 
 from pydantic import (
@@ -10,6 +10,7 @@ from pydantic import (
     Field,
     model_validator,
 )
+from pydantic.fields import FieldInfo
 from typing_extensions import Self
 
 from core.logger import logger
@@ -17,6 +18,9 @@ from core.logger import logger
 from .bitrix_validators import BitrixValidators
 from .enums import CURRENCY
 from .fields import FIELDS_BY_TYPE, FIELDS_BY_TYPE_ALT
+
+if TYPE_CHECKING:
+    from .product_schemas import FieldValue
 
 T = TypeVar("T", bound="CommonFieldMixin")
 
@@ -404,9 +408,18 @@ class EntityAwareSchema(BaseModel):  # type: ignore[misc]
         )
 
     def model_dump_db(self, exclude_unset: bool = False) -> dict[str, Any]:
-
         data = self.model_dump(exclude_unset=exclude_unset)
-        for key in self.FIELDS_BY_TYPE_ALT["list"]:
+        for key in self.FIELDS_BY_TYPE_ALT.get("list", []):
+            try:
+                del data[key]
+            except KeyError:
+                ...
+        for key in self.FIELDS_BY_TYPE_ALT.get("dict_none_str", []):
+            try:
+                del data[key]
+            except KeyError:
+                ...
+        for key in self.FIELDS_BY_TYPE_ALT.get("dict_none_dict", []):
             try:
                 del data[key]
             except KeyError:
@@ -418,6 +431,16 @@ class EntityAwareSchema(BaseModel):  # type: ignore[misc]
                 value is None or not int(value)
             ):
                 data[key] = None
+            # elif key in self.FIELDS_BY_TYPE_ALT.get("dict_none_str", []):
+            #     if value is None:
+            #         data[key] = None
+            #     else:
+            #         data[key] = value["value"]
+            # elif key in self.FIELDS_BY_TYPE_ALT.get("dict_none_dict", []):
+            #     if value is None:
+            #         data[key] = None
+            #     else:
+            #         data[key] = value["value"]["text_field"]
         return data  # type: ignore[no-any-return]
 
     # Константы для преобразований
@@ -451,7 +474,7 @@ class EntityAwareSchema(BaseModel):  # type: ignore[misc]
 
     _MONEY_FIELDS: ClassVar[set[str]] = {"UF_CRM_1760872964", "half_amount"}
 
-    def to_bitrix_dict(self, alias_choice: int = 1) -> dict[str, Any]:
+    def to_bitrix_dict_(self, alias_choice: int = 1) -> dict[str, Any]:
         """
         Преобразует модель Pydantic в словарь, оптимизированный для Bitrix API.
 
@@ -534,10 +557,73 @@ class EntityAwareSchema(BaseModel):  # type: ignore[misc]
 
         return alias_mapping
 
+    def to_bitrix_dict(self, alias_choice: int = 1) -> dict[str, Any]:
+        """
+        Преобразует модель Pydantic в словарь, оптимизированный для Bitrix API.
+        """
+        result: dict[str, Any] = {}
+
+        # Итерируемся по полям модели, чтобы получить доступ к исходным
+        # значениям и информации о полях (FieldInfo).
+        for field_name, field_info in self.__class__.model_fields.items():
+            # Получаем значение поля напрямую из объекта.
+            # Это будет исходный Python-объект
+            # (например, экземпляр FieldValue), а не словарь.
+            value = getattr(self, field_name, None)
+
+            # Пропускаем, если значение не установлено (unset) или равно None.
+            # Это имитирует поведение exclude_unset=True и exclude_none=True.
+            if value is None:
+                continue
+
+            # Получаем финальный алиас для поля на основе alias_choice
+            field_alias = self._get_field_alias(field_info, alias_choice)
+
+            # Пропускаем исключенные поля (например, 'ID', 'id')
+            if field_alias in self._EXCLUDED_FIELDS:
+                continue
+
+            # Применяем преобразования к исходному значению.
+            # Теперь isinstance(value, FieldValue) будет работать корректно.
+            transformed_value = self._apply_field_transformations(
+                field_alias, value, alias_choice
+            )
+
+            # Если после преобразования значение стало None,
+            # не добавляем его в результат.
+            if transformed_value is None:
+                continue
+
+            result[field_alias] = transformed_value
+
+        return result
+
+    def _get_field_alias(
+        self, field_info: FieldInfo, alias_choice: int
+    ) -> str:
+        """
+        Вспомогательный метод для получения алиаса поля из FieldInfo.
+        """
+        validation_alias = field_info.validation_alias
+        if isinstance(validation_alias, AliasChoices):
+            # Безопасный выбор алиаса с проверкой границ
+            choice_index = max(
+                0, min(alias_choice - 1, len(validation_alias.choices) - 1)
+            )
+            return validation_alias.choices[choice_index]  # type: ignore
+
+        # Если AliasChoices не используется, пробуем получить обычный алиас
+        return field_info.alias or field_info.name  # type: ignore
+
     def _apply_field_transformations(
         self, field_alias: str, value: Any, alias_choice: int
     ) -> Any:
         """Применяет все необходимые преобразования к значению поля"""
+        from .product_schemas import FieldValue
+
+        if isinstance(value, FieldValue):
+            return self._transform_field_value(value, alias_choice)
+
         if isinstance(value, bool):
             return self._transform_boolean_value(field_alias, value)
         elif isinstance(value, datetime):
@@ -550,6 +636,35 @@ class EntityAwareSchema(BaseModel):  # type: ignore[misc]
             )
         else:
             return self._transform_numeric_value(field_alias, value)
+
+    def _transform_field_value(
+        self, value: "FieldValue", alias_choice: int
+    ) -> dict[str, Any]:
+        """
+        Преобразует объект FieldValue в формат, ожидаемый Bitrix API.
+        Рекурсивно применяет алиасы для вложенных моделей.
+        """
+        result: dict[str, Any] = {}
+        # Обрабатываем поле value_id, если оно есть
+        if hasattr(value, "value_id") and value.value_id is not None:
+            # Предполагаем, что алиас для value_id - это 'valueId'
+            result["valueId"] = value.value_id
+
+        # Рекурсивно обрабатываем вложенное поле 'value'
+        if hasattr(value, "value") and value.value is not None:
+            nested_value = value.value
+            if isinstance(nested_value, BaseModel):
+                # Если вложенное значение - это другая Pydantic-модель
+                # (например, FieldText),
+                # используем model_dump(by_alias=True), чтобы применить ее
+                # алиасы.
+                result["value"] = nested_value.to_bitrix_dict(alias_choice)
+            else:
+                # Если это простое значение (например, строка),
+                # просто присваиваем его.
+                result["value"] = nested_value
+
+        return result
 
     def _transform_boolean_value(self, field_alias: str, value: bool) -> Any:
         """Преобразует булево значение в нужный формат"""
