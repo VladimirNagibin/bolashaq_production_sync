@@ -13,6 +13,14 @@ async def verify_api_key(api_key: str = Depends(api_key_header)) -> str:
     if api_key != API_KEY:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API Key",
+            detail=f"Invalid API Key: {api_key[:3]}...",
         )
     return api_key
+
+
+async def verify_incoming_webhook_token(key: str) -> None:
+    if key != settings.WEB_HOOK_TOKEN_INCOMING:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid incoming webhook token: {key[:3]}...",
+        )

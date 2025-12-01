@@ -29,7 +29,7 @@ from services.users.user_services import UserClient
 
 from ..base_services.base_service import BaseEntityClient
 from ..decorators import log_execution_time
-from ..exceptions import (  # InvalidDealStateError,
+from ..exceptions import (  # InvalidDealStateError,; BaseAppException,
     DealNotFoundError,
     DealNotInMainFunnelError,
     DealProcessingError,
@@ -59,6 +59,7 @@ from .deal_repository import DealRepository
 # from .deal_source_handler import DealSourceHandler
 # from .deal_stage_handler import DealStageHandler
 from .deal_update_tracker import DealUpdateTracker
+from .deals_webhook_handler import DealWebhookHandler
 
 # from fastapi import HTTPException, Request, status
 # from fastapi.responses import JSONResponse
@@ -127,6 +128,7 @@ class DealClient(BaseEntityClient[DealDB, DealRepository, DealBitrixClient]):
         self._data_provider: DealDataProvider | None = None
         self._update_tracker: DealUpdateTracker | None = None
         self._deal_handler: DealHandler | None = None
+        self._deal_webhook_handler: DealWebhookHandler | None = None
         # self.site_order_handler = SiteOrderHandler(self)
         # self.deal_with_invoice_handler = DealWithInvioceHandler(self)
         # self.deal_source_handler = DealSourceHandler(self)
@@ -216,6 +218,12 @@ class DealClient(BaseEntityClient[DealDB, DealRepository, DealBitrixClient]):
         if not self._deal_handler:
             self._deal_handler = DealHandler(self)
         return self._deal_handler
+
+    @property
+    def deal_webhook_handler(self) -> DealWebhookHandler:
+        if not self._deal_webhook_handler:
+            self._deal_webhook_handler = DealWebhookHandler(self)
+        return self._deal_webhook_handler
 
     async def _get_related_entity(
         self, entity_type: str, entity_id: int
@@ -345,72 +353,6 @@ class DealClient(BaseEntityClient[DealDB, DealRepository, DealBitrixClient]):
             self.update_tracker.reset()
             logger.info(f"Finished processing deal {external_id}")
 
-    # async def _check_update_products(
-    #     self, deal_b24: DealCreate, external_id: int
-    # ) -> None:
-    #     product_client = self.product_bitrix_client
-    #     products_update: ProductUpdateResult = (
-    #         await product_client.check_update_products_entity(
-    #             external_id, EntityTypeAbbr.DEAL
-    #         )
-    #     )
-    #     # Если товары заменялись, тогда сообщение ответственному
-    #     # (кроме заказов с сайта).
-    #     if products_update.has_changes:
-    #         removed_products = products_update.removed_products
-    #         replaced_products = products_update.replaced_products
-    #         link = self.bitrix_client.get_formatted_link(
-    #             deal_b24.external_id, deal_b24.title
-    #         )
-    #         if removed_products:
-    #             removed_info = (
-    #                 f"Сделка {link}: удалены товары "
-    #                 f"{len(removed_products)}шт."
-    #                 f"\n{[p.product_name for p in removed_products]}"
-    #             )
-    #             await self.bitrix_client.send_message_b24(
-    #                 deal_b24.assigned_by_id, removed_info
-    #             )
-    #         if replaced_products:
-    #             products_replaced = [
-    #                 f"{change['old_product'].product_name} -> "
-    #                 f"{change['new_product'].product_name}"
-    #                 for change in replaced_products
-    #             ]
-    #             products_replaced_ = "\n".join(products_replaced)
-    #             replaced_info = (
-    #                 f"Сделка {link}: заменены товары "
-    #                 f"{len(replaced_products)}"
-    #                 f"шт.\n{products_replaced_}"
-    #             )
-    #             await self.bitrix_client.send_message_b24(
-    #                 deal_b24.assigned_by_id, replaced_info
-    #             )
-
-    #     products = products_update.products
-    #     if products:
-    #         self.data_provider.set_cached_products(products)
-    #         logger.debug(
-    #             f"Cached {products.count_products} products for deal "
-    #             f"{external_id}"
-    #         )
-
-    # async def _send_message_unavailable_stage(
-    #     self, current_stage: int, available_stage: int, deal_b24: DealCreate
-    # ) -> None:
-    #     messages: list[str] = []
-    #     for i in range(available_stage, current_stage):
-    #         messages.append(CONDITION_MOVING_STAGE[i])
-    #     link = (
-    #         f"[url={self.bitrix_client.get_link(deal_b24.external_id)}]"
-    #         f"{deal_b24.title}[/url]"
-    #     )
-    #     await self.bitrix_client.send_message_b24(
-    #         deal_b24.assigned_by_id,
-    #         f"Сделка {link}: {'; '.join(messages)}",
-    #         # deal_b24.assigned_by_id, "; ".join(messages)
-    #     )
-
     def get_external_id(self, deal_b24: DealCreate) -> int | None:
         if not deal_b24.external_id:
             return None
@@ -463,196 +405,18 @@ class DealClient(BaseEntityClient[DealDB, DealRepository, DealBitrixClient]):
                 f"Synchronization failed for deal {deal_b24.external_id}"
             ) from e
 
-    # async def check_source(
-    #     self,
-    #     deal_b24: DealCreate,
-    #     deal_db: DealCreate | None,
-    # ) -> bool:
-    #     """Проверка и определение источника сделки"""
-    #     try:
-    #         needs_update = False
-    #         creation_source_id = deal_b24.creation_source_id
-    #         source_id = deal_b24.source_id
-    #         type_id = deal_b24.type_id
-    #         context: dict[str, Any] = {}
-    #         if deal_db and deal_db.is_setting_source:
-    #             creation_corr = CreationSourceEnum.from_value(
-    #                 deal_db.creation_source_id
-    #             )
-    #             type_corr = DealTypeEnum.from_value(deal_db.type_id)
-    #             source_corr = DealSourceEnum.from_value(deal_db.source_id)
-    #         else:
-    #             result = await identify_source(
-    #                 deal_b24,
-    #                 self.get_lead,
-    #                 self.get_company,
-    #                 self.get_comments,
-    #                 context=context,
-    #             )
-    #             if "company" in context:
-    #                 self.data_provider.set_cached_company(context["company"])
-    #             creation_corr, type_corr, source_corr = result
-    #             logger.info(
-    #                 f"{deal_b24.title} - comparison of source changes:"
-    #                 f"{CreationSourceEnum.get_display_name(creation_corr)}"
-    #                 f":{creation_source_id}, "
-    #                 f"{DealTypeEnum.get_display_name(type_corr)}:{type_id}, "
-    #                 f"{DealSourceEnum.get_display_name(source_corr)}:"
-    #                 f"{source_id}"
-    #             )
-
-    #         needs_update |= await self._update_field_if_needed(
-    #             deal_b24,
-    #             "creation_source_id",
-    #             creation_source_id,
-    #             creation_corr.value,
-    #         )
-
-    #         needs_update |= await self._update_field_if_needed(
-    #             deal_b24,
-    #             "source_id",
-    #             source_id,
-    #             source_corr.value,
-    #         )
-
-    #         needs_update |= await self._update_field_if_needed(
-    #             deal_b24,
-    #             "type_id",
-    #             type_id,
-    #             type_corr.value,
-    #         )
-    #         needs_update |= await self._handle_assignment(
-    #             deal_b24, creation_corr, type_corr, deal_db
-    #         )
-    #         logger.debug(
-    #             f"Source check for deal {deal_b24.external_id} completed, "
-    #             f"updates needed: {needs_update}"
-    #         )
-    #         return needs_update
-    #     except Exception as e:
-    #         logger.error(
-    #             f"Error identifying source for deal {deal_b24.external_id}: "
-    #             f"{str(e)}"
-    #         )
-    #         raise
-
-    # async def _update_field_if_needed(
-    #     self,
-    #     deal_b24: DealCreate,
-    #     field_name: str,
-    #     current_value: Any,
-    #     correct_value: Any,
-    # ) -> bool:
-    #     """
-    #     Обновляет поле сделки, если текущее значение отличается
-    #     от корректного
-    #     """
-    #     if current_value != correct_value:
-    #         self.update_tracker.update_field(
-    #             field_name, correct_value, deal_b24
-    #         )
-    #         logger.info(
-    #             f"Updated {field_name} from {current_value} to "
-    #             f"{correct_value}"
-    #         )
-    #         return True
-    #     return False
-
-    # async def _handle_assignment(
-    #     self,
-    #     deal_b24: DealCreate,
-    #     # creation_source: CreationSourceEnum,
-    #     # type_corr: DealTypeEnum,
-    #     deal_db: DealCreate | None,
-    # ) -> bool:
-    #     """
-    #     Обрабатывает назначение ответственного в зависимости от источника
-    #     сделки
-    #     """
-    #     needs_update = False
-
-    #     if (
-    #         creation_source == CreationSourceEnum.AUTO
-    #         and type_corr == DealTypeEnum.ONLINE_SALES
-    #         and not deal_db
-    #     ):
-    #         if deal_b24.assigned_by_id != WEBSITE_CREATOR:
-    #             self.update_tracker.update_field(
-    #                 "assigned_by_id", WEBSITE_CREATOR, deal_b24
-    #             )
-    #             logger.info(
-    #                 "Assigned to website creator for auto-created deal"
-    #             )
-    #     else:
-    #         if not await self._check_active_manager(deal_b24.assigned_by_id):
-    #             self.update_tracker.update_field(
-    #                 "assigned_by_id", WEBSITE_CREATOR, deal_b24
-    #             )
-    #             logger.info(
-    #                 "Reassigned to website creator due to inactive manager"
-    #             )
-
-    #     return needs_update
-
-    # async def _check_active_manager(self, manager_id: int) -> bool:
-    #     """Проверка активных менеджеров"""
-    #     logger.debug(f"Checking if manager {manager_id} is active")
-    #     try:
-    #         user_service = await self.repo.get_user_client()
-    #         return await user_service.repo.is_activity_manager(manager_id)
-    #     except Exception as e:
-    #         logger.error(f"Failed to check manager {manager_id}: {str(e)}")
-    #         return False
-
-    # async def update_comments(
-    #     self, comment: str, deal_b24: DealCreate
-    # ) -> bool:
-    #     """Обновляет комментарии сделки"""
-    #     logger.debug(f"Updating comments for deal {deal_b24.external_id}")
-    #     try:
-    #         comments_deal = deal_b24.comments
-    #         comments_new = None
-    #         if not comments_deal:
-    #             comments_new = comment
-    #         else:
-    #             if comment in comments_deal:
-    #                 return False
-    #             comments_new = (
-    #                 f"<div>{comments_deal}</div><div>{comment}<br></div>"
-    #             )
-    #             self.update_tracker.update_field(
-    #                 "comments", comments_new, deal_b24
-    #             )
-    #         return True
-
-    #     except Exception as e:
-    #         logger.error(
-    #             "Failed to update comments for deal "
-    #             f"{deal_b24.external_id}: {str(e)}"
-    #         )
-    #         return False
-
-    # async def set_deal_source(
-    #     self,
-    #     user_id: str,
-    #     key: str,
-    #     deal_id: str,
-    #     creation_source: str | None,
-    #     source: str | None,
-    #     type_deal: str | None,
-    # ) -> bool:
-    #     try:
-    #         return await self.deal_source_handler.set_deal_source(
-    #             user_id, key, deal_id, creation_source, source, type_deal
-    #         )
-    #     except HTTPException:
-    #         # Re-raise HTTP exceptions to be handled by FastAPI
-    #         raise
-    #     except Exception as e:
-    #         logger.error(
-    #             f"Error in process_deal_source: {str(e)}", exc_info=True
-    #         )
-    #         return False
+    async def handle_deal_without_offer(
+        self,
+        user_id: str,
+        deal_id: str,
+    ) -> None:
+        """
+        Обработчик входящего вебхука сделки без КП.
+        """
+        return
+        await self.deal_webhook_handler.handle_deal_without_offer(
+            user_id, deal_id
+        )
 
     # async def deal_processing(
     #     self,
@@ -795,40 +559,6 @@ class DealClient(BaseEntityClient[DealDB, DealRepository, DealBitrixClient]):
     #             "suggestion": "Please try again later",
     #         },
     #     )
-
-    # async def update_processing_statuses(
-    #     self, relative_time: datetime | None = None
-    # ) -> dict[str, int]:
-    #     """Обновляет статусы обработки сделок"""
-    #     try:
-    #         status_service = self.deal_processing_status_service
-    #         return await status_service.update_processing_statuses(
-    #             relative_time
-    #         )
-    #     except Exception as e:
-    #         logger.error(f"Error updating processing statuses: {e}")
-    #         raise HTTPException(
-    #             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-    #             detail=f"Failed to update processing statuses: {str(e)}",
-    #         )
-
-    # async def update_single_processing_status(
-    #     self, deal_id: int, relative_time: datetime | None = None
-    # ) -> bool:
-    #     """Обновляет статус обработки для одной сделки"""
-    #     try:
-    #         status_service = self.deal_processing_status_service
-    #         return await status_service.update_single_deal_status(
-    #             deal_id, relative_time
-    #         )
-    #     except Exception as e:
-    #         logger.error(f"Error updating single processing status: {e}")
-    #         raise HTTPException(
-    #             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-    #             detail=(
-    #                 f"Failed to update single processing status: {str(e)}"
-    #             ),
-    #         )
 
     # async def checking_deals(self) -> None:
     #     """

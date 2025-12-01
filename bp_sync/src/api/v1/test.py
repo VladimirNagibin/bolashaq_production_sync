@@ -47,14 +47,17 @@ async def check(
     product_client: ProductClient = Depends(get_product_service),
 ) -> JSONResponse:
     try:
-        result_ = ""
-        # await deal_client.handle_deal(141)
+        # result_ = ""
+        await deal_client.handle_deal(141)
         # result_ = result[0].to_pydantic().model_dump_json()
-        result = await product_client.import_from_bitrix(801)
-        result_ = await result[0].to_pydantic()
-        print(result_)
+        # result = await product_client.import_from_bitrix(801)
+        # result_ = await result[0].to_pydantic()
+        # print(result_)
     except Exception as e:
-        result_ = str(e)
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"error": str(e)},
+        )
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={

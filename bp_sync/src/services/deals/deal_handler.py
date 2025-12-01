@@ -6,6 +6,7 @@ from schemas.deal_schemas import DealCreate, DealUpdate
 from schemas.enums import (
     DealStagesEnum,
     DealStatusEnum,
+    EntityTypeAbbr,
     StageSemanticEnum,
 )
 
@@ -62,7 +63,7 @@ class DealHandler:
         handler_name = self.STATUS_HANDLERS.get(deal_b24.status_deal)
 
         deal_handler_error = DealProcessingError(
-            f"Not found handler for status: {deal_b24.status_deal.value}",
+            f"Not found handler for status: {deal_b24.status_deal}",
             self.deal_client.get_external_id(deal_b24),
         )
         if not handler_name:
@@ -154,7 +155,9 @@ class DealHandler:
                 self.deal_client.get_external_id(deal_b24),
             )
 
-        if deal_b24.status_deal != deal_db.status_deal:
+        if not deal_b24.status_deal or (
+            deal_b24.status_deal != deal_db.status_deal
+        ):
             logger.warning(
                 f"Status mismatch for deal {deal_b24.external_id}. "
                 f"B24: {deal_b24.status_deal}, DB: {deal_db.status_deal}. "
@@ -169,10 +172,10 @@ class DealHandler:
             await self.deal_client.bitrix_client.update(deal_update)
             raise InvalidDealStateError(
                 f"Deal {deal_b24.external_id} status was changed externally. "
-                f"Rolled back to '{deal_db.status_deal.value}'."
+                f"Rolled back to '{deal_db.status_deal}'."
             )
 
-    async def handle_deal_in_new_status(
+    async def _handle_deal_in_new_status(
         self,
         deal_b24: DealCreate,
         deal_db: DealCreate | None,
@@ -184,7 +187,6 @@ class DealHandler:
         stage_number = await repo.get_sort_order_by_external_id_stage(
             deal_b24.stage_id
         )
-
         if stage_number and stage_number > DealStagesEnum.NEW:
             logger.debug(
                 "Deal stage advanced beyond initial",
@@ -226,7 +228,9 @@ class DealHandler:
         )
         available_stage_number = DealStagesEnum.NEEDS_IDENTIFICATION
 
-        if deal_b24.company_id and await self._check_products(deal_b24):
+        if deal_b24.company_id and await self._check_products(
+            self.deal_client.get_external_id(deal_b24)
+        ):
             available_stage_number = DealStagesEnum.OFFER_PREPARE
         if stage_number != available_stage_number:
             available_stage = await repo.get_external_id_by_sort_order_stage(
@@ -236,6 +240,29 @@ class DealHandler:
                 "stage_id", available_stage, deal_b24
             )
 
-    async def _check_products(self, deal_b24: DealCreate) -> bool:
-
+    async def _check_products(self, deal_id: int | None) -> bool:
+        """Проверяет, есть ли товары в сделке."""
+        logger.debug(f"Checking products for deal: {deal_id}")
+        if not self.deal_client.product_client:
+            raise ValueError("Product client not set")
+        if not deal_id:
+            raise ValueError("deal_id not set")
+        product_bitrix_client = self.deal_client.product_client.bitrix_client
+        products = await product_bitrix_client.get_entity_products(
+            deal_id, EntityTypeAbbr.DEAL
+        )
+        if not products:
+            return False
+        for product in products.result:
+            if (
+                not product.price
+                or not product.quantity
+                or product.price <= 0
+                or product.quantity <= 0
+            ):
+                logger.debug(
+                    f"Product `{product.product_name}` has invalid price or "
+                    "quantity"
+                )
+                return False
         return True
