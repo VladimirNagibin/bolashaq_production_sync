@@ -2,6 +2,7 @@ from datetime import datetime
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, func
 from sqlalchemy.dialects.postgresql import ENUM as PgEnum
+from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from db.postgres import Base
@@ -9,6 +10,7 @@ from schemas.deal_schemas import DealCreate
 from schemas.enums import (
     DealStatusEnum,
     EntityType,
+    EntityTypeAbbr,
     StageSemanticEnum,
 )
 
@@ -17,6 +19,7 @@ from .company_models import Company
 from .contact_models import Contact
 from .deal_stage_models import DealStage
 from .lead_models import Lead
+from .product_models import ProductEntity
 from .timeline_comment_models import TimelineComment
 from .user_models import User
 
@@ -261,6 +264,24 @@ class Deal(BusinessEntity):
         back_populates="deal",
         foreign_keys="[ProductAgreementSupervisor.deal_id]",
     )
+
+    # Связь с товарами
+    @declared_attr  # type: ignore[misc]
+    def product_entities(cls) -> Mapped[list["ProductEntity"]]:
+        """Товары в сделке."""
+        condition = (
+            "and_("
+            "foreign(ProductEntity.owner_type) == '{}',"
+            "foreign(ProductEntity.owner_id) == {}.external_id"
+            ")"
+        ).format(EntityTypeAbbr.DEAL, cls.__name__)
+        return relationship(
+            "ProductEntity",
+            primaryjoin=condition,
+            viewonly=True,
+            lazy="selectin",
+            overlaps="product_entities",
+        )
 
 
 class AdditionalInfo(Base):  # type: ignore[misc]

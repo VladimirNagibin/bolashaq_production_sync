@@ -5,6 +5,7 @@ from services.companies.company_repository import CompanyRepository
 from services.contacts.contact_repository import ContactRepository
 from services.deals.deal_repository import DealRepository
 from services.leads.lead_repository import LeadRepository
+from services.products.product_repository import ProductRepository
 from services.timeline_comments.timeline_comment_repository import (
     TimelineCommentRepository,
 )
@@ -47,3 +48,9 @@ async def get_timeline_comment_repo(
     session: AsyncSession = Depends(get_session_context),
 ) -> TimelineCommentRepository:
     return TimelineCommentRepository(session=session)
+
+
+async def get_product_repo(
+    session: AsyncSession = Depends(get_session_context),
+) -> ProductRepository:
+    return ProductRepository(session=session)

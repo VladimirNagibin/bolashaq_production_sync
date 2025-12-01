@@ -399,65 +399,121 @@ FIELDS_BY_TYPE_ALT: dict[str, Any] = {
 }
 
 FIELDS_PRODUCT: dict[str, Any] = {
-    "bool_none": [  # Y / N
-        "taxIncluded",
-        "customized",
-        "active",
-        "vatIncluded",
-        "ACTIVE",
-        "VAT_INCLUDED",
+    "int_none": [
+        "SORT",  # sort
+        "sort",
+        "MODIFIED_BY",  # modified_by
+        "modifiedBy",
+        "CREATED_BY",  # created_by
+        "createdBy",
+        "CATALOG_ID",  # catalog_id
+        "iblockId",
+        "SECTION_ID",  # section_id
+        "iblockSectionId",
+        "VAT_ID",  # vat_id
+        "vatId",
+        "MEASURE",  # measure
+        "measure",
     ],
-    "dict_none": [
-        "PROPERTY_109",
-        "property109",
-        "PROPERTY_113",
-        "property113",
+    "str": [
+        "NAME",  # name
+        "name",
+    ],
+    "str_none": [
+        "CODE",  # code
+        "code",
+        "XML_ID",  # xml_id
+        "xmlId",
+        "CURRENCY_ID",  # currency_id
+        "DESCRIPTION",  # description
+        "detailText",
+        "DESCRIPTION_TYPE",  # description_type
+        "detailTextType",
+    ],
+    "float_none": [
+        "PRICE",  # price
+    ],
+    "bool_none": [  # Y / N
+        "ACTIVE",  # active
+        "active",
+        "VAT_INCLUDED",  # vat_included
+        "vatIncluded",
+    ],
+    "dict_none_str": [
+        "PROPERTY_111",
+        "property111",
         "PROPERTY_115",
         "property115",
         "PROPERTY_117",
         "property117",
         "PROPERTY_119",
         "property119",
+    ],
+    "dict_none_dict": [
+        "PROPERTY_113",
+        "property113",
         "PROPERTY_121",
         "property121",
         "PROPERTY_123",
         "property123",
+        "PROPERTY_125",
+        "property125",
         "PROPERTY_127",
         "property127",
         "PROPERTY_129",
         "property129",
         "PROPERTY_131",
         "property131",
-        "PROPERTY_151",
-        "property151",
     ],
     "datetime_none": [
-        "DATE_CREATE",
+        "DATE_CREATE",  # date_create
         "dateCreate",
-        "TIMESTAMP_X",
+        "TIMESTAMP_X",  # date_modify
         "TIMESTAMP_X",
     ],
 }
 
 FIELDS_PRODUCT_ALT: dict[str, Any] = {
+    "int_none": [
+        "sort",
+        "modified_by",
+        "created_by",
+        "catalog_id",
+        "section_id",
+        "vat_id",
+        "measure",
+    ],
+    "str": [
+        "name",
+    ],
+    "str_none": [
+        "code",
+        "xml_id",
+        "currency_id",
+        "description",
+        "description_type",
+    ],
+    "float_none": [
+        "price",
+    ],
     "bool_none": [  # Y / N
-        "tax_included",
-        "customized",
         "active",
         "vat_included",
     ],
-    "dict_none": [
+    "dict_none_str": [
+        "link",
+        "original_name",
+        "standards",
         "article",
-        "remains_spb",
-        "remains_kdr",
-        "remains_msk",
-        "remains_nsk",
-        "price_distributor",
-        "price_minimal",
-        "manufacturer",
-        "country",
-        "brand",
-        "incentive_tier",
+    ],
+    "dict_none_dict": [
+        "additional_description",
+        "characteristics",
+        "characteristics_for_print",
+        "complect_for_print",
+        "complect",
+        "description_for_print",
+        "standards_for_print",
     ],
     "datetime_none": [
         "date_create",

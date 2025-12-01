@@ -2,14 +2,15 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 import uvicorn
-from fastapi import FastAPI
-from fastapi.responses import ORJSONResponse
+from fastapi import FastAPI, Request, status
+from fastapi.responses import JSONResponse, ORJSONResponse
 from sqladmin import Admin
 
 from admin.admin_models import register_models
 from admin.authenticate import BasicAuthBackend
 from api.v1.b24.b24_router import b24_router
 from api.v1.health_checker import healht_router
+from api.v1.schemas.response_schemas import ErrorResponse
 from api.v1.test import test_router
 from core.logger import LOGGING, logger
 from core.settings import settings
@@ -19,6 +20,7 @@ from services.dependencies.dependencies_bitrix import (
     initialize_container,
     shutdown_container,
 )
+from services.exceptions import BaseAppException
 from services.rabbitmq_client import get_rabbitmq
 
 
@@ -63,6 +65,24 @@ def setup_admin_panel(app: FastAPI) -> None:
     register_models(admin)
 
 
+def register_exception_handler(app: FastAPI) -> None:
+    """
+    Регистрирует глобальные обработчики исключений для приложения.
+    """
+
+    @app.exception_handler(BaseAppException)  # type: ignore[misc]
+    async def app_exception_handler(  # type: ignore
+        request: Request, exc: BaseAppException
+    ):
+        """Обработчик для всех наших бизнес-исключений."""
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content=ErrorResponse(
+                error_code=exc.error_code, message=exc.message
+            ).model_dump(mode="json"),
+        )
+
+
 def create_app() -> FastAPI:
     """Фабрика для создания приложения."""
     app = FastAPI(
@@ -75,6 +95,7 @@ def create_app() -> FastAPI:
 
     setup_routes(app)
     setup_admin_panel(app)
+    register_exception_handler(app)
 
     return app
 

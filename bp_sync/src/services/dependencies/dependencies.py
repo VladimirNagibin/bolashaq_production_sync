@@ -17,6 +17,9 @@ from services.departments.department_services import DepartmentClient
 from services.leads.lead_bitrix_services import LeadBitrixClient
 from services.leads.lead_repository import LeadRepository
 from services.leads.lead_services import LeadClient
+from services.products.product_bitrix_services import ProductBitrixClient
+from services.products.product_repository import ProductRepository
+from services.products.product_services import ProductClient
 from services.timeline_comments.timeline_comment_bitrix_services import (
     TimeLineCommentBitrixClient,
 )
@@ -36,6 +39,7 @@ from .dependencies_bitrix_entity import (
     get_contact_bitrix_client,
     get_deal_bitrix_client,
     get_lead_bitrix_client,
+    get_product_bitrix_client,
     get_timeline_comment_bitrix_client,
     get_user_bitrix_client,
 )
@@ -45,6 +49,7 @@ from .dependencies_repo_entity import (
     get_contact_repo,
     get_deal_repo,
     get_lead_repo,
+    get_product_repo,
     get_timeline_comment_repo,
     get_user_repo,
 )
@@ -123,6 +128,20 @@ async def get_timeline_comment_service(
     )
 
 
+async def get_product_service(
+    product_bitrix_client: ProductBitrixClient = Depends(
+        get_product_bitrix_client
+    ),
+    product_repo: ProductRepository = Depends(get_product_repo),
+    user_service: UserClient = Depends(get_user_service),
+) -> ProductClient:
+    return ProductClient(
+        product_bitrix_client,
+        product_repo,
+        user_client=user_service,
+    )
+
+
 async def get_lock_service(redis: Redis = Depends(get_redis)) -> LockService:
     return LockService(redis)
 
@@ -138,6 +157,7 @@ async def get_deal_service(
     timeline_comment_service: TimelineCommentClient = Depends(
         get_timeline_comment_service
     ),
+    product_service: ProductClient = Depends(get_product_service),
 ) -> DealClient:
     return DealClient(
         deal_bitrix_client,
@@ -148,4 +168,5 @@ async def get_deal_service(
         company_client=company_service,
         lead_client=lead_service,
         timeline_comment_client=timeline_comment_service,
+        product_client=product_service,
     )

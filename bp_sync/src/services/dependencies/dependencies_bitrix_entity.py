@@ -8,6 +8,7 @@ from ..contacts.contact_bitrix_services import ContactBitrixClient
 from ..deals.deal_bitrix_services import DealBitrixClient
 from ..entities.entities_bitrix_services import EntitiesBitrixClient
 from ..leads.lead_bitrix_services import LeadBitrixClient
+from ..products.product_bitrix_services import ProductBitrixClient
 from ..timeline_comments.timeline_comment_bitrix_services import (
     TimeLineCommentBitrixClient,
 )
@@ -55,6 +56,13 @@ async def get_timeline_comment_bitrix_client(
 ) -> AsyncGenerator[TimeLineCommentBitrixClient, None]:
     """Зависимость для клиента комментариев в таймлайне"""
     yield TimeLineCommentBitrixClient(api_client)
+
+
+async def get_product_bitrix_client(
+    api_client: BitrixAPIClient = Depends(get_api_client),
+) -> AsyncGenerator[ProductBitrixClient, None]:
+    """Зависимость для клиента товаров"""
+    yield ProductBitrixClient(api_client)
 
 
 async def get_entity_bitrix_client(
