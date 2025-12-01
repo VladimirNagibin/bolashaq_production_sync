@@ -21,6 +21,7 @@ from schemas.lead_schemas import LeadCreate
 from services.companies.company_services import CompanyClient
 from services.contacts.contact_services import ContactClient
 from services.leads.lead_services import LeadClient
+from services.products.product_services import ProductClient
 from services.timeline_comments.timeline_comment_services import (
     TimelineCommentClient,
 )
@@ -114,12 +115,12 @@ class DealClient(BaseEntityClient[DealDB, DealRepository, DealBitrixClient]):
         company_client: CompanyClient | None = None,
         lead_client: LeadClient | None = None,
         timeline_comment_client: TimelineCommentClient | None = None,
-        # product_bitrix_client: ProductBitrixClient,
+        product_client: ProductClient | None = None,
     ):
         super().__init__()
         self._bitrix_client = deal_bitrix_client
         self._repo = deal_repo
-        # self.product_bitrix_client = product_bitrix_client
+        self.product_client = product_client
         self.lock_service = lock_service
 
         # self.stage_handler = DealStageHandler(self)

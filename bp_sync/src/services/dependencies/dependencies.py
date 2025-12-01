@@ -157,6 +157,7 @@ async def get_deal_service(
     timeline_comment_service: TimelineCommentClient = Depends(
         get_timeline_comment_service
     ),
+    product_service: ProductClient = Depends(get_product_service),
 ) -> DealClient:
     return DealClient(
         deal_bitrix_client,
@@ -167,4 +168,5 @@ async def get_deal_service(
         company_client=company_service,
         lead_client=lead_service,
         timeline_comment_client=timeline_comment_service,
+        product_client=product_service,
     )
