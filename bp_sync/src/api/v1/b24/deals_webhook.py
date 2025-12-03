@@ -30,7 +30,7 @@ deals_webhook_router = APIRouter(
     description="Set fields and move deals without offer.",
     responses=RESPONSES_WEBHOOK,
 )  # type: ignore
-@handle_deal_webhook_logic
+# @handle_deal_webhook_logic
 async def deals_without_offer(
     user_id: Annotated[
         str, Query(..., description="ID пользователя из шаблона")
