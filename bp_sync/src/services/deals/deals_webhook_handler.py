@@ -24,7 +24,7 @@ class DealWebhookHandler:
     async def handle_deal_without_offer(
         self,
         user_id: str,
-        deal_id: str,
+        deal_id: int,
     ) -> None:
         """
         Обработчик входящего вебхука сделки без КП.
@@ -46,7 +46,7 @@ class DealWebhookHandler:
         await self.deal_client.bitrix_client.update(deal_update)
 
     async def _update_local_deal(
-        self, deal_id: str, deal_update: DealUpdate
+        self, deal_id: int, deal_update: DealUpdate
     ) -> None:
         """Update deal in local database with error handling"""
         try:
@@ -69,7 +69,7 @@ class DealWebhookHandler:
     async def set_products_string_field(
         self,
         user_id: str,
-        deal_id: str,
+        deal_id: int,
         products: str,
         products_origin: str,
     ) -> None:
@@ -132,7 +132,7 @@ class DealWebhookHandler:
 
     async def set_stage_status_deal(
         self,
-        deal_id: str,
+        deal_id: int,
         deal_stage: int,
         deal_status: str,
         user_id: str | None = None,

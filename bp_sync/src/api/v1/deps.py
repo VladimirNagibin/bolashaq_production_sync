@@ -34,7 +34,7 @@ async def verify_incoming_webhook_token(key: str) -> None:
 
 async def get_common_webhook_params(
     user_id: Annotated[str, Query(...)],
-    deal_id: Annotated[str, Query(...)],
+    deal_id: Annotated[int, Query(...)],
 ) -> CommonWebhookParams:
     """
     Зависимость для получения общих параметров вебхука.

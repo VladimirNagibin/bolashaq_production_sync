@@ -408,7 +408,7 @@ class DealClient(BaseEntityClient[DealDB, DealRepository, DealBitrixClient]):
     async def set_products_string_field(
         self,
         user_id: str,
-        deal_id: str,
+        deal_id: int,
         products: str,
         products_origin: str,
     ) -> None:
@@ -422,7 +422,7 @@ class DealClient(BaseEntityClient[DealDB, DealRepository, DealBitrixClient]):
     async def handle_deal_without_offer(
         self,
         user_id: str,
-        deal_id: str,
+        deal_id: int,
     ) -> None:
         """
         Обработчик входящего вебхука сделки без КП.
@@ -433,7 +433,7 @@ class DealClient(BaseEntityClient[DealDB, DealRepository, DealBitrixClient]):
 
     async def set_stage_status_deal(
         self,
-        deal_id: str,
+        deal_id: int,
         deal_stage: int,
         deal_status: str,
         user_id: str | None = None,

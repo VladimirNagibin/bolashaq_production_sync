@@ -3,9 +3,6 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 
 from services.deals.deal_services import DealClient
-from services.dependencies.dependencies import (
-    get_deal_service,
-)
 from services.dependencies.dependencies_repo import request_context
 
 from ..decorators.webhook_decorators import (
@@ -36,14 +33,9 @@ async def deals_without_offer(
         tuple[CommonWebhookParams, DealClient],
         Depends(get_deal_webhook_context),
     ],
-    # user_id: Annotated[
-    #     str, Query(..., description="ID пользователя из шаблона")
-    # ],
-    # deal_id: Annotated[str, Query(..., description="ID сделки")],
-    # deal_client: DealClient = Depends(get_deal_service),
 ) -> None:
     """
-    Обрабатывает сделку, для которой создаётся КП.
+    Обрабатывает сделку, для которой не создаётся КП.
     """
     params, deal_client = common_params
     await deal_client.handle_deal_without_offer(
@@ -59,21 +51,21 @@ async def deals_without_offer(
 )  # type: ignore
 @handle_deal_webhook_logic
 async def deals_set_products_string_field(
-    user_id: Annotated[
-        str, Query(..., description="ID пользователя из шаблона")
+    common_params: Annotated[
+        tuple[CommonWebhookParams, DealClient],
+        Depends(get_deal_webhook_context),
     ],
-    deal_id: Annotated[str, Query(..., description="ID сделки")],
     products: Annotated[str, Query(..., description="Список продуктов")],
     products_origin: Annotated[
         str, Query(..., description="Оригинальный список продуктов")
     ],
-    deal_client: DealClient = Depends(get_deal_service),
 ) -> None:
     """
     Устанавливает список продуктов в текстовое поле сделки.
     """
+    params, deal_client = common_params
     await deal_client.set_products_string_field(
-        user_id, deal_id, products, products_origin
+        params.user_id, params.deal_id, products, products_origin
     )
 
 
@@ -85,15 +77,17 @@ async def deals_set_products_string_field(
 )  # type: ignore
 @handle_deal_webhook_logic
 async def deals_set_stage_status(
-    deal_id: Annotated[str, Query(..., description="ID сделки")],
+    common_params: Annotated[
+        tuple[CommonWebhookParams, DealClient],
+        Depends(get_deal_webhook_context),
+    ],
     deal_stage: Annotated[int, Query(..., description="Стадия сделки")],
     deal_status: Annotated[str, Query(..., description="Статус сделки")],
-    user_id: Annotated[
-        str | None, Query(..., description="ID пользователя из шаблона")
-    ] = None,
-    deal_client: DealClient = Depends(get_deal_service),
 ) -> None:
     """
     Устанавливает этап и статус сделки.
     """
-    await deal_client.set_stage_status_deal(deal_id, deal_stage, deal_status)
+    params, deal_client = common_params
+    await deal_client.set_stage_status_deal(
+        params.deal_id, deal_stage, deal_status
+    )
