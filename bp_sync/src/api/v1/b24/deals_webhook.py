@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 
-# from core.logger import logger
+from core.logger import logger
 from services.deals.deal_services import DealClient
 from services.dependencies.dependencies import (
     get_deal_service,
@@ -41,7 +41,10 @@ async def deals_without_offer(
     """
     Обрабатывает сделку, для которой создаётся КП.
     """
-    await deal_client.handle_deal_without_offer(user_id, deal_id)
+    logger.info(f"Deal {deal_id} without offer")
+    await deal_client.handle_deal_without_offer(
+        user_id=user_id, deal_id=deal_id
+    )
 
 
 @deals_webhook_router.post(
