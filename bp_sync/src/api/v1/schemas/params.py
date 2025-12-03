@@ -10,4 +10,4 @@ class CommonWebhookParams(BaseModel):  # type: ignore[misc]
     user_id: Annotated[
         str, Query(..., description="ID пользователя из шаблона")
     ]
-    deal_id: Annotated[str, Query(..., description="ID сделки")]
+    deal_id: Annotated[int, Query(..., description="ID сделки")]
