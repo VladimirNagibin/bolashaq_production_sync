@@ -98,6 +98,7 @@ async def deals_set_products_string_field(
     products: Annotated[str, Query(..., description="Список продуктов")],
     deal_client: DealClient = Depends(get_deal_service),
 ) -> SuccessResponse:
+    logger.info(f"Deal with ID={deal_id} set products string field")
     try:
         await deal_client.set_products_string_field(user_id, deal_id, products)
         return SuccessResponse(
