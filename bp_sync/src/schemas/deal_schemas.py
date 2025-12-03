@@ -185,6 +185,9 @@ class DealUpdate(BaseUpdateSchema, BaseDeal):
     status_deal: DealStatusEnum | None = Field(
         default=None, alias="UF_CRM_1763479557"
     )
+    products_list_as_string: str | None = Field(
+        default=None, alias="UF_CRM_1764696465"
+    )
 
     @field_validator("stage_semantic_id", mode="before")  # type: ignore[misc]
     @classmethod

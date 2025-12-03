@@ -74,6 +74,28 @@ class DealStatusEnum(IntEnum):
         }
         return display_name_map.get(value, "Неизвестно")
 
+    @classmethod
+    def get_deal_status_by_name(
+        cls, status_name: str
+    ) -> "DealStatusEnum | None":
+        """
+        Возвращает элемент DealStatusEnum по его строковому имени.
+
+        Поиск нечувствителен к регистру.
+
+        Args:
+            status_name: Строковое имя статуса (например, "NEW", "deal_lose").
+
+        Returns:
+            Соответствующий элемент DealStatusEnum или NOT_DEFINE,
+            если статус не найден.
+        """
+        try:
+            return DealStatusEnum[status_name.upper()]
+        except KeyError:
+            # Если элемент с таким именем не найден, возвращаем None
+            return DealStatusEnum.NOT_DEFINE
+
 
 class EntityType(StrEnum):
     """Типы сущностей в системе."""

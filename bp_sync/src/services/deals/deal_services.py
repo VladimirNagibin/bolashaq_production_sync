@@ -405,6 +405,19 @@ class DealClient(BaseEntityClient[DealDB, DealRepository, DealBitrixClient]):
                 f"Synchronization failed for deal {deal_b24.external_id}"
             ) from e
 
+    async def set_products_string_field(
+        self,
+        user_id: str,
+        deal_id: str,
+        products: str,
+    ) -> None:
+        """
+        Обработчик входящего вебхука сделки без КП.
+        """
+        await self.deal_webhook_handler.set_products_string_field(
+            user_id, deal_id, products
+        )
+
     async def handle_deal_without_offer(
         self,
         user_id: str,
@@ -413,9 +426,22 @@ class DealClient(BaseEntityClient[DealDB, DealRepository, DealBitrixClient]):
         """
         Обработчик входящего вебхука сделки без КП.
         """
-        return
         await self.deal_webhook_handler.handle_deal_without_offer(
             user_id, deal_id
+        )
+
+    async def set_stage_status_deal(
+        self,
+        deal_id: str,
+        deal_stage: int,
+        deal_status: str,
+        user_id: str | None = None,
+    ) -> None:
+        """
+        Установка стадии и статуса сделки.
+        """
+        await self.deal_webhook_handler.set_stage_status_deal(
+            deal_id, deal_stage, deal_status
         )
 
     # async def deal_processing(

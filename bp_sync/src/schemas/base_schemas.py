@@ -577,7 +577,9 @@ class EntityAwareSchema(BaseModel):  # type: ignore[misc]
                 continue
 
             # Получаем финальный алиас для поля на основе alias_choice
-            field_alias = self._get_field_alias(field_info, alias_choice)
+            field_alias = self._get_field_alias(
+                field_name, field_info, alias_choice
+            )
 
             # Пропускаем исключенные поля (например, 'ID', 'id')
             if field_alias in self._EXCLUDED_FIELDS:
@@ -599,7 +601,7 @@ class EntityAwareSchema(BaseModel):  # type: ignore[misc]
         return result
 
     def _get_field_alias(
-        self, field_info: FieldInfo, alias_choice: int
+        self, field_name: str, field_info: FieldInfo, alias_choice: int
     ) -> str:
         """
         Вспомогательный метод для получения алиаса поля из FieldInfo.
@@ -613,7 +615,7 @@ class EntityAwareSchema(BaseModel):  # type: ignore[misc]
             return validation_alias.choices[choice_index]  # type: ignore
 
         # Если AliasChoices не используется, пробуем получить обычный алиас
-        return field_info.alias or field_info.name  # type: ignore
+        return field_info.alias or field_name
 
     def _apply_field_transformations(
         self, field_alias: str, value: Any, alias_choice: int
