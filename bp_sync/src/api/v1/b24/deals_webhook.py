@@ -35,7 +35,7 @@ async def deals_without_offer(
     user_id: Annotated[
         str, Query(..., description="ID пользователя из шаблона")
     ],
-    deal_id: Annotated[int, Query(..., description="ID сделки")],
+    deal_id: Annotated[str, Query(..., description="ID сделки")],
     deal_client: DealClient = Depends(get_deal_service),
 ) -> None:
     """
