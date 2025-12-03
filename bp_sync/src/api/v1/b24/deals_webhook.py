@@ -96,11 +96,16 @@ async def deals_set_products_string_field(
     ],
     deal_id: Annotated[str, Query(..., description="ID сделки")],
     products: Annotated[str, Query(..., description="Список продуктов")],
+    products_origin: Annotated[
+        str, Query(..., description="Оригинальный список продуктов")
+    ],
     deal_client: DealClient = Depends(get_deal_service),
 ) -> SuccessResponse:
     logger.info(f"Deal with ID={deal_id} set products string field")
     try:
-        await deal_client.set_products_string_field(user_id, deal_id, products)
+        await deal_client.set_products_string_field(
+            user_id, deal_id, products, products_origin
+        )
         return SuccessResponse(
             message=(
                 f"Deal with ID={deal_id} successfully processed without offer"

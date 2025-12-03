@@ -1,3 +1,4 @@
+import html
 import re
 from datetime import date
 from typing import TYPE_CHECKING, Any
@@ -70,6 +71,7 @@ class DealWebhookHandler:
         user_id: str,
         deal_id: str,
         products: str,
+        products_origin: str,
     ) -> None:
         """
         Обработчик входящего вебхука сделки установка списка товаров в
@@ -79,10 +81,13 @@ class DealWebhookHandler:
         products_list_as_string = self._get_products_list_as_string(
             products,
         )
-        logger.info(
-            f"Deal {deal_id} products list as string :"
-            f"{products_list_as_string}"
-        )
+        if products_list_as_string == html.unescape(products_origin).strip():
+            logger.info(
+                f"Deal {deal_id} products list as string is the same: "
+                f"{products_list_as_string}"
+            )
+            return
+
         data_deal: dict[str, Any] = {
             "external_id": deal_id,
             "products_list_as_string": products_list_as_string,
@@ -111,8 +116,16 @@ class DealWebhookHandler:
         # [('Товар1', 'Цена1'), ('Товар2', 'Цена2')]
         matches = pattern.findall(table_string)
 
-        # Формируем строки из найденных пар
-        lines = [f"{product}: {price}" for product, price in matches]
+        lines: list[str] = []
+        # 2. Проходим по каждой найденной паре (товар, цена)
+        for product, price in matches:
+            # 3. Декодируем HTML-сущности и убираем лишние пробелы
+            clean_product = html.unescape(product).strip()
+            clean_price = html.unescape(price).strip()
+
+            if clean_product and clean_price:
+                # 4. Формируем строку из очищенных данных
+                lines.append(f"{clean_product}: {clean_price}")
 
         # Соединяем все строки в единый текст с переносом строки
         return "\n".join(lines)

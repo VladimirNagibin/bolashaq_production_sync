@@ -410,12 +410,13 @@ class DealClient(BaseEntityClient[DealDB, DealRepository, DealBitrixClient]):
         user_id: str,
         deal_id: str,
         products: str,
+        products_origin: str,
     ) -> None:
         """
         Обработчик входящего вебхука сделки без КП.
         """
         await self.deal_webhook_handler.set_products_string_field(
-            user_id, deal_id, products
+            user_id, deal_id, products, products_origin
         )
 
     async def handle_deal_without_offer(
