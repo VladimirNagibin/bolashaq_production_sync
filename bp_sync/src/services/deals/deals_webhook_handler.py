@@ -75,8 +75,13 @@ class DealWebhookHandler:
         Обработчик входящего вебхука сделки установка списка товаров в
         строковое поле.
         """
+        logger.info(f"Deal {deal_id} set products string field :{products}")
         products_list_as_string = self._get_products_list_as_string(
             products,
+        )
+        logger.info(
+            f"Deal {deal_id} products list as string :"
+            f"{products_list_as_string}"
         )
         data_deal: dict[str, Any] = {
             "external_id": deal_id,
