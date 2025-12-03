@@ -22,7 +22,7 @@ deals_webhook_router = APIRouter(
 )
 
 
-@deals_webhook_router.get(
+@deals_webhook_router.post(
     "/deals-without-offer",
     summary="Handel deals without offer",
     description="Set fields and move deals without offer.",
@@ -70,7 +70,7 @@ async def deals_without_offer(
         ) from e
 
 
-@deals_webhook_router.get(
+@deals_webhook_router.post(
     "/deals-set-products-string-field",
     summary="Set deals products in string field",
     description="Set deals products in string field.",
@@ -120,7 +120,7 @@ async def deals_set_products_string_field(
         ) from e
 
 
-@deals_webhook_router.get(
+@deals_webhook_router.post(
     "/deal-set-stage-status",
     summary="Set stage and status deals",
     description="Set stage and status deals.",
