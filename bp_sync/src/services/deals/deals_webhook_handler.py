@@ -133,20 +133,34 @@ class DealWebhookHandler:
     async def set_stage_status_deal(
         self,
         deal_id: str,
-        stage_deal: int,
-        status_deal: str,
+        deal_stage: int,
+        deal_status: str,
         user_id: str | None = None,
     ) -> None:
         """
-        Обработчик входящего вебхука сделки без КП.
+        Устанавливает стадии и статус сделки.
+        Args:
+            deal_id: ID сделки.
+            deal_stage: ID стадии.
+            deal_status: Статус сделки.
+            user_id: ID пользователя.
+        Returns:
+            None
         """
+        logger.info(
+            f"Deal {deal_id} set stage: {deal_stage}, status: {deal_status}"
+        )
         repo = self.deal_client.repo
         stage_id = await repo.get_external_id_by_sort_order_stage(
-            stage_deal,
+            deal_stage,
+        )
+        status_enum = DealStatusEnum.get_deal_status_by_name(deal_status)
+        logger.info(
+            f"Deal {deal_id} set stage: {stage_id}, status: {status_enum}"
         )
         data_deal: dict[str, Any] = {
             "external_id": deal_id,
-            "status_deal": DealStatusEnum.get_deal_status_by_name(status_deal),
+            "status_deal": status_enum,
             "stage_id": stage_id,
         }
         deal_update = DealUpdate(**data_deal)
