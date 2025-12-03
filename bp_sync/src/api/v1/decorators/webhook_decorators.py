@@ -37,7 +37,10 @@ def handle_deal_webhook_logic(
     @functools.wraps(func)
     async def wrapper(*args: Any, **kwargs: Any) -> SuccessResponse:
         # Извлекаем параметры для логирования
-        deal_id = kwargs.get("deal_id", "N/A")
+        try:
+            deal_id = _get_deal_id_from_kwargs(kwargs)
+        except Exception:
+            deal_id = "N/A"
         endpoint_name = func.__name__
         logger.info(
             f"Webhook '{endpoint_name}' started for Deal ID: {deal_id}"
@@ -80,3 +83,26 @@ def handle_deal_webhook_logic(
             ) from e
 
     return wrapper
+
+
+def _get_deal_id_from_kwargs(kwargs: dict[Any, Any]) -> str:
+    """
+    Безопасно извлекает 'deal_id' из kwargs.
+    Поддерживает два сценария:
+    1. `deal_id` является прямым аргументом.
+    2. `deal_id` является атрибутом первого элемента кортежа `common_params`.
+    """
+    # Сценарий 1: deal_id является прямым аргументом
+    if "deal_id" in kwargs:
+        return str(kwargs["deal_id"])
+
+    # Сценарий 2: deal_id находится в common_params
+    common_params = kwargs.get("common_params")
+    if (
+        isinstance(common_params, (list, tuple))
+        and len(common_params) > 0
+        and hasattr(common_params[0], "deal_id")
+    ):
+        return str(common_params[0].deal_id)
+    # Если ничего не найдено, возвращаем значение по умолчанию
+    return "N/A"

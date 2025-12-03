@@ -437,12 +437,18 @@ class DealClient(BaseEntityClient[DealDB, DealRepository, DealBitrixClient]):
         deal_stage: int,
         deal_status: str,
         user_id: str | None = None,
+        doc_update: int | None = None,
+        doc_id: int | None = None,
     ) -> None:
         """
         Установка стадии и статуса сделки.
         """
         await self.deal_webhook_handler.set_stage_status_deal(
-            deal_id, deal_stage, deal_status
+            deal_id,
+            deal_stage,
+            deal_status,
+            doc_update=doc_update,
+            doc_id=doc_id,
         )
 
     # async def deal_processing(

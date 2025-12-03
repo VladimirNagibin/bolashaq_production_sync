@@ -83,11 +83,24 @@ async def deals_set_stage_status(
     ],
     deal_stage: Annotated[int, Query(..., description="Стадия сделки")],
     deal_status: Annotated[str, Query(..., description="Статус сделки")],
+    doc_update: Annotated[
+        int | None,
+        Query(
+            ..., description="Флаг обновления изображения(1-обновление, 0-нет)"
+        ),
+    ] = None,
+    doc_id: Annotated[
+        int | None, Query(..., description="Ссылка на изображение")
+    ] = None,
 ) -> None:
     """
     Устанавливает этап и статус сделки.
     """
     params, deal_client = common_params
     await deal_client.set_stage_status_deal(
-        params.deal_id, deal_stage, deal_status
+        params.deal_id,
+        deal_stage,
+        deal_status,
+        doc_update=doc_update,
+        doc_id=doc_id,
     )
