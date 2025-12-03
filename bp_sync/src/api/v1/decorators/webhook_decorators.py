@@ -39,6 +39,7 @@ def handle_deal_webhook_logic(
         # Извлекаем параметры для логирования
         deal_id = kwargs.get("deal_id", "N/A")
         endpoint_name = func.__name__
+        logger.info(f"args: '{args}' kwargs: {kwargs}")
 
         logger.info(
             f"Webhook '{endpoint_name}' started for Deal ID: {deal_id}"

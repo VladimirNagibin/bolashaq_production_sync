@@ -24,7 +24,7 @@ class DealWebhookHandler:
     async def handle_deal_without_offer(
         self,
         user_id: str,
-        deal_id: str,
+        deal_id: int,
     ) -> None:
         """
         Обработчик входящего вебхука сделки без КП.
@@ -46,7 +46,7 @@ class DealWebhookHandler:
         await self.deal_client.bitrix_client.update(deal_update)
 
     async def _update_local_deal(
-        self, deal_id: str, deal_update: DealUpdate
+        self, deal_id: str | int, deal_update: DealUpdate
     ) -> None:
         """Update deal in local database with error handling"""
         try:
@@ -58,7 +58,9 @@ class DealWebhookHandler:
                 logger.info(
                     f"Deal {deal_id} not found locally, importing from Bitrix"
                 )
-                await self.deal_client.import_from_bitrix(deal_id)
+                await self.deal_client.import_from_bitrix(
+                    deal_id
+                )  # type: ignore
                 await self.deal_client.repo.update_entity(deal_update)
             else:
                 raise

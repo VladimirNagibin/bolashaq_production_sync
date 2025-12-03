@@ -422,7 +422,7 @@ class DealClient(BaseEntityClient[DealDB, DealRepository, DealBitrixClient]):
     async def handle_deal_without_offer(
         self,
         user_id: str,
-        deal_id: str,
+        deal_id: int,
     ) -> None:
         """
         Обработчик входящего вебхука сделки без КП.
