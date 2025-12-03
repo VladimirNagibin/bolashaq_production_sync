@@ -2,7 +2,6 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 
-from core.logger import logger
 from services.deals.deal_services import DealClient
 from services.dependencies.dependencies import (
     get_deal_service,
@@ -13,7 +12,8 @@ from ..decorators.webhook_decorators import (
     RESPONSES_WEBHOOK,
     handle_deal_webhook_logic,
 )
-from ..deps import verify_incoming_webhook_token
+from ..deps import get_deal_webhook_context, verify_incoming_webhook_token
+from ..schemas.params import CommonWebhookParams
 
 deals_webhook_router = APIRouter(
     prefix="/deals-webhook",
@@ -30,20 +30,24 @@ deals_webhook_router = APIRouter(
     description="Set fields and move deals without offer.",
     responses=RESPONSES_WEBHOOK,
 )  # type: ignore
-# @handle_deal_webhook_logic
+@handle_deal_webhook_logic
 async def deals_without_offer(
-    user_id: Annotated[
-        str, Query(..., description="ID пользователя из шаблона")
+    common_params: Annotated[
+        tuple[CommonWebhookParams, DealClient],
+        Depends(get_deal_webhook_context),
     ],
-    deal_id: Annotated[str, Query(..., description="ID сделки")],
-    deal_client: DealClient = Depends(get_deal_service),
+    # user_id: Annotated[
+    #     str, Query(..., description="ID пользователя из шаблона")
+    # ],
+    # deal_id: Annotated[str, Query(..., description="ID сделки")],
+    # deal_client: DealClient = Depends(get_deal_service),
 ) -> None:
     """
     Обрабатывает сделку, для которой создаётся КП.
     """
-    logger.info(f"Deal {deal_id} without offer")
+    params, deal_client = common_params
     await deal_client.handle_deal_without_offer(
-        user_id=user_id, deal_id=deal_id
+        user_id=params.user_id, deal_id=params.deal_id
     )
 
 
