@@ -1,3 +1,4 @@
+from datetime import date, datetime
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Query, status
@@ -52,3 +53,23 @@ def get_deal_webhook_context(
     Комбинированная зависимость, возвращающая общие параметры и клиент.
     """
     return common_params, deal_client
+
+
+def parse_custom_date(
+    date_str: Annotated[
+        str, Query(..., description="Дата в формате дд.мм.гггг")
+    ],
+) -> date:
+    """
+    Парсит дату из формата дд.мм.гггг в объект date.
+    """
+    try:
+        return datetime.strptime(date_str, "%d.%m.%Y").date()
+    except ValueError:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Неверный формат даты: {date_str}. "
+                "Ожидается формат: дд.мм.гггг (например, 18.12.2025)"
+            ),
+        )

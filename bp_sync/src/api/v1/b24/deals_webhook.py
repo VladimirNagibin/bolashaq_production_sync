@@ -1,4 +1,4 @@
-from datetime import date
+# from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
@@ -10,7 +10,10 @@ from ..decorators.webhook_decorators import (
     RESPONSES_WEBHOOK,
     handle_deal_webhook_logic,
 )
-from ..deps import get_deal_webhook_context, verify_incoming_webhook_token
+from ..deps import (  # parse_custom_date,
+    get_deal_webhook_context,
+    verify_incoming_webhook_token,
+)
 from ..schemas.params import CommonWebhookParams
 
 deals_webhook_router = APIRouter(
@@ -121,16 +124,13 @@ async def company_set_work_email(
     ],
     company_id: Annotated[int, Query(..., description="ИД компании")],
     email: Annotated[str, Query(..., description="Рабочий email")],
-    response_due_date: Annotated[
-        date, Query(..., description="Дата ожидания ответа клиента")
-    ],
+    # response_due_date: Annotated[date, Depends(parse_custom_date)],
 ) -> None:
     """
     Устанавливает рабочий email для компании.
     """
-    params, deal_client = common_params
+    _, deal_client = common_params
     await deal_client.company_set_work_email(
         company_id=company_id,
         email=email,
-        response_due_date=response_due_date,
     )

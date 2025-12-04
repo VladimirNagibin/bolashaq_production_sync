@@ -1,6 +1,6 @@
 # import asyncio
 # import time
-from datetime import date  # , datetime, timezone
+# from datetime import date  # , datetime, timezone
 from typing import Any, Self
 
 from core.logger import logger
@@ -452,7 +452,7 @@ class DealClient(BaseEntityClient[DealDB, DealRepository, DealBitrixClient]):
         )
 
     async def company_set_work_email(
-        self, company_id: int, email: str, response_due_date: date
+        self, company_id: int, email: str
     ) -> None:
         """
         Установка стадии и статуса сделки.
@@ -460,7 +460,6 @@ class DealClient(BaseEntityClient[DealDB, DealRepository, DealBitrixClient]):
         await self.deal_webhook_handler.company_set_work_email(
             company_id=company_id,
             email=email,
-            response_due_date=response_due_date,
         )
 
     # async def deal_processing(

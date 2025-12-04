@@ -10,6 +10,8 @@ import requests  # type: ignore[import-untyped]
 from fastapi import HTTPException, status
 
 from core.logger import logger
+from schemas.base_schemas import CommunicationChannel
+from schemas.company_schemas import CompanyUpdate
 from schemas.deal_schemas import DealUpdate
 from schemas.enums import DealStagesEnum, DealStatusEnum
 
@@ -298,12 +300,38 @@ class DealWebhookHandler:
         return None
 
     async def company_set_work_email(
-        self, company_id: int, email: str, response_due_date: date
+        self, company_id: int, email: str
     ) -> None:
         """
         Установка стадии и статуса сделки.
         """
-        logger.info(
-            f"company: {company_id}, email: {email}, date: {response_due_date}"
-            "++++++++++++=============="
+        company_client = self.deal_client.repo.company_client
+        if not company_client:
+            raise
+        if not company_client.bitrix_client:
+            raise
+        company = await company_client.bitrix_client.get(company_id)
+        current_emails: list[CommunicationChannel] = (
+            company.email if company.email else []
         )
+
+        added = False
+        for current_email in current_emails:
+            if current_email.value == email:
+                if current_email.value_type != "WORK":
+                    current_email.value_type = "WORK"
+                    added = True
+            else:
+                if current_email.value_type == "WORK":
+                    current_email.value_type = "OTHER"
+        if not added:
+            email_date = {
+                "type_id": "EMAIL",
+                "value_type": "WORK",
+                "value": email,
+            }
+            current_emails.append(CommunicationChannel(**email_date))
+        company_update = CompanyUpdate(
+            external_id=company_id, email=current_emails
+        )
+        await company_client.bitrix_client.update(company_update)
