@@ -303,7 +303,7 @@ class DealWebhookHandler:
         """
         Установка стадии и статуса сделки.
         """
-        print(
+        logger.info(
             f"company: {company_id}, email: {email}, date: {response_due_date}"
             "++++++++++++=============="
         )
