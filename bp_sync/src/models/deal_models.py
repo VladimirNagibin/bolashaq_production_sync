@@ -250,6 +250,10 @@ class Deal(BusinessEntity):
         comment="Макс"
     )  # UF_CRM_6909F9E9994A9 : Макс
 
+    products_list_as_string: Mapped[str | None] = mapped_column(
+        comment="Список товаров преобразованном в строку"
+    )  # UF_CRM_1764696465 : Список товаров преобразованном в строку
+
     # Вспомогательное поле для хранения реальной даты перехода на стадию
     moved_date: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),

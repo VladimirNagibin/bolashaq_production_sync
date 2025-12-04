@@ -577,12 +577,13 @@ class EntityAwareSchema(BaseModel):  # type: ignore[misc]
                 continue
 
             # Получаем финальный алиас для поля на основе alias_choice
-            field_alias = self._get_field_alias(field_info, alias_choice)
+            field_alias = self._get_field_alias(
+                field_name, field_info, alias_choice
+            )
 
             # Пропускаем исключенные поля (например, 'ID', 'id')
             if field_alias in self._EXCLUDED_FIELDS:
                 continue
-
             # Применяем преобразования к исходному значению.
             # Теперь isinstance(value, FieldValue) будет работать корректно.
             transformed_value = self._apply_field_transformations(
@@ -595,11 +596,10 @@ class EntityAwareSchema(BaseModel):  # type: ignore[misc]
                 continue
 
             result[field_alias] = transformed_value
-
         return result
 
     def _get_field_alias(
-        self, field_info: FieldInfo, alias_choice: int
+        self, field_name: str, field_info: FieldInfo, alias_choice: int
     ) -> str:
         """
         Вспомогательный метод для получения алиаса поля из FieldInfo.
@@ -613,7 +613,7 @@ class EntityAwareSchema(BaseModel):  # type: ignore[misc]
             return validation_alias.choices[choice_index]  # type: ignore
 
         # Если AliasChoices не используется, пробуем получить обычный алиас
-        return field_info.alias or field_info.name  # type: ignore
+        return field_info.alias or field_name
 
     def _apply_field_transformations(
         self, field_alias: str, value: Any, alias_choice: int
@@ -623,7 +623,12 @@ class EntityAwareSchema(BaseModel):  # type: ignore[misc]
 
         if isinstance(value, FieldValue):
             return self._transform_field_value(value, alias_choice)
-
+        if (
+            isinstance(value, list)
+            and value
+            and isinstance(value[0], CommunicationChannel)
+        ):
+            return self._transform_comm_channel(value, alias_choice)
         if isinstance(value, bool):
             return self._transform_boolean_value(field_alias, value)
         elif isinstance(value, datetime):
@@ -665,6 +670,14 @@ class EntityAwareSchema(BaseModel):  # type: ignore[misc]
                 result["value"] = nested_value
 
         return result
+
+    def _transform_comm_channel(
+        self, value: list["CommunicationChannel"], alias_choice: int
+    ) -> list[Any]:
+        """
+        Преобразует объект CommunicationChannel в формат, ожидаемый Bitrix API.
+        """
+        return [val.model_dump(by_alias=True) for val in value]
 
     def _transform_boolean_value(self, field_alias: str, value: bool) -> Any:
         """Преобразует булево значение в нужный формат"""

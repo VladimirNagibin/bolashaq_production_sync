@@ -34,6 +34,7 @@ FIELDS_BY_TYPE: dict[str, Any] = {
         "UF_CRM_6909F9E9ADB80",  # wz_telegram_id
         "UF_CRM_1760952984",  # contract
         "UF_CRM_1763483026",  # offer_link
+        "UF_CRM_1764696465",  # products_list_as_string
         # lead
         "NAME",  # "name:",
         "SECOND_NAME",  # "second_name:",
@@ -263,6 +264,7 @@ FIELDS_BY_TYPE_ALT: dict[str, Any] = {
         "repeat_sale_segment_id",
         "contract",
         "offer_link",
+        "products_list_as_string",
         # lead
         "name:",
         "second_name:",

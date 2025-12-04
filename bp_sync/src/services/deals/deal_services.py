@@ -1,6 +1,6 @@
 # import asyncio
 # import time
-# from datetime import date, datetime, timezone
+# from datetime import date  # , datetime, timezone
 from typing import Any, Self
 
 from core.logger import logger
@@ -405,17 +405,61 @@ class DealClient(BaseEntityClient[DealDB, DealRepository, DealBitrixClient]):
                 f"Synchronization failed for deal {deal_b24.external_id}"
             ) from e
 
-    async def handle_deal_without_offer(
+    async def set_products_string_field(
         self,
         user_id: str,
-        deal_id: str,
+        deal_id: int,
+        products: str,
+        products_origin: str,
     ) -> None:
         """
         Обработчик входящего вебхука сделки без КП.
         """
-        return
+        await self.deal_webhook_handler.set_products_string_field(
+            user_id, deal_id, products, products_origin
+        )
+
+    async def handle_deal_without_offer(
+        self,
+        user_id: str,
+        deal_id: int,
+    ) -> None:
+        """
+        Обработчик входящего вебхука сделки без КП.
+        """
         await self.deal_webhook_handler.handle_deal_without_offer(
             user_id, deal_id
+        )
+
+    async def set_stage_status_deal(
+        self,
+        deal_id: int,
+        deal_stage: int,
+        deal_status: str,
+        user_id: str | None = None,
+        doc_update: int | None = None,
+        doc_id: int | None = None,
+    ) -> None:
+        """
+        Установка стадии и статуса сделки.
+        """
+        await self.deal_webhook_handler.set_stage_status_deal(
+            deal_id,
+            deal_stage,
+            deal_status,
+            doc_update=doc_update,
+            doc_id=doc_id,
+        )
+
+    async def company_set_work_email(
+        self, company_id: int, email: str
+    ) -> None:
+        """
+        Установка стадии и статуса сделки.
+        """
+        await self.deal_webhook_handler.company_set_work_email(
+            company_id=company_id,
+            email=email,
         )
 
     # async def deal_processing(
