@@ -1,6 +1,6 @@
 # import asyncio
 # import time
-# from datetime import date  # , datetime, timezone
+from datetime import date  # , datetime, timezone
 from typing import Any, Self
 
 from core.logger import logger
@@ -439,6 +439,7 @@ class DealClient(BaseEntityClient[DealDB, DealRepository, DealBitrixClient]):
         user_id: str | None = None,
         doc_update: int | None = None,
         doc_id: int | None = None,
+        response_due_date: date | None = None,
     ) -> None:
         """
         Установка стадии и статуса сделки.
@@ -449,6 +450,7 @@ class DealClient(BaseEntityClient[DealDB, DealRepository, DealBitrixClient]):
             deal_status,
             doc_update=doc_update,
             doc_id=doc_id,
+            response_due_date=response_due_date,
         )
 
     async def company_set_work_email(
