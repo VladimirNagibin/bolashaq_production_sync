@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
@@ -103,4 +104,33 @@ async def deals_set_stage_status(
         deal_status,
         doc_update=doc_update,
         doc_id=doc_id,
+    )
+
+
+@deals_webhook_router.post(
+    "/company-set-work-email",
+    summary="Set work email for company",
+    description="Set work email for company.",
+    responses=RESPONSES_WEBHOOK,
+)  # type: ignore
+@handle_deal_webhook_logic
+async def company_set_work_email(
+    common_params: Annotated[
+        tuple[CommonWebhookParams, DealClient],
+        Depends(get_deal_webhook_context),
+    ],
+    company_id: Annotated[int, Query(..., description="ИД компании")],
+    email: Annotated[str, Query(..., description="Рабочий email")],
+    response_due_date: Annotated[
+        date, Query(..., description="Дата ожидания ответа клиента")
+    ],
+) -> None:
+    """
+    Устанавливает рабочий email для компании.
+    """
+    params, deal_client = common_params
+    await deal_client.company_set_work_email(
+        company_id=company_id,
+        email=email,
+        response_due_date=response_due_date,
     )

@@ -296,3 +296,14 @@ class DealWebhookHandler:
         #    return url_filename
 
         return None
+
+    async def company_set_work_email(
+        self, company_id: int, email: str, response_due_date: date
+    ) -> None:
+        """
+        Установка стадии и статуса сделки.
+        """
+        print(
+            f"company: {company_id}, email: {email}, date: {response_due_date}"
+            "++++++++++++=============="
+        )
