@@ -58,7 +58,7 @@ def get_deal_webhook_context(
 def parse_custom_date(
     date_str: Annotated[
         str | None, Query(..., description="Дата в формате дд.мм.гггг")
-    ],
+    ] = None,
 ) -> date | None:
     """
     Парсит дату из формата дд.мм.гггг в объект date.
