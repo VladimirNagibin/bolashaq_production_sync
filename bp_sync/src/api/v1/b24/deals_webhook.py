@@ -1,4 +1,4 @@
-# from datetime import date
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
@@ -10,8 +10,9 @@ from ..decorators.webhook_decorators import (
     RESPONSES_WEBHOOK,
     handle_deal_webhook_logic,
 )
-from ..deps import (  # parse_custom_date,
+from ..deps import (
     get_deal_webhook_context,
+    parse_custom_date,
     verify_incoming_webhook_token,
 )
 from ..schemas.params import CommonWebhookParams
@@ -96,6 +97,9 @@ async def deals_set_stage_status(
     doc_id: Annotated[
         int | None, Query(..., description="Ссылка на изображение")
     ] = None,
+    response_due_date: Annotated[
+        date | None, Depends(parse_custom_date)
+    ] = None,
 ) -> None:
     """
     Устанавливает этап и статус сделки.
@@ -107,6 +111,7 @@ async def deals_set_stage_status(
         deal_status,
         doc_update=doc_update,
         doc_id=doc_id,
+        response_due_date=response_due_date,
     )
 
 
@@ -124,7 +129,6 @@ async def company_set_work_email(
     ],
     company_id: Annotated[int, Query(..., description="ИД компании")],
     email: Annotated[str, Query(..., description="Рабочий email")],
-    # response_due_date: Annotated[date, Depends(parse_custom_date)],
 ) -> None:
     """
     Устанавливает рабочий email для компании.

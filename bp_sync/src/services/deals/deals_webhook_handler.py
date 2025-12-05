@@ -144,6 +144,7 @@ class DealWebhookHandler:
         user_id: str | None = None,
         doc_update: int | None = None,
         doc_id: int | None = None,
+        response_due_date: date | None = None,
     ) -> None:
         """
         Устанавливает стадии и статус сделки.
@@ -154,6 +155,7 @@ class DealWebhookHandler:
             user_id: ID пользователя.
             doc_update: Флаг обновления документа(1-обновление, 0-нет).
             doc_id: ИД документа.
+            response_due_date: Дата ожидаемого ответа клиента.
         Returns:
             None
         """
@@ -173,6 +175,8 @@ class DealWebhookHandler:
             "status_deal": status_enum,
             "stage_id": stage_id,
         }
+        if response_due_date:
+            data_deal["date_answer_client"] = response_due_date
         deal_update = DealUpdate(**data_deal)
 
         await self._update_local_deal(deal_id, deal_update)

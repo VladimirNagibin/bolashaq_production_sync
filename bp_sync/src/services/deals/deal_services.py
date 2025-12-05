@@ -1,7 +1,10 @@
 # import asyncio
-# import time
-# from datetime import date  # , datetime, timezone
+import time
+from datetime import date  # , datetime, timezone
 from typing import Any, Self
+
+from fastapi import Request, status
+from fastapi.responses import JSONResponse
 
 from core.logger import logger
 from core.settings import settings
@@ -34,6 +37,10 @@ from ..exceptions import (  # InvalidDealStateError,; BaseAppException,
     DealNotInMainFunnelError,
     DealProcessingError,
     DealSyncError,
+    LockAcquisitionError,
+    MaxRetriesExceededError,
+    WebhookSecurityError,
+    WebhookValidationError,
 )
 
 # from ..products.product_bitrix_services import ProductBitrixClient
@@ -48,11 +55,6 @@ from .deal_lock_service import LockService
 # from .deal_extend_processing import DealProcessingClient
 # from .deal_lock_service import LockService
 # from .deal_processing_status_service import DealProcessingStatusService
-# from .deal_report_helpers import (
-#    create_dataframe,
-#     create_excel_file,
-#    process_deal_row_report,
-# )
 from .deal_repository import DealRepository
 
 # from .deal_source_classifier import WEBSITE_CREATOR, identify_source
@@ -60,20 +62,6 @@ from .deal_repository import DealRepository
 # from .deal_stage_handler import DealStageHandler
 from .deal_update_tracker import DealUpdateTracker
 from .deals_webhook_handler import DealWebhookHandler
-
-# from fastapi import HTTPException, Request, status
-# from fastapi.responses import JSONResponse
-
-
-# from .deal_with_invoice_handler import DealWithInvioceHandler
-# from .enums import (
-#    EXCLUDE_FIELDS_FOR_COMPARE,
-#    CreationSourceEnum,
-#    DealSourceEnum,
-#    DealTypeEnum,
-#    NotificationScopeEnum,
-# )
-# from .site_order_handler import SiteOrderHandler
 
 # STAGES_LOSE = ("LOSE", "APOLOGY")
 
@@ -439,6 +427,7 @@ class DealClient(BaseEntityClient[DealDB, DealRepository, DealBitrixClient]):
         user_id: str | None = None,
         doc_update: int | None = None,
         doc_id: int | None = None,
+        response_due_date: date | None = None,
     ) -> None:
         """
         Установка стадии и статуса сделки.
@@ -449,6 +438,7 @@ class DealClient(BaseEntityClient[DealDB, DealRepository, DealBitrixClient]):
             deal_status,
             doc_update=doc_update,
             doc_id=doc_id,
+            response_due_date=response_due_date,
         )
 
     async def company_set_work_email(
@@ -462,147 +452,146 @@ class DealClient(BaseEntityClient[DealDB, DealRepository, DealBitrixClient]):
             email=email,
         )
 
-    # async def deal_processing(
-    #     self,
-    #     request: Request,
-    # ) -> JSONResponse:
-    #     """
-    #     Основной метод обработки вебхука сделки
-    #     """
-    #     # ADMIN_ID = 171
-    #     try:
-    #         webhook_payload = await self.webhook_service.process_webhook(
-    #             request
-    #         )
+    async def deal_processing(
+        self,
+        request: Request,
+    ) -> JSONResponse:
+        """
+        Основной метод обработки вебхука сделки
+        """
+        # ADMIN_ID = 171
+        try:
+            webhook_payload = await self.webhook_service.process_webhook(
+                request
+            )
 
-    #         deal_id = webhook_payload.deal_id
-    #         if not deal_id:
-    #             return self._success_response(
-    #                 "Webhook received but no deal ID found",
-    #                 webhook_payload.event,
-    #             )
+            deal_id = webhook_payload.entity_id
+            if not deal_id:
+                return self._success_response(
+                    "Webhook received but no deal ID found",
+                    webhook_payload.event,
+                )
 
-    #         if settings.WEB_HOOK_TEST and deal_id != settings.DEAL_ID_TEST:
-    #             return self._success_response(
-    #                 "Test mode: Webhook received but deal not test",
-    #                 webhook_payload.event,
-    #             )
+            if settings.WEB_HOOK_TEST and deal_id != settings.DEAL_ID_TEST:
+                return self._success_response(
+                    "Test mode: Webhook received but deal not test",
+                    webhook_payload.event,
+                )
 
-    #         if webhook_payload.event == "ONCRMDEALDELETE":
-    #             try:
-    #                 await self.repo.set_deleted_in_bitrix(deal_id)
-    #             except Exception:
-    #                 ...
-    #         # await self.bitrix_client.send_message_b24(
-    #         #    ADMIN_ID,
-    #         #    f"START NEW PROCESS DEAL ID: {deal_id}
-    #         #    f{webhook_payload.ts}",
-    #         # )
-    #         try:
-    #             async with self.lock_service.acquire_deal_lock_with_retry(
-    #                 deal_id,
-    #                 timeout=self.retry_config["lock_timeout"],
-    #                 max_retries=self.retry_config["max_retries"],
-    #                 base_delay=self.retry_config["base_delay"],
-    #                 max_delay=self.retry_config["max_delay"],
-    #                 jitter=self.retry_config["jitter"],
-    #             ):
+            if webhook_payload.event == "ONCRMDEALDELETE":
+                try:
+                    await self.repo.set_deleted_in_bitrix(deal_id)
+                except Exception:
+                    ...
+            # await self.bitrix_client.send_message_b24(
+            #    ADMIN_ID,
+            #    f"START NEW PROCESS DEAL ID: {deal_id}
+            #    f{webhook_payload.ts}",
+            # )
+            try:
+                async with self.lock_service.acquire_deal_lock_with_retry(
+                    deal_id,
+                    timeout=self.retry_config["lock_timeout"],
+                    max_retries=self.retry_config["max_retries"],
+                    base_delay=self.retry_config["base_delay"],
+                    max_delay=self.retry_config["max_delay"],
+                    jitter=self.retry_config["jitter"],
+                ):
 
-    #                 success = await self.handle_deal(deal_id)
+                    success = await self.handle_deal(deal_id)
 
-    #                 if success:
-    #                     try:
-    #                         ext_service = self.deal_ext_service
-    #                         await ext_service.send_deal_processing_request(
-    #                             deal_id, int(webhook_payload.ts)
-    #                         )
-    #                     except HTTPException as e:
-    #                         logger.error(
-    #                             f"Failed to send deal processing request "
-    #                             f"for deal {deal_id}-{webhook_payload.ts}: "
-    #                             f"{str(e)}"
-    #                         )
-    #                     return self._success_response(
-    #                         f"Deal {deal_id} processed successfully",
-    #                         webhook_payload.event,
-    #                     )
-    #                 else:
-    #                     raise DealProcessingError(
-    #                         f"Failed to process deal {deal_id}"
-    #                     )
+                    if success:
+                        # try:
+                        #     ext_service = self.deal_ext_service
+                        #     await ext_service.send_deal_processing_request(
+                        #         deal_id, int(webhook_payload.ts)
+                        #     )
+                        # except HTTPException as e:
+                        #     logger.error(
+                        #         f"Failed to send deal processing request "
+                        #         f"for deal {deal_id}-{webhook_payload.ts}: "
+                        #         f"{str(e)}"
+                        #     )
+                        return self._success_response(
+                            f"Deal {deal_id} processed successfully",
+                            webhook_payload.event,
+                        )
+                    else:
+                        raise DealProcessingError(
+                            f"Failed to process deal {deal_id}"
+                        )
 
-    #         except MaxRetriesExceededError:
-    #             # Все попытки исчерпаны
-    #             remain_time = await self.lock_service.
-    #                 get_remaining_lock_time(
-    #                 deal_id
-    #             )
-    #             error_msg = (
-    #                 f"Deal {deal_id} is still locked after "
-    #                 f"{self.retry_config['max_retries']} retries"
-    #             )
-    #             if remain_time:
-    #                 error_msg += f", lock expires in {remain_time:.1f}s"
+            except MaxRetriesExceededError:
+                # Все попытки исчерпаны
+                remain_time = await self.lock_service.get_remaining_lock_time(
+                    deal_id
+                )
+                error_msg = (
+                    f"Deal {deal_id} is still locked after "
+                    f"{self.retry_config['max_retries']} retries"
+                )
+                if remain_time:
+                    error_msg += f", lock expires in {remain_time:.1f}s"
 
-    #             logger.warning(error_msg)
-    #             return self._concurrent_processing_response(
-    #                 deal_id, webhook_payload.event
-    #             )
+                logger.warning(error_msg)
+                return self._concurrent_processing_response(
+                    deal_id, webhook_payload.event
+                )
 
-    #         except LockAcquisitionError as e:
-    #             logger.warning(
-    #                 f"Lock acquisition failed for deal {deal_id}: {e}"
-    #             )
-    #             return self._concurrent_processing_response(
-    #                 deal_id, webhook_payload.event
-    #             )
+            except LockAcquisitionError as e:
+                logger.warning(
+                    f"Lock acquisition failed for deal {deal_id}: {e}"
+                )
+                return self._concurrent_processing_response(
+                    deal_id, webhook_payload.event
+                )
 
-    #     except WebhookSecurityError as e:
-    #         logger.warning(f"Webhook security error: {e}")
-    #         return self._error_response(
-    #             status.HTTP_401_UNAUTHORIZED,
-    #             "Security validation failed",
-    #             "Security error",
-    #         )
-    #     except WebhookValidationError as e:
-    #         logger.warning(f"Webhook validation error: {e}")
-    #         return self._error_response(
-    #             status.HTTP_400_BAD_REQUEST,
-    #             "Webhook validation failed",
-    #             "Validation error",
-    #         )
-    #     except DealProcessingError as e:
-    #         logger.error(f"Deal processing error: {e}")
-    #         return self._error_response(
-    #             status.HTTP_500_INTERNAL_SERVER_ERROR,
-    #             "Deal processing failed",
-    #             "Processing error",
-    #         )
-    #     except Exception as e:
-    #         logger.error(f"Unexpected error in deal processing: {e}")
-    #         return self._error_response(
-    #             status.HTTP_500_INTERNAL_SERVER_ERROR,
-    #             "Internal server error",
-    #             "Unexpected error",
-    #         )
+        except WebhookSecurityError as e:
+            logger.warning(f"Webhook security error: {e}")
+            return self._error_response(
+                status.HTTP_401_UNAUTHORIZED,
+                "Security validation failed",
+                "Security error",
+            )
+        except WebhookValidationError as e:
+            logger.warning(f"Webhook validation error: {e}")
+            return self._error_response(
+                status.HTTP_400_BAD_REQUEST,
+                "Webhook validation failed",
+                "Validation error",
+            )
+        except DealProcessingError as e:
+            logger.error(f"Deal processing error: {e}")
+            return self._error_response(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                "Deal processing failed",
+                "Processing error",
+            )
+        except Exception as e:
+            logger.error(f"Unexpected error in deal processing: {e}")
+            return self._error_response(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                "Internal server error",
+                "Unexpected error",
+            )
 
-    # def _concurrent_processing_response(
-    #     self, deal_id: int, event: str
-    # ) -> JSONResponse:
-    #     """Ответ при параллельной обработке после исчерпания попыток"""
-    #     return JSONResponse(
-    #         status_code=status.HTTP_409_CONFLICT,
-    #         content={
-    #             "status": "skipped",
-    #             "message": (
-    #                 f"Deal {deal_id} is still being processed by another "
-    #                 "worker"
-    #             ),
-    #             "event": event,
-    #             "timestamp": time.time(),
-    #             "suggestion": "Please try again later",
-    #         },
-    #     )
+    def _concurrent_processing_response(
+        self, deal_id: int, event: str
+    ) -> JSONResponse:
+        """Ответ при параллельной обработке после исчерпания попыток"""
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "status": "skipped",
+                "message": (
+                    f"Deal {deal_id} is still being processed by another "
+                    "worker"
+                ),
+                "event": event,
+                "timestamp": time.time(),
+                "suggestion": "Please try again later",
+            },
+        )
 
     # async def checking_deals(self) -> None:
     #     """

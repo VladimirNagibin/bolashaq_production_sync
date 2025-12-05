@@ -1,26 +1,42 @@
-from fastapi import APIRouter, Depends
+import time
+
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 
-from services.deals.deal_bitrix_services import DealBitrixClient
-from services.dependencies.dependencies_bitrix_entity import (
-    get_deal_bitrix_client,
+from core.logger import logger
+from services.deals.deal_services import DealClient
+from services.dependencies.dependencies import get_deal_service
+from services.dependencies.dependencies_repo import request_context
+
+deals_router = APIRouter(
+    prefix="/deals", dependencies=[Depends(request_context)]
 )
 
-deals_router = APIRouter(prefix="/deals")
 
-
-@deals_router.get(
-    "/test-deals",
-    summary="Test deals",
-    description="Testing deals.",
-)  # type: ignore
-async def test_deals(
-    deal_client: DealBitrixClient = Depends(get_deal_bitrix_client),
+@deals_router.post("/process")  # type: ignore
+async def handle_bitrix24_webhook_raw(
+    request: Request,
+    deal_client: DealClient = Depends(get_deal_service),
 ) -> JSONResponse:
+    """
+    Обработчик вебхуков Bitrix24 для сделок
+
+    - Принимает webhook в формате application/x-www-form-urlencoded
+    - Валидирует подпись и данные
+    - Обрабатывает тестовые и продакшен сделки
+    - Возвращает детализированные ответы
+    """
+    logger.info("Received Bitrix24 webhook request")
     try:
-        result = None
-        # result = await deal_client.handle_request_price("11111111", 35)
+        return await deal_client.deal_processing(request)
     except Exception as e:
-        result = e
-    print(result)
-    return JSONResponse(content="result")
+        logger.error(f"Unhandled error in webhook handler: {e}")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "status": "fail",
+                "message": "Deal processing failed",
+                "error": str(e),
+                "timestamp": time.time(),
+            },
+        )
