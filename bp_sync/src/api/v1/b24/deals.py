@@ -6,8 +6,11 @@ from fastapi.responses import JSONResponse
 from core.logger import logger
 from services.deals.deal_services import DealClient
 from services.dependencies.dependencies import get_deal_service
+from services.dependencies.dependencies_repo import request_context
 
-deals_router = APIRouter(prefix="/deals")
+deals_router = APIRouter(
+    prefix="/deals", dependencies=[Depends(request_context)]
+)
 
 
 @deals_router.post("/process")  # type: ignore
