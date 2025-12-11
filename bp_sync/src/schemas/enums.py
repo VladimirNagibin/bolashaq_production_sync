@@ -42,7 +42,9 @@ class DealStatusEnum(IntEnum):
     """Статусы состояния сделки."""
 
     NEW = 45
+
     ACCEPTED = 47
+
     OFFER_NO = 49
     OFFER_IN_AGREEMENT_SUPERVISOR = 51
     OFFER_APPROVED_SUPERVISOR = 53
@@ -50,6 +52,21 @@ class DealStatusEnum(IntEnum):
     OFFER_SENT_CLIENT = 57
     OFFER_APPROVED_CLIENT = 59
     OFFER_DISMISSED_CLIENT = 61
+
+    CONTRACT_NO = 67
+    DRAFT_CONTRACT_IN_AGREEMENT_SUPERVISOR = 69
+    DRAFT_CONTRACT_APPROVED_SUPERVISOR = 71
+    DRAFT_CONTRACT_DISMISSED_SUPERVISOR = 73
+    DRAFT_CONTRACT_SENT_CLIENT = 75
+    DRAFT_CONTRACT_APPROVED_CLIENT = 77
+    DRAFT_CONTRACT_DISMISSED_CLIENT = 79
+    CONTRACT_IN_SIGN_SUPERVISOR = 81
+    CONTRACT_SIGN_SUPERVISOR = 83
+    CONTRACT_UNSIGN_SUPERVISOR = 85
+    CONTRACT_SENT_IN_SIGN_CLIENT = 87
+    CONTRACT_SIGN_CLIENT = 89
+    CONTRACT_UNSIGN_CLIENT = 91
+
     DEAL_LOSE = 63
     DEAL_WON = 65
 
@@ -68,6 +85,19 @@ class DealStatusEnum(IntEnum):
             57: "КП - отправлен клиенту",
             59: "КП - согласован с клиентом",
             61: "КП - отклонён клиентом",
+            67: "Договор - отсутствует",
+            69: "Проект договора - на согласовании руководителем",
+            71: "Проект договора - подтверждён руководителем",
+            73: "Проект договора - отклонен руководителем",
+            75: "Проект договора - отправлен клиенту",
+            77: "Проект договора - согласован с клиентом",
+            79: "Проект договора - отклонён клиентом",
+            81: "Договор - на подпись руководителем",
+            83: "Договор - подписан руководителем",
+            85: "Договор - отклонен руководителем",
+            87: "Договор - отправлен на подпись клиенту",
+            89: "Договор - подписан клиентом",
+            91: "Договор - отклонён клиентом",
             63: "Сделка провалена",
             65: "Сделка успешна",
             0: "Не определено",

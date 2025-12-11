@@ -27,29 +27,46 @@ class DealWebhookHandler:
     def __init__(self, deal_client: "DealClient") -> None:
         self.deal_client = deal_client
 
-    async def handle_deal_without_offer(
+    async def handle_deal_without_stage(
         self,
         user_id: str,
         deal_id: int,
+        stage_id: DealStagesEnum,
     ) -> None:
         """
-        Обработчик входящего вебхука сделки без КП.
+        Обработчик входящего вебхука сделки без Стадии.
         """
         repo = self.deal_client.repo
-        contract_stage_id = await repo.get_external_id_by_sort_order_stage(
-            DealStagesEnum.CONTRACT_CONCLUSION,
-        )
-        data_deal: dict[str, Any] = {
-            "external_id": deal_id,
-            "without_offer": True,
-            "moved_date": date.today(),
-            "status_deal": DealStatusEnum.OFFER_NO,
-            "stage_id": contract_stage_id,
-        }
-        deal_update = DealUpdate(**data_deal)
+        deal_data: dict[str, Any] = {}
+        # without Offer stage
+        if stage_id == DealStagesEnum.OFFER_PREPARE:
+            new_stage_id = await repo.get_external_id_by_sort_order_stage(
+                DealStagesEnum.CONTRACT_CONCLUSION,
+            )
+            deal_data = {
+                "external_id": deal_id,
+                "without_offer": True,
+                "moved_date": date.today(),
+                "status_deal": DealStatusEnum.OFFER_NO,
+                "stage_id": new_stage_id,
+            }
+        # without contract stage
+        elif stage_id == DealStagesEnum.CONTRACT_CONCLUSION:
+            new_stage_id = await repo.get_external_id_by_sort_order_stage(
+                DealStagesEnum.PREPAYMENT_INVOICE,
+            )
+            deal_data = {
+                "external_id": deal_id,
+                "without_contract": True,
+                "moved_date": date.today(),
+                "status_deal": DealStatusEnum.CONTRACT_NO,
+                "stage_id": new_stage_id,
+            }
+        if deal_data:
+            deal_update = DealUpdate(**deal_data)
 
-        await self._update_local_deal(deal_id, deal_update)
-        await self.deal_client.bitrix_client.update(deal_update)
+            await self._update_local_deal(deal_id, deal_update)
+            await self.deal_client.bitrix_client.update(deal_update)
 
     async def _update_local_deal(
         self, deal_id: int, deal_update: DealUpdate
