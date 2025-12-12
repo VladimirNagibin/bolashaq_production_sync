@@ -203,7 +203,17 @@ class DealWebhookHandler:
             doc_data = await self.download_doc_from_id(doc_id)
             if not doc_data:
                 return
-            fields["UF_CRM_1764217378"] = {
+            fieldname = None
+            if status_enum == DealStatusEnum.OFFER_APPROVED_SUPERVISOR:
+                fieldname = "UF_CRM_1764217378"
+            elif (
+                status_enum
+                == DealStatusEnum.DRAFT_CONTRACT_APPROVED_SUPERVISOR
+            ):
+                fieldname = "UF_CRM_1765532097"
+            if not fieldname:
+                return
+            fields[fieldname] = {
                 "fileData": [
                     doc_data["filename"],
                     doc_data["content"],
