@@ -3,6 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 
+from schemas.enums import DealStagesEnum
 from services.deals.deal_services import DealClient
 from services.dependencies.dependencies_repo import request_context
 
@@ -43,8 +44,34 @@ async def deals_without_offer(
     Обрабатывает сделку, для которой не создаётся КП.
     """
     params, deal_client = common_params
-    await deal_client.handle_deal_without_offer(
-        user_id=params.user_id, deal_id=params.deal_id
+    await deal_client.handle_deal_without_stage(
+        user_id=params.user_id,
+        deal_id=params.deal_id,
+        stage_id=DealStagesEnum.OFFER_PREPARE,
+    )
+
+
+@deals_webhook_router.post(
+    "/deals-without-contract",
+    summary="Handel deals without contract",
+    description="Set fields and move deals without contract.",
+    responses=RESPONSES_WEBHOOK,
+)  # type: ignore
+@handle_deal_webhook_logic
+async def deals_without_contract(
+    common_params: Annotated[
+        tuple[CommonWebhookParams, DealClient],
+        Depends(get_deal_webhook_context),
+    ],
+) -> None:
+    """
+    Обрабатывает сделку, для которой не создаётся Договор.
+    """
+    params, deal_client = common_params
+    await deal_client.handle_deal_without_stage(
+        user_id=params.user_id,
+        deal_id=params.deal_id,
+        stage_id=DealStagesEnum.CONTRACT_CONCLUSION,
     )
 
 

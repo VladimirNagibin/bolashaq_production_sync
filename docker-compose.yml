@@ -53,7 +53,7 @@ services:
 
   db:
     image: postgres:17.4-bookworm
-    restart: always
+    restart: unless-stopped
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:

@@ -13,13 +13,7 @@ from schemas.base_schemas import CommonFieldMixin
 from schemas.company_schemas import CompanyCreate
 from schemas.contact_schemas import ContactCreate
 from schemas.deal_schemas import DealCreate  # , DealUpdate
-
-# from schemas.enums import (
-#    DealStagesEnum,
-#     DealStatusEnum,
-#     StageSemanticEnum,
-#     EntityTypeAbbr,
-# )
+from schemas.enums import DealStagesEnum
 from schemas.lead_schemas import LeadCreate
 from services.companies.company_services import CompanyClient
 from services.contacts.contact_services import ContactClient
@@ -407,16 +401,17 @@ class DealClient(BaseEntityClient[DealDB, DealRepository, DealBitrixClient]):
             user_id, deal_id, products, products_origin
         )
 
-    async def handle_deal_without_offer(
+    async def handle_deal_without_stage(
         self,
         user_id: str,
         deal_id: int,
+        stage_id: DealStagesEnum,
     ) -> None:
         """
         Обработчик входящего вебхука сделки без КП.
         """
-        await self.deal_webhook_handler.handle_deal_without_offer(
-            user_id, deal_id
+        await self.deal_webhook_handler.handle_deal_without_stage(
+            user_id, deal_id, stage_id
         )
 
     async def set_stage_status_deal(
