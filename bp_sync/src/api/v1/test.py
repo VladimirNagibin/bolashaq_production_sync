@@ -48,7 +48,10 @@ async def check(
 ) -> JSONResponse:
     try:
         # result_ = ""
-        await deal_client.handle_deal(141)
+        # await deal_client.handle_deal(141)
+        await deal_client.deal_webhook_handler.company_set_work_email(
+            21, "test@test.com"
+        )
         # result_ = result[0].to_pydantic().model_dump_json()
         # result = await product_client.import_from_bitrix(801)
         # result_ = await result[0].to_pydantic()

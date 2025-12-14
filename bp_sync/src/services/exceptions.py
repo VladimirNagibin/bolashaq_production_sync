@@ -122,6 +122,20 @@ class ExternalServiceError(DealProcessingError):
     pass
 
 
+class DocumentProcessingError(DealProcessingError):
+    """Исключение для ошибок при обработке документов."""
+
+    pass
+
+
+class CompanyClientNotInitializedError(DealProcessingError):
+    """
+    Исключение, когда клиент для работы с компаниями не инициализирован.
+    """
+
+    pass
+
+
 class WebhookValidationError(Exception):
     """Кастомное исключение для ошибок валидации вебхуков."""
 
