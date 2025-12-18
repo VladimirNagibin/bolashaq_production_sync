@@ -110,6 +110,12 @@ class DealSyncError(DealProcessingError):
     pass
 
 
+class InvalidDealStatusError(DealProcessingError):
+    """Исключение для некорректного состояния сделки, требующего отката."""
+
+    pass
+
+
 class InvalidDealStateError(DealProcessingError):
     """Исключение для некорректного состояния сделки, требующего отката."""
 

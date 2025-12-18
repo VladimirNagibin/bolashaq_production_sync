@@ -472,6 +472,11 @@ class DealClient(BaseEntityClient[DealDB, DealRepository, DealBitrixClient]):
                     "Test mode: Webhook received but deal not test",
                     webhook_payload.event,
                 )
+            if not settings.WEB_HOOK_TEST and deal_id < settings.DEAL_ID_TEST:
+                return self._success_response(
+                    "Prod mode: Webhook received but deal_id less then limit",
+                    webhook_payload.event,
+                )
 
             if webhook_payload.event == "ONCRMDEALDELETE":
                 try:
@@ -496,6 +501,7 @@ class DealClient(BaseEntityClient[DealDB, DealRepository, DealBitrixClient]):
                     success = await self.handle_deal(deal_id)
 
                     if success:
+                        # sending into external service for control
                         # try:
                         #     ext_service = self.deal_ext_service
                         #     await ext_service.send_deal_processing_request(
