@@ -209,7 +209,7 @@ class FieldText(BaseModel):  # type: ignore[misc]
 
 
 class FieldValue(BaseModel):  # type: ignore[misc]
-    value_id: int = Field(..., alias="valueId")  # id value
+    value_id: int | None = Field(None, alias="valueId")  # id value
     value: str | FieldText = Field(..., alias="value")  # value
 
 
@@ -330,6 +330,10 @@ class BaseProduct(CommonFieldMixin):
         None,
         validation_alias=AliasChoices("PROPERTY_131", "property131"),
     )  # Стандарты для печати
+    brend: FieldValue | None = Field(
+        None,
+        validation_alias=AliasChoices("PROPERTY_133", "property133"),
+    )  # Бренд
 
     @field_validator("price", mode="before")  # type: ignore[misc]
     @classmethod
@@ -354,7 +358,7 @@ class ProductCreate(BaseProduct, EntityAwareSchema):
         return ProductCreate(**product_data)
 
 
-class ProductUpdate(BaseProduct):
+class ProductUpdate(BaseProduct, EntityAwareSchema):
     """Модель для частичного обновления товаров"""
 
     name: str | None = Field(

@@ -211,7 +211,9 @@ logs/
 
 .info
 data/
+uploads/
 
 .env_
 .env.mail
 .env.mess
+.env.sign_bot

@@ -21,6 +21,9 @@ from services.dependencies.dependencies_repo import request_context
 from services.products.product_bitrix_services import ProductBitrixClient
 from services.products.product_services import ProductClient
 
+# from schemas.product_schemas import FieldValue, ProductUpdate
+
+
 # from services.users.user_bitrix_services import UserBitrixClient
 
 # from services.users.user_services import UserClient
@@ -46,12 +49,19 @@ async def check(
     ),
     product_client: ProductClient = Depends(get_product_service),
 ) -> JSONResponse:
+    external_id = 0
     try:
         # result_ = ""
-        # await deal_client.handle_deal(141)
-        await deal_client.deal_webhook_handler.company_set_work_email(
-            21, "test@test.com"
-        )
+        await deal_client.handle_deal(141)
+        # for external_id in range(2001, 2148, 2):
+        #     product_update = ProductUpdate(
+        #         external_id=external_id, brend=FieldValue(value="93")
+        #     )
+        #     await product_bitrix_client.update(product_update)
+        #     print(f"UPDATED {external_id}")
+        # pr = await product_bitrix_client.get(349)
+        # print(product_update)
+
         # result_ = result[0].to_pydantic().model_dump_json()
         # result = await product_client.import_from_bitrix(801)
         # result_ = await result[0].to_pydantic()
@@ -59,7 +69,7 @@ async def check(
     except Exception as e:
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"error": str(e)},
+            content={"error": str(e), "external_id": f"{external_id}"},
         )
     return JSONResponse(
         status_code=status.HTTP_200_OK,
