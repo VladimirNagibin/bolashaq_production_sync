@@ -10,11 +10,7 @@ from schemas.enums import (
     StageSemanticEnum,
 )
 
-from ..exceptions import (
-    DealNotFoundError,
-    DealProcessingError,
-    InvalidDealStateError,
-)
+from ..exceptions import DealProcessingError, InvalidDealStatusError
 
 if TYPE_CHECKING:
     from .deal_services import DealClient
@@ -141,19 +137,13 @@ class DealHandler:
     async def _check_deal_status(
         self,
         deal_b24: DealCreate,
-        deal_db: DealCreate | None,
+        deal_db: DealCreate,
     ) -> None:
         """
         Проверяет, не был ли изменен статус сделки в Bitrix24.
         Если был, откатывает его на значение из БД.
         """
         logger.debug(f"Check status for deal: {deal_b24.external_id}")
-
-        if not deal_db:
-            raise DealNotFoundError(
-                "Deal not found in database",
-                self.deal_client.get_external_id(deal_b24),
-            )
 
         if not deal_b24.status_deal or (
             deal_b24.status_deal != deal_db.status_deal
@@ -170,7 +160,7 @@ class DealHandler:
             deal_update = DealUpdate(**deal_data)
 
             await self.deal_client.bitrix_client.update(deal_update)
-            raise InvalidDealStateError(
+            raise InvalidDealStatusError(
                 f"Deal {deal_b24.external_id} status was changed externally. "
                 f"Rolled back to '{deal_db.status_deal}'."
             )
@@ -208,6 +198,9 @@ class DealHandler:
             self.deal_client.update_tracker.update_field(
                 "status_deal", DealStatusEnum.ACCEPTED, deal_b24
             )
+            self.deal_client.update_tracker.update_field(
+                "moved_date", date.today(), deal_b24
+            )
             logger.info(
                 f"Deal {deal_b24.external_id} status updated to ACCEPTED."
             )
@@ -239,6 +232,10 @@ class DealHandler:
             self.deal_client.update_tracker.update_field(
                 "stage_id", available_stage, deal_b24
             )
+            if available_stage_number == DealStagesEnum.OFFER_PREPARE:
+                self.deal_client.update_tracker.update_field(
+                    "moved_date", date.today(), deal_b24
+                )
 
     async def _check_products(self, deal_id: int | None) -> bool:
         """Проверяет, есть ли товары в сделке."""
@@ -251,7 +248,7 @@ class DealHandler:
         products = await product_bitrix_client.get_entity_products(
             deal_id, EntityTypeAbbr.DEAL
         )
-        if not products:
+        if not products or not products.result:
             return False
         for product in products.result:
             if (
