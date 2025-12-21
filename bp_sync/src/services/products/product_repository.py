@@ -7,11 +7,18 @@ from sqlalchemy.orm import selectinload
 
 from core.logger import logger
 from models.product_models import Product as ProductDB
-from models.product_models import ProductProperty, ProductSimpleProperty
+from models.product_models import (  # ProductEntity,
+    ProductProperty,
+    ProductSimpleProperty,
+)
 from models.user_models import User as UserDB
 from schemas.enums import EntityType
 from schemas.fields import FIELDS_PRODUCT_ALT
-from schemas.product_schemas import ProductCreate, ProductUpdate
+from schemas.product_schemas import (
+    ProductCreate,
+    ProductEntityCreate,
+    ProductUpdate,
+)
 
 from ..base_repositories.base_repository import (
     BaseRepository,
@@ -165,3 +172,9 @@ class ProductRepository(
     #             include_properties=True, session=self.session
     #         )
     #     return None
+
+    async def create_or_update_product_in_entity(
+        self, product_entity: ProductEntityCreate
+    ) -> ProductDB | None:
+        """Создает или обновляет продукт в сущности"""
+        pass

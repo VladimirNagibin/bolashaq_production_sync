@@ -52,7 +52,7 @@ async def check(
     external_id = 0
     try:
         # result_ = ""
-        await deal_client.handle_deal(141)
+        await deal_client.handle_deal(257)
         # for external_id in range(2001, 2148, 2):
         #     product_update = ProductUpdate(
         #         external_id=external_id, brend=FieldValue(value="93")

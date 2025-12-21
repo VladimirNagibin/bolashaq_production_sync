@@ -41,7 +41,7 @@ class DealWebhookHandler:
         stage_id: DealStagesEnum,
     ) -> None:
         """
-        Обработчик входящего вебхука сделки без Стадии.
+        Обработчик входящего вебхука сделки без Стадии(КП или Договора).
         """
         logger.info(
             (
@@ -292,6 +292,7 @@ class DealWebhookHandler:
                 "external_id": deal_id,
                 "status_deal": status_enum,
                 "stage_id": stage_id,
+                "moved_date": date.today(),
             }
             if response_due_date:
                 deal_update_data["date_answer_client"] = response_due_date

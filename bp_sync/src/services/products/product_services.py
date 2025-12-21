@@ -2,6 +2,7 @@ from typing import Any
 
 from core.settings import settings
 from models.product_models import Product as ProductDB
+from schemas.enums import EntityTypeAbbr
 from services.users.user_services import UserClient
 
 from ..base_services.base_service import BaseEntityClient
@@ -46,3 +47,13 @@ class ProductClient(
     @property
     def webhook_config(self) -> dict[str, Any]:
         return settings.web_hook_config_product  # type: ignore
+
+    async def load_products_from_bitrix(
+        self,
+        owner_id: int,
+        owner_type: EntityTypeAbbr,
+    ) -> None:
+        products_entity = await self.bitrix_client.get_entity_products(
+            owner_id, owner_type
+        )
+        print(products_entity)

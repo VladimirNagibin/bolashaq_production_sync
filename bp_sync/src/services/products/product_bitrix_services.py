@@ -57,7 +57,7 @@ class ProductBitrixClient(
         return await self.get(entity_id=product_id, crm=False)
 
     @handle_bitrix_errors()
-    async def _set_product_rows(
+    async def set_entity_products(
         self,
         owner_id: int,
         owner_type: EntityTypeAbbr,
@@ -128,7 +128,7 @@ class ProductBitrixClient(
                 logger.info(
                     f"Products not equals deal:{deal_id}, invoice:{invoice_id}"
                 )
-                await self._set_product_rows(
+                await self.set_entity_products(
                     deal_id, EntityTypeAbbr.DEAL, invoice_products
                 )
             logger.info(
