@@ -60,6 +60,7 @@ class Settings(BaseSettings):  # type: ignore
 
     WEB_HOOK_TEST: bool = True
     DEAL_ID_TEST: int = 1
+    MAX_PROCESSING_STAGE_NUMBER: int = 5
 
     WEB_HOOK_TOKEN: str = "/rest/token/"
     WEB_HOOK_PRODUCT_UPDATE_TOKEN: str = "token"

@@ -15,7 +15,11 @@ from .contact_admin_model import ContactAdmin
 from .deal_admin_model import DealAdmin
 from .lead_admin_model import LeadAdmin
 from .mixins import COLUMN_LABELS
-from .product_admin_model import ProductAdmin, ProductAgreementSupervisorAdmin
+from .product_admin_model import (
+    ProductAdmin,
+    ProductAgreementSupervisorAdmin,
+    ProductEntityAdmin,
+)
 from .user_admin_model import ManagerAdmin, UserAdmin
 
 
@@ -213,3 +217,4 @@ def register_models(admin: Admin) -> None:
     admin.add_view(ContactAdmin)
     admin.add_view(LeadAdmin)
     admin.add_view(ProductAdmin)
+    admin.add_view(ProductEntityAdmin)

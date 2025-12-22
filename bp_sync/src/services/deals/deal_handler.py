@@ -2,6 +2,7 @@ from datetime import date
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from core.logger import logger
+from core.settings import settings
 from schemas.deal_schemas import DealCreate, DealUpdate
 from schemas.enums import (
     DealStagesEnum,
@@ -314,6 +315,13 @@ class DealHandler:
         if not available_stage_number:
             return
         repo = self.deal_client.repo
+        stage_number = await repo.get_sort_order_by_external_id_stage(
+            deal_b24.stage_id
+        )
+        if available_stage_number == settings.MAX_PROCESSING_STAGE_NUMBER:
+            if stage_number and stage_number >= available_stage_number:
+                return
+
         available_stage = await repo.get_external_id_by_sort_order_stage(
             available_stage_number
         )

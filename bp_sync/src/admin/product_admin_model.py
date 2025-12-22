@@ -1,5 +1,5 @@
 from models.deal_models import ProductAgreementSupervisor
-from models.product_models import Product
+from models.product_models import Product, ProductEntity
 
 from .base_admin import BaseAdmin
 from .mixins import COLUMN_LABELS
@@ -86,3 +86,50 @@ class ProductAdmin(BaseAdmin, model=Product):  # type: ignore[call-arg]
     #     "updated_at",
     #     "is_deleted_in_bitrix",
     # ]  # Поля на форме просмотра
+
+
+class ProductEntityAdmin(
+    BaseAdmin, model=ProductEntity
+):  # type: ignore[call-arg]
+    name = "Товар в сущности"
+    name_plural = "Товары в сущности"
+    category = "Товары"
+    icon = "fa-solid fa-tags"
+
+    column_list = [  # Поля в списке
+        "product_name",
+        "price",
+        "quantity",
+        "owner_id",
+        "owner_type",
+    ]
+    column_labels_local = {  # Надписи полей в списке
+        "product_name": "Наименование",
+        "price": "Цена",
+        "quantity": "Количество",
+        "owner_id": "Ид доеумента",
+        "owner_type": "Тип сущности",
+    }
+    column_labels = COLUMN_LABELS | column_labels_local
+    column_default_sort = [
+        ("owner_type", True),
+        ("owner_id", True),
+        ("product_id", True),
+    ]  # Сортировка по умолчанию
+    column_sortable_list = [  # Список полей по которым возможна сортировка
+        "product_name",
+        "owner_id",
+        "owner_type",
+    ]
+    column_searchable_list = [  # Список полей по которым возможен поиск
+        "product_name",
+        "owner_id",
+    ]
+    form_columns = [  # Поля на форме
+        "product_name",
+        "price",
+        "quantity",
+        "owner_id",
+        "owner_type",
+        "is_deleted_in_bitrix",
+    ]
