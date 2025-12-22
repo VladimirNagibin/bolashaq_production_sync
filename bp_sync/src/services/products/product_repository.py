@@ -7,16 +7,25 @@ from sqlalchemy.orm import selectinload
 
 from core.logger import logger
 from models.product_models import Product as ProductDB
-from models.product_models import ProductProperty, ProductSimpleProperty
+from models.product_models import (
+    ProductEntity,
+    ProductProperty,
+    ProductSimpleProperty,
+)
 from models.user_models import User as UserDB
-from schemas.enums import EntityType
+from schemas.enums import EntityType, EntityTypeAbbr
 from schemas.fields import FIELDS_PRODUCT_ALT
-from schemas.product_schemas import ProductCreate, ProductUpdate
+from schemas.product_schemas import (
+    ListProductEntity,
+    ProductCreate,
+    ProductEntityCreate,
+    ProductUpdate,
+)
 
 from ..base_repositories.base_repository import (
     BaseRepository,
 )
-from ..exceptions import CyclicCallException
+from ..exceptions import CyclicCallException, DatabaseException
 
 if TYPE_CHECKING:
     from ..users.user_services import UserClient
@@ -165,3 +174,96 @@ class ProductRepository(
     #             include_properties=True, session=self.session
     #         )
     #     return None
+
+    async def get_entity_products(
+        self,
+        owner_id: int,
+        owner_type: EntityTypeAbbr,
+    ) -> ListProductEntity:
+        """Получает продукты в сущности"""
+        stmt = select(ProductEntity).where(
+            ProductEntity.owner_id == owner_id,
+            ProductEntity.owner_type == owner_type,
+        )
+
+        result = await self.session.execute(stmt)
+        products_entity = result.scalars().all()
+        return ListProductEntity(
+            result=[product.to_pydantic() for product in products_entity]
+        )
+
+    async def delete_product_from_entity(
+        self,
+        owner_id: int,
+        owner_type: EntityTypeAbbr,
+        product_id: int,
+    ) -> None:
+        """Удаляет продукт из сущности"""
+        stmt = delete(ProductEntity).where(
+            ProductEntity.owner_id == owner_id,
+            ProductEntity.owner_type == owner_type,
+            ProductEntity.product_id == product_id,
+        )
+
+        await self.session.execute(stmt)
+
+    async def create_or_update_product_in_entity(
+        self, product_entity: ProductEntityCreate
+    ) -> ProductEntity | None:
+        """Создает или обновляет продукт в сущности"""
+
+        try:
+            # Проверяем существование
+            stmt = select(ProductEntity).where(
+                ProductEntity.owner_id == product_entity.owner_id,
+                ProductEntity.owner_type == product_entity.owner_type,
+                ProductEntity.product_id == product_entity.product_id,
+            )
+
+            result = await self.session.execute(stmt)
+            existing = result.scalar_one_or_none()
+
+            if existing:
+                # Обновляем существующий
+                for field, value in product_entity.model_dump(
+                    exclude_unset=True
+                ).items():
+                    setattr(existing, field, value)
+
+                self.session.add(existing)
+                await self.session.flush()
+
+                logger.info(
+                    "Updated product in entity",
+                    extra={
+                        "owner_id": product_entity.owner_id,
+                        "owner_type": product_entity.owner_type.value,
+                        "product_id": product_entity.product_id,
+                    },
+                )
+
+                return existing
+            else:
+                # Создаем новый
+                new_entity = ProductEntity(**product_entity.model_dump())
+                self.session.add(new_entity)
+                await self.session.flush()
+
+                logger.info(
+                    "Created product in entity",
+                    extra={
+                        "owner_id": product_entity.owner_id,
+                        "owner_type": product_entity.owner_type.value,
+                        "product_id": product_entity.product_id,
+                    },
+                )
+
+                return new_entity
+
+        except Exception as exc:
+            logger.error(f"Failed to create/update product in entity: {exc}")
+            raise DatabaseException(
+                error_code="failed_to_create_or_update_product_in_entity",
+                operation="create_or_update_product_in_entity",
+                details=product_entity.model_dump(),
+            )

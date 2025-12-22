@@ -73,6 +73,7 @@ class CyclicCallException(Exception):
     """Исключение для обнаружения циклических вызовов."""
 
     def __init__(self, message: str = "Cyclic call detected"):
+        self.detail = message
         self.message = message
         super().__init__(message)
 
@@ -319,3 +320,19 @@ class BaseAppException(Exception):
         self.error_code = error_code
         self.message = message
         super().__init__(message)
+
+
+class DatabaseException(BaseAppException):
+    """Ошибка работы с БД."""
+
+    def __init__(
+        self,
+        error_code: str,
+        message: str | None = None,
+        operation: str | None = None,
+        details: dict[str, Any] | None = None,
+    ):
+        self.operation = operation
+        self.details = details
+        self.message = message or "Database exception"
+        super().__init__(error_code, self.message)

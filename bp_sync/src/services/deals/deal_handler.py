@@ -2,6 +2,7 @@ from datetime import date
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from core.logger import logger
+from core.settings import settings
 from schemas.deal_schemas import DealCreate, DealUpdate
 from schemas.enums import (
     DealStagesEnum,
@@ -25,6 +26,40 @@ class DealHandler:
     STATUS_HANDLERS: ClassVar[dict[DealStatusEnum, str]] = {
         DealStatusEnum.NEW: "_handle_deal_in_new_status",
         DealStatusEnum.ACCEPTED: "_handle_deal_in_accepted_status",
+    }
+
+    STAGE_STATUSES_MAPPING: ClassVar[
+        dict[DealStagesEnum, tuple[DealStatusEnum, ...]]
+    ] = {
+        DealStagesEnum.NEW: (DealStatusEnum.NEW,),
+        DealStagesEnum.NEEDS_IDENTIFICATION: (DealStatusEnum.ACCEPTED,),
+        DealStagesEnum.OFFER_PREPARE: (
+            DealStatusEnum.ACCEPTED,
+            DealStatusEnum.OFFER_IN_AGREEMENT_SUPERVISOR,
+            DealStatusEnum.OFFER_APPROVED_SUPERVISOR,
+            DealStatusEnum.OFFER_DISMISSED_SUPERVISOR,
+            DealStatusEnum.OFFER_DISMISSED_CLIENT,
+        ),
+        DealStagesEnum.CLIENT_CONSIDER: (DealStatusEnum.OFFER_SENT_CLIENT,),
+        DealStagesEnum.CONTRACT_CONCLUSION: (
+            DealStatusEnum.OFFER_NO,
+            DealStatusEnum.OFFER_APPROVED_CLIENT,
+            DealStatusEnum.DRAFT_CONTRACT_IN_AGREEMENT_SUPERVISOR,
+            DealStatusEnum.DRAFT_CONTRACT_APPROVED_SUPERVISOR,
+            DealStatusEnum.DRAFT_CONTRACT_DISMISSED_SUPERVISOR,
+            DealStatusEnum.DRAFT_CONTRACT_SENT_CLIENT,
+            DealStatusEnum.DRAFT_CONTRACT_APPROVED_CLIENT,
+            DealStatusEnum.DRAFT_CONTRACT_DISMISSED_CLIENT,
+            DealStatusEnum.CONTRACT_IN_SIGN_SUPERVISOR,
+            DealStatusEnum.CONTRACT_SIGN_SUPERVISOR,
+            DealStatusEnum.CONTRACT_UNSIGN_SUPERVISOR,
+            DealStatusEnum.CONTRACT_SENT_IN_SIGN_CLIENT,
+            DealStatusEnum.CONTRACT_UNSIGN_CLIENT,
+        ),
+        DealStagesEnum.PREPAYMENT_INVOICE: (
+            DealStatusEnum.CONTRACT_NO,
+            DealStatusEnum.CONTRACT_SIGN_CLIENT,
+        ),
     }
 
     def __init__(self, deal_client: "DealClient") -> None:
@@ -56,7 +91,9 @@ class DealHandler:
         await self._check_deal_status(deal_b24, deal_db)
 
         # 4. Диспетчеризация к обработчику для текущего статуса
-        handler_name = self.STATUS_HANDLERS.get(deal_b24.status_deal)
+        handler_name = self.STATUS_HANDLERS.get(
+            deal_b24.status_deal, "_handle_deal_check_stage_and_product"
+        )
 
         deal_handler_error = DealProcessingError(
             f"Not found handler for status: {deal_b24.status_deal}",
@@ -263,3 +300,33 @@ class DealHandler:
                 )
                 return False
         return True
+
+    async def _handle_deal_check_stage_and_product(
+        self,
+        deal_b24: DealCreate,
+        deal_db: DealCreate | None,
+        changes: dict[str, dict[str, Any]] | None,
+    ) -> None:
+        """Проверка стадии и товаров сделки в зависимости от статуса"""
+        available_stage_number = None
+        for stage, statuses in self.STAGE_STATUSES_MAPPING.items():
+            if deal_b24.status_deal in statuses:
+                available_stage_number = stage
+        if not available_stage_number:
+            return
+        repo = self.deal_client.repo
+        stage_number = await repo.get_sort_order_by_external_id_stage(
+            deal_b24.stage_id
+        )
+        if available_stage_number == settings.MAX_PROCESSING_STAGE_NUMBER:
+            if stage_number and stage_number >= available_stage_number:
+                return
+
+        available_stage = await repo.get_external_id_by_sort_order_stage(
+            available_stage_number
+        )
+        if deal_b24.stage_id != available_stage:
+            self.deal_client.update_tracker.update_field(
+                "stage_id", available_stage, deal_b24
+            )
+        # TODO: update or save product
