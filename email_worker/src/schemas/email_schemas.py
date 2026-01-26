@@ -28,6 +28,7 @@ class ParsedRequest(BaseModel):  # type: ignore[misc]
     product_id: int
     name: str | None = None
     phone: str
+    bin_company: str | None = None
     comment: str | None = None
     raw_text: str
 

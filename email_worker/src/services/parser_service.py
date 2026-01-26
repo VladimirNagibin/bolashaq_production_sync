@@ -17,6 +17,9 @@ class RequestParserService:
             "phone": re.compile(
                 r"Телефон:\s*([\d\s\+\(\)\-]+)(?:\r\n|$)", re.IGNORECASE
             ),
+            "bin_company": re.compile(
+                r"БИН/компания:\s*([^\r\n]*)(?:\r\n|$)", re.IGNORECASE
+            ),
             "comment": re.compile(
                 r"Комментарий:\s*([^\r\n]*)(?:\r\n|$)", re.IGNORECASE
             ),
@@ -27,6 +30,7 @@ class RequestParserService:
             r"Товар:\s*(.+?)\s*\(ID:\s*(\d+)\s*\)\s*\r?\n"
             r"Имя:\s*([^\r\n]*)\s*\r?\n"
             r"Телефон:\s*([\d\s\+\(\)\-]+)\s*\r?\n"
+            r"БИН/компания:\s*([^\r\n]*)\s*\r?\n"
             r"Комментарий:\s*([^\r\n]*)",
             re.IGNORECASE | re.DOTALL,
         )
@@ -60,7 +64,9 @@ class RequestParserService:
                 )
                 parse_data["name"] = comprehensive_match.group(3).strip()
                 parse_data["phone"] = comprehensive_match.group(4).strip()
-                parse_data["comment"] = comprehensive_match.group(5).strip()
+                bin_val = comprehensive_match.group(5).strip()
+                parse_data["bin_company"] = bin_val if bin_val else None
+                parse_data["comment"] = comprehensive_match.group(6).strip()
                 logger.debug("Успешный парсинг комплексным паттерном")
                 return ParsedRequest(**parse_data)
 
@@ -101,8 +107,17 @@ class RequestParserService:
             if phone_match:
                 phone_value = phone_match.group(1).strip()
                 # Проверяем, что это действительно телефон
-                if phone_value and not phone_value.startswith("Комментарий:"):
+                if phone_value and not phone_value.startswith("БИН/компания:"):
                     parse_data["phone"] = self._clean_phone(phone_value)
+
+            # Парсим БИН/компанию (Новое поле)
+            bin_match = self.patterns["bin_company"].search(text)
+            if bin_match:
+                bin_value = bin_match.group(1).strip()
+                # Проверяем, что это действительно БИН
+                if bin_value and not bin_value.startswith("Комментарий:"):
+                    # Очистка от лишних пробелов
+                    parse_data["bin_company"] = " ".join(bin_value.split())
 
             # Парсим комментарий
             comment_match = self.patterns["comment"].search(text)
@@ -151,6 +166,11 @@ class RequestParserService:
                     if len(parts) > 1:
                         result.phone = self._clean_phone(parts[1].strip())
 
+                elif "БИН/компания:" in line:
+                    parts = line.split("БИН/компания:", 1)
+                    if len(parts) > 1:
+                        result.bin_company = parts[1].strip()
+
                 elif "Комментарий:" in line:
                     parts = line.split("Комментарий:", 1)
                     if len(parts) > 1:
@@ -187,6 +207,7 @@ class RequestParserService:
             "product_id": bool(data.product_id),
             "name": bool(data.name and data.name.strip()),
             "phone": bool(data.phone and len(data.phone) >= 10),
+            "bin_company": bool(data.bin_company),
             "comment": bool(data.comment and data.comment.strip()),
         }
 

@@ -16,8 +16,13 @@ from fastapi import (  # Depends,
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from core.logger import logger
+from core.settings import settings
+
+from .document_approval_bot import DocumentApprovalBot
+
 # from database import Database
-from utils import (
+from .utils import (
     create_upload_folder,
     generate_unique_filename,
     get_file_hash,
@@ -25,11 +30,6 @@ from utils import (
     validate_file_extension,
     validate_file_size,
 )
-
-from core.logger import logger
-from core.settings import settings
-
-from .document_approval_bot import DocumentApprovalBot
 
 # Создаем папку для загрузок
 create_upload_folder(settings.UPLOAD_FOLDER)

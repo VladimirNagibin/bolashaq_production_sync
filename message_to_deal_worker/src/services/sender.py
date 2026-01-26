@@ -72,6 +72,7 @@ class Sender:
         optional_params = {
             "product_name": request_data.product,
             "name": request_data.name,
+            "bin_company": request_data.bin_company,
             "comment": request_data.comment,  # or request_data.raw_text,
             "message_id": request_data.message_id,
         }
