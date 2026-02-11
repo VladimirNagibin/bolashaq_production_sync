@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from .entities_bitrix_services import EntitiesBitrixClient
 
 DEFAULT_DEAL_TITLE = "Запрос цены с сайта"
-TAX_RATE_DEFAULT = 12
+TAX_RATE_DEFAULT = 16
 SITE_SOURCE = "WEB"
 
 

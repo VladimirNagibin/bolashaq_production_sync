@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Type
+from typing import TYPE_CHECKING, Any, Type
 from uuid import UUID
 
 from sqlalchemy import DateTime, ForeignKey
@@ -17,6 +17,9 @@ from schemas.product_schemas import (
 
 from .bases import IntIdEntity
 from .user_models import User
+
+if TYPE_CHECKING:
+    from .suppier_models import SupplierProduct
 
 
 class Product(IntIdEntity):
@@ -196,6 +199,12 @@ class Product(IntIdEntity):
         lazy="selectin",
     )
 
+    supplier_product: Mapped[list["SupplierProduct"]] = relationship(
+        "SupplierProduct",
+        back_populates="product",
+        lazy="selectin",
+    )
+
     async def to_pydantic(
         self,
         schema_class: Type[ProductCreate] | None = None,
@@ -302,7 +311,7 @@ class ProductProperty(IntIdEntity):
         nullable=True, comment="Значение свойства"
     )
     type_field: Mapped[str | None] = mapped_column(
-        nullable=True, comment="Значение свойства"
+        nullable=True, comment="Тип свойства"
     )
     product: Mapped["Product"] = relationship(
         "Product", back_populates="properties"
