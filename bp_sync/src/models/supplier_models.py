@@ -1,4 +1,6 @@
-from typing import Any, ClassVar, Optional, Type  # , TYPE_CHECKING
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, ClassVar, Optional, Type
 from uuid import UUID
 
 from sqlalchemy import (
@@ -18,10 +20,14 @@ from sqlalchemy.orm import Mapped, class_mapper, mapped_column, relationship
 
 from db.postgres import Base
 from schemas.enums import EntityType, SourcesProductEnum
-from schemas.supplier_schemas import SupplierProductCreate
+from schemas.supplier_schemas import (
+    ImportColumnMappingCreate,
+    ImportConfigCreate,
+    SupplierProductCreate,
+)
 
-# if TYPE_CHECKING:
-from .product_models import Product as ProductDB
+if TYPE_CHECKING:
+    from .product_models import Product
 
 
 class SupplierProduct(Base):  # type: ignore[misc]
@@ -174,8 +180,8 @@ class SupplierProduct(Base):  # type: ignore[misc]
         index=True,
         comment="Идентификатор связанного товара в системе",
     )
-    product: Mapped[Optional["ProductDB"]] = relationship(
-        "ProductDB",
+    product: Mapped[Optional["Product"]] = relationship(
+        "Product",
         foreign_keys=[product_id],
         back_populates="supplier_products",
     )
@@ -194,7 +200,7 @@ class SupplierProduct(Base):  # type: ignore[misc]
         back_populates="supplier_product",
         cascade="all, delete-orphan",
         lazy="selectin",
-        order_by="name",
+        order_by="SupplierCharacteristic.name",
     )
 
     # Связь с комплектующими (complects)
@@ -319,6 +325,20 @@ class SourceImportConfig(Base):  # type: ignore[misc]
         order_by="SourceColumnMapping.display_order",
     )
 
+    def to_pydantic(
+        self, exclude_relationships: bool = True
+    ) -> ImportConfigCreate:
+
+        data: dict[str, Any] = {}
+        # Явно перечисляем поля, соответствующие ImportConfigCreate
+        for field_name in ImportConfigCreate.model_fields:
+            if exclude_relationships and field_name == "column_mappings":
+                continue
+            if hasattr(self, field_name):
+                data[field_name] = getattr(self, field_name)
+
+        return ImportConfigCreate(**data)
+
 
 class SourceColumnMapping(Base):  # type: ignore[misc]
     """
@@ -389,6 +409,18 @@ class SourceColumnMapping(Base):  # type: ignore[misc]
         default=0,
         comment="Для UI и порядка обработки",
     )
+
+    def to_pydantic(
+        self, exclude_relationships: bool = True
+    ) -> ImportColumnMappingCreate:
+        data: dict[str, Any] = {}
+        # Явно перечисляем поля, соответствующие ImportColumnMappingCreate
+        for field_name in ImportColumnMappingCreate.model_fields:
+            if exclude_relationships and field_name == "config":
+                continue
+            if hasattr(self, field_name):
+                data[field_name] = getattr(self, field_name)
+        return ImportColumnMappingCreate(**data)
 
 
 class SupplierCharacteristic(Base):  # type: ignore[misc]

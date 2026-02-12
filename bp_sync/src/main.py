@@ -11,6 +11,7 @@ from admin.authenticate import BasicAuthBackend
 from api.v1.b24.b24_router import b24_router
 from api.v1.health_checker import healht_router
 from api.v1.schemas.response_schemas import ErrorResponse
+from api.v1.suppliers.suppliers_router import suppliers_router
 from api.v1.test import test_router
 from core.logger import LOGGING, logger
 from core.settings import settings
@@ -50,6 +51,9 @@ def setup_routes(app: FastAPI) -> None:
     app.include_router(b24_router, prefix="/api/v1/b24", tags=["b24"])
     app.include_router(test_router, prefix="/api/v1/test", tags=["test"])
     app.include_router(healht_router, prefix="/api/v1", tags=["health"])
+    app.include_router(
+        suppliers_router, prefix="/api/v1/suppliers", tags=["suppliers"]
+    )
 
 
 def setup_admin_panel(app: FastAPI) -> None:

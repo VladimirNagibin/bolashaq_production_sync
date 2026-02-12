@@ -14,8 +14,8 @@ class BaseFields(BaseModel):  # type: ignore[misc]
 
     id: UUID | None = Field(
         default=None,
-        exclude=True,
-        init_var=False,
+        # exclude=False,
+        # init_var=False,
         description="Внутренний UUID идентификатор",
         examples=["123e4567-e89b-12d3-a456-426614174000"],
     )
@@ -32,7 +32,19 @@ class BaseFields(BaseModel):  # type: ignore[misc]
         description="Флаг удаления в Битрикс",
     )
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+        # use_enum_values=True,
+        # populate_by_name=True,
+        # arbitrary_types_allowed=True,
+        # validate_assignment=True,
+        # str_strip_whitespace=True,
+        # extra="ignore",
+        json_encoders={
+            datetime: lambda v: v.isoformat(),
+            UUID: str,
+        },
+    )
 
 
 # ----------------------------------------------------------------------
@@ -258,5 +270,3 @@ class ImportConfigDetail(ImportConfigCreate):
     """Конфигурация импорта с маппингами."""
 
     column_mappings: list[ImportColumnMappingCreate] = []
-
-    model_config = ConfigDict(from_attributes=True)
