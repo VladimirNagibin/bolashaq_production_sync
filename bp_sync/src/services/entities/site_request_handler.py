@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from .entities_bitrix_services import EntitiesBitrixClient
 
 DEFAULT_DEAL_TITLE = "Запрос цены с сайта"
-TAX_RATE_DEFAULT = 12
+TAX_RATE_DEFAULT = 16
 SITE_SOURCE = "WEB"
 
 
@@ -50,6 +50,7 @@ class SiteRequestHandler:
         product_id: int,
         product_name: str | None = None,
         name: str | None = None,
+        bin_company: str | None = None,
         comment: str | None = None,
         message_id: str | None = None,
     ) -> dict[str, Any]:
@@ -79,7 +80,9 @@ class SiteRequestHandler:
             },
         )
         try:
-            deal_id = await self._create_deal(phone, name, comment, message_id)
+            deal_id = await self._create_deal(
+                phone, name, bin_company, comment, message_id
+            )
             if not deal_id:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -104,7 +107,10 @@ class SiteRequestHandler:
 
             if not product_added and product_name:
                 comment_added = await self._add_deal_comment(
-                    deal_id, product_name, comment
+                    deal_id,
+                    product_name,
+                    comment,
+                    bin_company,
                 )
                 if comment_added:
                     result["product_name_added"] = True
@@ -116,7 +122,9 @@ class SiteRequestHandler:
             if await self._add_timeline_comment_to_deal(
                 deal_id,
                 self._get_complex_comment(
-                    product_name if product_name else "", comment
+                    product_name if product_name else "",
+                    comment,
+                    bin_company,
                 ),
             ):
                 result["timeline_comment_added"] = True
@@ -146,6 +154,7 @@ class SiteRequestHandler:
         self,
         phone: str,
         name: str | None = None,
+        bin_company: str | None = None,
         comment: str | None = None,
         message_id: str | None = None,
     ) -> int | None:
@@ -155,6 +164,7 @@ class SiteRequestHandler:
         Args:
             phone: Телефон клиента
             name: Имя клиента
+            bin_company: БИН/Компания клиента
             comment: Комментарий
             message_id: ID сообщения
 
@@ -162,6 +172,8 @@ class SiteRequestHandler:
             int: ID созданной сделки или None при ошибке
         """
         try:
+            # TODO: if bin_company not None => search company.
+            # if find => check phone and added if need else next
             result_entity = await self._get_entity_by_phone(phone, name)
             entity_type, entity_id, assigned_id = result_entity
 
@@ -175,7 +187,8 @@ class SiteRequestHandler:
                 if message_id
                 else DEFAULT_DEAL_TITLE
             )
-
+            if bin_company:
+                comment = f"БИН/компания: {bin_company}.\n{comment}"
             deal_data: dict[str, Any] = {
                 "title": title,
                 entity_type: entity_id,
@@ -672,7 +685,11 @@ class SiteRequestHandler:
         return ListProductEntity(result=entity_data["productRows"])
 
     async def _add_deal_comment(
-        self, deal_id: int, product_name: str, comment: str | None = None
+        self,
+        deal_id: int,
+        product_name: str,
+        comment: str | None = None,
+        bin_company: str | None = None,
     ) -> bool:
         """
         Добавляет комментарий к сделке.
@@ -688,7 +705,9 @@ class SiteRequestHandler:
         try:
             deal_data: dict[str, Any] = {
                 "external_id": deal_id,
-                "comments": self._get_complex_comment(product_name, comment),
+                "comments": self._get_complex_comment(
+                    product_name, comment, bin_company
+                ),
             }
 
             deal_update = DealUpdate(**deal_data)
@@ -717,9 +736,14 @@ class SiteRequestHandler:
             return False
 
     def _get_complex_comment(
-        self, product_name: str, comment: str | None = None
+        self,
+        product_name: str,
+        comment: str | None = None,
+        bin_company: str | None = None,
     ) -> str:
         comments: list[str] = []
+        if bin_company:
+            comments.append(f"БИН/компания: {bin_company}")
         if comment:
             comments.append(comment)
         comments.append(f"Товар: {product_name}")

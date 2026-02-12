@@ -138,6 +138,7 @@ class EntityType(StrEnum):
     INVOICE = "Invoice"
     TIMELINE_COMMENT = "TimelineComment"
     PRODUCT = "Product"
+    SUPPLIER_PRODUCT = "SupplierProduct"
 
 
 class CommunicationType(StrEnum):
@@ -180,3 +181,12 @@ class DealStagesEnum(IntEnum):
     WON = 11
     LOSE = 12
     LOSE_ANALYSIS = 13
+
+
+class SourcesProductEnum(StrEnum):
+    """Источники данных о товарах."""
+
+    MATEST = "matest.kz"
+    RUP = "rup-su.ru"
+    C1 = "1c"
+    LABSET = "labset.su"

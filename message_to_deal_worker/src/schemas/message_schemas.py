@@ -11,6 +11,7 @@ class RequestPrice(BaseModel):  # type: ignore[misc]
     product_id: int
     name: str | None = None
     phone: str
+    bin_company: str | None = None
     comment: str | None = None
     raw_text: str | None = None
     message_id: int | None = None
