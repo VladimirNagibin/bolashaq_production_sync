@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING
+from typing import Any, ClassVar, Optional, Type  # , TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import (
@@ -14,25 +14,27 @@ from sqlalchemy import (
     false,
     true,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, class_mapper, mapped_column, relationship
 
 from db.postgres import Base
 from schemas.enums import EntityType, SourcesProductEnum
+from schemas.supplier_schemas import SupplierProductCreate
 
-from .bases import IntIdEntity
-
-if TYPE_CHECKING:
-    from .product_models import Product as ProductDB
+# if TYPE_CHECKING:
+from .product_models import Product as ProductDB
 
 
-class SupplierProduct(IntIdEntity):
+class SupplierProduct(Base):  # type: ignore[misc]
     """
     Товары/продукты поставщиков.
     Хранит сырые данные, полученные от поставщиков до валидации и маппинга.
     """
 
     __tablename__ = "supplier_products"
-    # TODO: _schema_class = SupplierProductCreate
+
+    _schema_class: ClassVar[Type[SupplierProductCreate]] = (
+        SupplierProductCreate
+    )
 
     __table_args__ = (
         Index("ix_supplier_products_source", "source"),
@@ -59,6 +61,10 @@ class SupplierProduct(IntIdEntity):
         return str(self.name)
 
     # Основные данные товара
+    external_id: Mapped[int] = mapped_column(
+        unique=True,
+        comment="ID во внешней системе",
+    )
     name: Mapped[str] = mapped_column(
         String(500),
         comment="Название товара",
@@ -163,16 +169,15 @@ class SupplierProduct(IntIdEntity):
 
     # Связь с главной таблицей продуктов (Номенклатурой)
     product_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey("products.id"),
-        ondelete="SET NULL",
+        ForeignKey("products.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
         comment="Идентификатор связанного товара в системе",
     )
-    product: Mapped["ProductDB" | None] = relationship(
+    product: Mapped[Optional["ProductDB"]] = relationship(
         "ProductDB",
         foreign_keys=[product_id],
-        back_populates="supplier_product",
+        back_populates="supplier_products",
     )
 
     # Данные для предложений (Offers)
@@ -199,6 +204,56 @@ class SupplierProduct(IntIdEntity):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
+
+    def to_pydantic(
+        self,
+        schema_class: Type[SupplierProductCreate] | None = None,
+        exclude_relationships: bool = True,
+    ) -> SupplierProductCreate:
+        """
+        Преобразует объект SQLAlchemy в Pydantic схему
+
+        Args:
+            schema_class: Класс Pydantic схемы
+            exclude_relationships: Исключать ли связи из преобразования
+
+        Returns:
+            Экземпляр Pydantic схемы
+
+        Raises:
+            ValueError: Если не удалось определить класс схемы
+        """
+        schema_class = schema_class or self._schema_class
+        data: dict[str, Any] = {}
+
+        # Получаем все поля схемы
+        for field_name in schema_class.model_fields:
+            # Пропускаем поля, которые являются связями и должны быть исключены
+            if exclude_relationships and self._is_relationship_field(
+                field_name
+            ):
+                continue
+
+            if hasattr(self, field_name):
+                value = getattr(self, field_name)
+                data.update({field_name: value})
+        # if hasattr(self, "id"):
+        #     data["internal_id"] = self.id
+        return schema_class(**data)
+
+    # def _transform_field_value(self, field_name: str, value: Any) -> Any:
+    #     """Трансформирует значение поля при необходимости."""
+    #     if field_name == "external_id" and value:
+    #         return {"ID": value}
+    #     return {field_name: value}
+
+    def _is_relationship_field(self, field_name: str) -> bool:
+        """Проверяет, является ли поле связью"""
+        try:
+            mapper = class_mapper(self.__class__)
+            return field_name in mapper.relationships
+        except Exception:
+            return False
 
 
 class SourceImportConfig(Base):  # type: ignore[misc]
@@ -366,7 +421,7 @@ class SupplierCharacteristic(Base):  # type: ignore[misc]
     )
     supplier_product: Mapped["SupplierProduct"] = relationship(
         "SupplierProduct",
-        forien_keys=[supplier_product_id],
+        foreign_keys=[supplier_product_id],
         back_populates="characteristics",
     )
 
@@ -403,6 +458,6 @@ class SupplierComplect(Base):  # type: ignore[misc]
     )
     supplier_product: Mapped["SupplierProduct"] = relationship(
         "SupplierProduct",
-        forien_keys=[supplier_product_id],
+        foreign_keys=[supplier_product_id],
         back_populates="complects",
     )

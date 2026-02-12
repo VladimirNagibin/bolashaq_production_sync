@@ -22,6 +22,13 @@ from models.deal_models import (  # noqa: F401
 from models.deal_stage_models import DealStage  # noqa: F401
 from models.department_models import Department  # noqa: F401
 from models.lead_models import Lead  # noqa: F401
+from models.supplier_models import (  # noqa: F401
+    SourceColumnMapping,
+    SourceImportConfig,
+    SupplierCharacteristic,
+    SupplierComplect,
+    SupplierProduct,
+)
 from models.timeline_comment_models import TimelineComment  # noqa: F401
 from models.user_models import Manager, User  # noqa: F401
 
