@@ -1,9 +1,153 @@
-from models.supplier_models import (  # SupplierProduct,
+from models.supplier_models import (
     SourceColumnMapping,
     SourceImportConfig,
+    SupplierCharacteristic,
+    SupplierComplect,
+    SupplierProduct,
 )
 
 from .base_admin import BaseAdmin
+
+
+class SupplierProductAdmin(
+    BaseAdmin, model=SupplierProduct
+):  # type: ignore[call-arg]
+
+    name = "Товар поставщиков"
+    name_plural = "Товары поставщиков"
+    category = "Поставщики"
+    icon = "fa-solid fa-id-card"
+
+    column_list = [  # Поля в списке
+        "external_id",
+        "name",
+        "source",
+        "code",
+        "active",
+        "price",
+        "original_name",
+        "article",
+        "supplier_category",
+        "supplier_subcategory",
+    ]
+    column_labels = {  # Надписи полей в списке
+        "external_id": "ID во внешней системе",
+        "name": "Название товара",
+        "code": "Символьный код",
+        "active": "Активен",
+        "sort": "Сортировка",
+        "xml_id": "Внешний код",
+        "price": "Цена",
+        "currency_id": "Валюта",
+        "description": "Описание",
+        "description_type": "Тип описания",
+        "link": "Ссылка",
+        "original_name": "Оригинальное название",
+        "standards": "Стандарты",
+        "article": "Артикул",
+        "supplier_category": "Категория в системе поставщика",
+        "supplier_subcategory": "Подкатегория в системе поставщика",
+        "detail_picture": "Детальная картинка (путь)",
+        "detail_picture_description": "Описание для детальной картинки",
+        "preview_picture": "Картинка для анонса (путь)",
+        "preview_picture_description": "Описание для картинки анонса",
+        "preview_text": "Описание для анонса",
+        "preview_text_type": "Тип описания для анонса",
+        "availability_status": "Статус наличия",
+        "quantity": "Остаток",
+        "source": "Источник данных",
+        "is_validated": "Флаг обработки позиции",
+        "should_export_to_crm": "Выгружать в CRM",
+        "internal_section_id": "Раздел в CRM",
+        "product_id": "Идентификатор связанного товара в системе",
+        "product": "Связь с основной номенклатурой",
+        "preview_for_offer": "Анонс для предложенияя",
+        "description_for_offer": "Описание для предложения",
+        "characteristics": "Связь с характеристиками",
+        "complects": "Связь с комплектующими",
+    }
+    column_default_sort = [("source", True)]  # Сортировка по умолчанию
+    column_sortable_list = [  # Список полей по которым возможна сортировка
+        "external_id",
+        "name",
+    ]
+    column_searchable_list = [  # Список полей по которым возможен поиск
+        "external_id",
+        "name",
+    ]
+    form_columns = [
+        "external_id",
+        "name",
+        "code",
+        "active",
+        "sort",
+        "xml_id",
+        "price",
+        "currency_id",
+        "description",
+        "description_type",
+        "link",
+        "original_name",
+        "standards",
+        "article",
+        "supplier_category",
+        "supplier_subcategory",
+        "detail_picture",
+        "detail_picture_description",
+        "preview_picture",
+        "preview_picture_description",
+        "preview_text",
+        "preview_text_type",
+        "availability_status",
+        "quantity",
+        "source",
+        "is_validated",
+        "should_export_to_crm",
+        "internal_section_id",
+        "product_id",
+        "product",
+        "preview_for_offer",
+        "description_for_offer",
+        "characteristics",
+        "complects",
+    ]
+
+    column_details_list = [
+        "external_id",
+        "name",
+        "code",
+        "active",
+        "sort",
+        "xml_id",
+        "price",
+        "currency_id",
+        "description",
+        "description_type",
+        "link",
+        "original_name",
+        "standards",
+        "article",
+        "supplier_category",
+        "supplier_subcategory",
+        "detail_picture",
+        "detail_picture_description",
+        "preview_picture",
+        "preview_picture_description",
+        "preview_text",
+        "preview_text_type",
+        "availability_status",
+        "quantity",
+        "source",
+        "is_validated",
+        "should_export_to_crm",
+        "internal_section_id",
+        "product_id",
+        "product",
+        "preview_for_offer",
+        "description_for_offer",
+        "characteristics",
+        "complects",
+    ]
 
 
 class ImportConfigAdmin(
@@ -138,4 +282,110 @@ class ColumnMappingAdmin(
         "data_type",
         "transformation_rule",
         "display_order",
+    ]
+
+
+class SupplierCharacteristicAdmin(
+    BaseAdmin, model=SupplierCharacteristic
+):  # type: ignore[call-arg]
+
+    name = "Характеристики товара"
+    name_plural = "Характеристики товаров"
+    category = "Поставщики"
+    icon = "fa-solid fa-id-card"
+
+    column_list = [  # Поля в списке
+        "name",
+        "value",
+        "unit",
+        "supplier_product_id",
+        "supplier_product",
+    ]
+    column_labels = {  # Надписи полей в списке
+        "name": "Название характеристики",
+        "value": "Значение характеристики",
+        "unit": "Единица измерения",
+        "supplier_product_id": "Ссылка на товар поставщика",
+        "supplier_product": "Связь с товаром поставщика",
+    }
+    column_default_sort = [("name", True)]  # Сортировка по умолчанию
+    column_sortable_list = [  # Список полей по которым возможна сортировка
+        "name",
+        "value",
+        "supplier_product_id",
+    ]
+    column_searchable_list = [  # Список полей по которым возможен поиск
+        "name",
+        "value",
+        "supplier_product_id",
+    ]
+    form_columns = [
+        "name",
+        "value",
+        "unit",
+        "supplier_product_id",
+        "supplier_product",
+    ]
+
+    column_details_list = [
+        "name",
+        "value",
+        "unit",
+        "supplier_product_id",
+        "supplier_product",
+    ]
+
+
+class SupplierComplectAdmin(
+    BaseAdmin, model=SupplierComplect
+):  # type: ignore[call-arg]
+
+    name = "Комплектация товара"
+    name_plural = "Комплектация товаров"
+    category = "Поставщики"
+    icon = "fa-solid fa-id-card"
+
+    column_list = [  # Поля в списке
+        "name",
+        "code",
+        "description",
+        "specifications",
+        "supplier_product_id",
+        "supplier_product",
+    ]
+    column_labels = {  # Надписи полей в списке
+        "name": "Название комплектующего",
+        "code": "Символьный код",
+        "description": "Описание",
+        "specifications": "Спецификации",
+        "supplier_product_id": "Ссылка на товар поставщика",
+        "supplier_product": "Связь с товаром поставщика",
+    }
+    column_default_sort = [("name", True)]  # Сортировка по умолчанию
+    column_sortable_list = [  # Список полей по которым возможна сортировка
+        "name",
+        "code",
+        "supplier_product_id",
+    ]
+    column_searchable_list = [  # Список полей по которым возможен поиск
+        "name",
+        "code",
+        "supplier_product_id",
+    ]
+    form_columns = [
+        "name",
+        "code",
+        "description",
+        "specifications",
+        "supplier_product_id",
+        "supplier_product",
+    ]
+
+    column_details_list = [
+        "name",
+        "code",
+        "description",
+        "specifications",
+        "supplier_product_id",
+        "supplier_product",
     ]
