@@ -7,13 +7,11 @@ from core.logger import logger
 from services.dependencies.dependencies_repo import request_context
 from services.dependencies.dependencies_suppliers import (
     get_import_config_repo,
-    get_supplier_repo,
     get_supplier_service,
 )
 from services.suppliers.repositories.import_config_repo import (
     ImportConfigRepository,
 )
-from services.suppliers.supplier_repository import SupplierRepository
 from services.suppliers.supplier_services import SupplierClient
 
 supplier_product_router = APIRouter(
@@ -24,7 +22,6 @@ supplier_product_router = APIRouter(
 @supplier_product_router.post("/test")  # type: ignore
 async def test(
     # request: Request,
-    supp_repo: SupplierRepository = Depends(get_supplier_repo),
     supp_client: SupplierClient = Depends(get_supplier_service),
     import_config_repo: ImportConfigRepository = Depends(
         get_import_config_repo
