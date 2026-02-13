@@ -190,3 +190,10 @@ class SourcesProductEnum(StrEnum):
     RUP = "rup-su.ru"
     C1 = "1c"
     LABSET = "labset.su"
+
+
+class SourceKeyField(StrEnum):
+    """Поля, которые могут быть уникальным идентификатором источника."""
+
+    EXTERNAL_ID = "external_id"
+    CODE = "code"

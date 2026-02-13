@@ -19,10 +19,10 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, class_mapper, mapped_column, relationship
 
 from db.postgres import Base
-from schemas.enums import EntityType, SourcesProductEnum
+from schemas.enums import EntityType, SourceKeyField, SourcesProductEnum
 from schemas.supplier_schemas import (
     ImportColumnMappingCreate,
-    ImportConfigCreate,
+    ImportConfigDetail,
     SupplierProductCreate,
 )
 
@@ -286,6 +286,12 @@ class SourceImportConfig(Base):  # type: ignore[misc]
     config_name: Mapped[str | None] = mapped_column(
         String(255), comment="Название конфигурации"
     )
+    source_key_field: Mapped[SourceKeyField] = mapped_column(
+        String(20),
+        default=SourceKeyField.EXTERNAL_ID.value,
+        server_default=SourceKeyField.EXTERNAL_ID.value,
+        comment="Поле-идентификатор для сопоставления с источником",
+    )
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         default=True,
@@ -327,17 +333,22 @@ class SourceImportConfig(Base):  # type: ignore[misc]
 
     def to_pydantic(
         self, exclude_relationships: bool = True
-    ) -> ImportConfigCreate:
+    ) -> ImportConfigDetail:
 
         data: dict[str, Any] = {}
         # Явно перечисляем поля, соответствующие ImportConfigCreate
-        for field_name in ImportConfigCreate.model_fields:
-            if exclude_relationships and field_name == "column_mappings":
-                continue
+        for field_name in ImportConfigDetail.model_fields:
+            if field_name == "column_mappings":
+                if hasattr(self, field_name):
+                    column_mappings = getattr(self, field_name)
+                    if column_mappings:
+                        data[field_name] = [
+                            m.to_pydantic() for m in column_mappings
+                        ]
             if hasattr(self, field_name):
                 data[field_name] = getattr(self, field_name)
 
-        return ImportConfigCreate(**data)
+        return ImportConfigDetail(**data)
 
 
 class SourceColumnMapping(Base):  # type: ignore[misc]

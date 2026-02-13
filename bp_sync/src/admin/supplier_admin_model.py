@@ -1,4 +1,7 @@
-from models.supplier_models import SourceColumnMapping, SourceImportConfig
+from models.supplier_models import (  # SupplierProduct,
+    SourceColumnMapping,
+    SourceImportConfig,
+)
 
 from .base_admin import BaseAdmin
 
@@ -21,7 +24,7 @@ class ImportConfigAdmin(
         "delimiter",
         "header_row_index",
         "data_start_row",
-        # "column_mappings",
+        "source_key_field",
     ]
     column_labels = {  # Надписи полей в списке
         "source": "Источник",
@@ -33,6 +36,9 @@ class ImportConfigAdmin(
         "header_row_index": "Номер строки с заголовками",
         "data_start_row": "Номер начала данных",
         "column_mappings": "Маппинг колонок",
+        "source_key_field": (
+            "Поле-идентификатор для сопоставления с источником"
+        ),
     }
     column_default_sort = [("source", True)]  # Сортировка по умолчанию
     column_sortable_list = [  # Список полей по которым возможна сортировка
@@ -53,6 +59,7 @@ class ImportConfigAdmin(
         "header_row_index",
         "data_start_row",
         "column_mappings",
+        "source_key_field",
     ]
 
     column_details_list = [
@@ -65,6 +72,7 @@ class ImportConfigAdmin(
         "header_row_index",
         "data_start_row",
         "column_mappings",
+        "source_key_field",
     ]
 
 

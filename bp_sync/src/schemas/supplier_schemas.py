@@ -6,7 +6,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from typing_extensions import Annotated
 
-from schemas.enums import SourcesProductEnum
+from schemas.enums import SourceKeyField, SourcesProductEnum
 
 
 class BaseFields(BaseModel):  # type: ignore[misc]
@@ -162,12 +162,14 @@ class ImportConfigCreate(ImportConfigBase):
     """Создание конфигурации импорта."""
 
     source: SourcesProductEnum
+    source_key_field: SourceKeyField
 
 
 class ImportConfigUpdate(ImportConfigBase):
     """Обновление конфигурации импорта."""
 
     source: SourcesProductEnum | None = None
+    source_key_field: SourceKeyField | None = None
 
 
 # ----------------------------------------------------------------------
