@@ -1,4 +1,6 @@
-from typing import TYPE_CHECKING
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, ClassVar, Optional, Type
 from uuid import UUID
 
 from sqlalchemy import (
@@ -14,25 +16,31 @@ from sqlalchemy import (
     false,
     true,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, class_mapper, mapped_column, relationship
 
 from db.postgres import Base
-from schemas.enums import EntityType, SourcesProductEnum
-
-from .bases import IntIdEntity
+from schemas.enums import EntityType, SourceKeyField, SourcesProductEnum
+from schemas.supplier_schemas import (
+    ImportColumnMappingCreate,
+    ImportConfigDetail,
+    SupplierProductCreate,
+)
 
 if TYPE_CHECKING:
-    from .product_models import Product as ProductDB
+    from .product_models import Product
 
 
-class SupplierProduct(IntIdEntity):
+class SupplierProduct(Base):  # type: ignore[misc]
     """
     Товары/продукты поставщиков.
     Хранит сырые данные, полученные от поставщиков до валидации и маппинга.
     """
 
     __tablename__ = "supplier_products"
-    # TODO: _schema_class = SupplierProductCreate
+
+    _schema_class: ClassVar[Type[SupplierProductCreate]] = (
+        SupplierProductCreate
+    )
 
     __table_args__ = (
         Index("ix_supplier_products_source", "source"),
@@ -59,6 +67,10 @@ class SupplierProduct(IntIdEntity):
         return str(self.name)
 
     # Основные данные товара
+    external_id: Mapped[int] = mapped_column(
+        unique=True,
+        comment="ID во внешней системе",
+    )
     name: Mapped[str] = mapped_column(
         String(500),
         comment="Название товара",
@@ -163,16 +175,15 @@ class SupplierProduct(IntIdEntity):
 
     # Связь с главной таблицей продуктов (Номенклатурой)
     product_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey("products.id"),
-        ondelete="SET NULL",
+        ForeignKey("products.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
         comment="Идентификатор связанного товара в системе",
     )
-    product: Mapped["ProductDB" | None] = relationship(
-        "ProductDB",
+    product: Mapped[Optional["Product"]] = relationship(
+        "Product",
         foreign_keys=[product_id],
-        back_populates="supplier_product",
+        back_populates="supplier_products",
     )
 
     # Данные для предложений (Offers)
@@ -189,7 +200,7 @@ class SupplierProduct(IntIdEntity):
         back_populates="supplier_product",
         cascade="all, delete-orphan",
         lazy="selectin",
-        order_by="name",
+        order_by="SupplierCharacteristic.name",
     )
 
     # Связь с комплектующими (complects)
@@ -199,6 +210,56 @@ class SupplierProduct(IntIdEntity):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
+
+    def to_pydantic(
+        self,
+        schema_class: Type[SupplierProductCreate] | None = None,
+        exclude_relationships: bool = True,
+    ) -> SupplierProductCreate:
+        """
+        Преобразует объект SQLAlchemy в Pydantic схему
+
+        Args:
+            schema_class: Класс Pydantic схемы
+            exclude_relationships: Исключать ли связи из преобразования
+
+        Returns:
+            Экземпляр Pydantic схемы
+
+        Raises:
+            ValueError: Если не удалось определить класс схемы
+        """
+        schema_class = schema_class or self._schema_class
+        data: dict[str, Any] = {}
+
+        # Получаем все поля схемы
+        for field_name in schema_class.model_fields:
+            # Пропускаем поля, которые являются связями и должны быть исключены
+            if exclude_relationships and self._is_relationship_field(
+                field_name
+            ):
+                continue
+
+            if hasattr(self, field_name):
+                value = getattr(self, field_name)
+                data.update({field_name: value})
+        # if hasattr(self, "id"):
+        #     data["internal_id"] = self.id
+        return schema_class(**data)
+
+    # def _transform_field_value(self, field_name: str, value: Any) -> Any:
+    #     """Трансформирует значение поля при необходимости."""
+    #     if field_name == "external_id" and value:
+    #         return {"ID": value}
+    #     return {field_name: value}
+
+    def _is_relationship_field(self, field_name: str) -> bool:
+        """Проверяет, является ли поле связью"""
+        try:
+            mapper = class_mapper(self.__class__)
+            return field_name in mapper.relationships
+        except Exception:
+            return False
 
 
 class SourceImportConfig(Base):  # type: ignore[misc]
@@ -224,6 +285,12 @@ class SourceImportConfig(Base):  # type: ignore[misc]
     )
     config_name: Mapped[str | None] = mapped_column(
         String(255), comment="Название конфигурации"
+    )
+    source_key_field: Mapped[SourceKeyField] = mapped_column(
+        String(20),
+        default=SourceKeyField.EXTERNAL_ID.value,
+        server_default=SourceKeyField.EXTERNAL_ID.value,
+        comment="Поле-идентификатор для сопоставления с источником",
     )
     is_active: Mapped[bool] = mapped_column(
         Boolean,
@@ -263,6 +330,25 @@ class SourceImportConfig(Base):  # type: ignore[misc]
         lazy="selectin",
         order_by="SourceColumnMapping.display_order",
     )
+
+    def to_pydantic(
+        self, exclude_relationships: bool = True
+    ) -> ImportConfigDetail:
+
+        data: dict[str, Any] = {}
+        # Явно перечисляем поля, соответствующие ImportConfigCreate
+        for field_name in ImportConfigDetail.model_fields:
+            if field_name == "column_mappings":
+                if hasattr(self, field_name):
+                    column_mappings = getattr(self, field_name)
+                    if column_mappings:
+                        data[field_name] = [
+                            m.to_pydantic() for m in column_mappings
+                        ]
+            if hasattr(self, field_name):
+                data[field_name] = getattr(self, field_name)
+
+        return ImportConfigDetail(**data)
 
 
 class SourceColumnMapping(Base):  # type: ignore[misc]
@@ -335,6 +421,18 @@ class SourceColumnMapping(Base):  # type: ignore[misc]
         comment="Для UI и порядка обработки",
     )
 
+    def to_pydantic(
+        self, exclude_relationships: bool = True
+    ) -> ImportColumnMappingCreate:
+        data: dict[str, Any] = {}
+        # Явно перечисляем поля, соответствующие ImportColumnMappingCreate
+        for field_name in ImportColumnMappingCreate.model_fields:
+            if exclude_relationships and field_name == "config":
+                continue
+            if hasattr(self, field_name):
+                data[field_name] = getattr(self, field_name)
+        return ImportColumnMappingCreate(**data)
+
 
 class SupplierCharacteristic(Base):  # type: ignore[misc]
     """
@@ -366,7 +464,7 @@ class SupplierCharacteristic(Base):  # type: ignore[misc]
     )
     supplier_product: Mapped["SupplierProduct"] = relationship(
         "SupplierProduct",
-        forien_keys=[supplier_product_id],
+        foreign_keys=[supplier_product_id],
         back_populates="characteristics",
     )
 
@@ -403,6 +501,6 @@ class SupplierComplect(Base):  # type: ignore[misc]
     )
     supplier_product: Mapped["SupplierProduct"] = relationship(
         "SupplierProduct",
-        forien_keys=[supplier_product_id],
+        foreign_keys=[supplier_product_id],
         back_populates="complects",
     )

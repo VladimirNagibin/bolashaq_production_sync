@@ -1,6 +1,7 @@
-# from __future__ import annotations
+from __future__ import annotations
+
 from datetime import datetime
-from typing import Any, Type  # TYPE_CHECKING,
+from typing import TYPE_CHECKING, Any, Type
 from uuid import UUID
 
 from sqlalchemy import DateTime, ForeignKey
@@ -19,8 +20,8 @@ from schemas.product_schemas import (
 from .bases import IntIdEntity
 from .user_models import User
 
-# if TYPE_CHECKING:
-# from .suppier_models import SupplierProduct
+if TYPE_CHECKING:
+    from models.supplier_models import SupplierProduct
 
 
 class Product(IntIdEntity):
@@ -200,11 +201,12 @@ class Product(IntIdEntity):
         lazy="selectin",
     )
 
-    # supplier_product: Mapped[list["SupplierProduct"]] = relationship(
-    #     "SupplierProduct",
-    #     back_populates="product",
-    #     lazy="selectin",
-    # )
+    supplier_products: Mapped[list["SupplierProduct"]] = relationship(
+        "SupplierProduct",
+        back_populates="product",
+        lazy="selectin",
+        viewonly=True,
+    )
 
     async def to_pydantic(
         self,
