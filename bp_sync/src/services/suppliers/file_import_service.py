@@ -15,6 +15,7 @@ from schemas.supplier_schemas import (
 )
 from services.products.product_services import ProductClient
 
+from ..open_ai_services import OpenAIService
 from .repositories.supplier_product_repo import SupplierProductRepository
 
 
@@ -28,6 +29,7 @@ class FileImportService:
     ):
         self.supplier_product_repo = supplier_product_repo
         self.product_client = product_client
+        self.open_al_service = OpenAIService()
 
     async def import_file(
         self,
@@ -620,5 +622,21 @@ class FileImportService:
         data: dict[str, Any],
     ) -> dict[str, Any]:
         # TODO: Вычисляем раздел, обрабатываем описание и т.д.
+        if source == SourcesProductEnum.LABSET:
+            if description := data.get("description"):
+                detail = self.open_al_service.parse_product_with_deepseek(
+                    description,
+                    name=data.get("name", ""),
+                    article=data.get("article"),
+                    brend=data.get("brend"),
+                )
+                if announce := detail.announcement:
+                    data["preview_for_offer"] = announce
+                if descr := detail.description:
+                    data["description_for_offer"] = descr
+                if characts := detail.characteristics:
+                    data["characteristics"] = characts
+                if kit := detail.kit:
+                    data["complects"] = kit
 
         return data
