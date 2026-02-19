@@ -77,6 +77,9 @@ class Settings(BaseSettings):  # type: ignore
 
     MANAGERS: set[int] = {33, 35}
 
+    OPEN_AI_API_KEY: str = "sk-12345"
+    OPEN_AI_BASE_URL: str = "https://api.com"
+
     @property
     def dsn(self) -> str:
         return (

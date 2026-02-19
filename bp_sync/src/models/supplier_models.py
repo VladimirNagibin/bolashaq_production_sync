@@ -318,10 +318,10 @@ class SourceImportConfig(Base):  # type: ignore[misc]
 
     # Настройки структуры файла (Строки)
     header_row_index: Mapped[int | None] = mapped_column(
-        Integer, comment="Номер строки с заголовками"
+        Integer, comment="Номер строки с заголовками. Нумерация с 0."
     )
     data_start_row: Mapped[int | None] = mapped_column(
-        Integer, comment="Номер начала данных"
+        Integer, comment="Номер начала данных. Нумерация с 0."
     )
     column_mappings: Mapped[list["SourceColumnMapping"]] = relationship(
         "SourceColumnMapping",
@@ -406,6 +406,12 @@ class SourceColumnMapping(Base):  # type: ignore[misc]
         server_default=false(),
         default=False,
         comment="Перегружать в CRM без проверки",
+    )
+    sync_with_crm: Mapped[bool] = mapped_column(
+        Boolean,
+        server_default=false(),
+        default=False,
+        comment="Участвует в синхронизации с CRM",
     )
     data_type: Mapped[str | None] = mapped_column(
         String(20), comment="Тип данных: string, integer, decimal, date и т.д."

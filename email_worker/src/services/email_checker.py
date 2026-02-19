@@ -49,6 +49,7 @@ class EmailChecker:
         Получает новые письма от целевого отправителя
         """
         emails: list[EmailMessage] = []
+        # sender_emails = settings.TARGET_SENDER_EMAIL.split(",")
         try:
             # Подключение к серверу
             if not self.connect() or not self.connection:

@@ -38,9 +38,8 @@ class BaseRepository(Generic[T]):
             return result
         except SQLAlchemyError as e:
             self.logger.error(
-                f"Database {operation} failed: {str(e)}",
+                f"Database {operation} failed: {str(e)}. Context: {context}",
                 exc_info=True,
-                **context,
             )
             raise DatabaseOperationError(
                 operation=operation,

@@ -22,6 +22,7 @@ from models.deal_models import (  # noqa: F401
 from models.deal_stage_models import DealStage  # noqa: F401
 from models.department_models import Department  # noqa: F401
 from models.lead_models import Lead  # noqa: F401
+from models.productsection_models import Productsection  # noqa: F401
 from models.supplier_models import (  # noqa: F401
     SourceColumnMapping,
     SourceImportConfig,

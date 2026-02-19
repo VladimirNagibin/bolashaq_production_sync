@@ -1,5 +1,6 @@
 from models.deal_models import ProductAgreementSupervisor
 from models.product_models import Product, ProductEntity
+from models.productsection_models import Productsection
 
 from .base_admin import BaseAdmin
 from .mixins import COLUMN_LABELS
@@ -133,3 +134,59 @@ class ProductEntityAdmin(
         "owner_type",
         "is_deleted_in_bitrix",
     ]
+
+
+class ProductsectionAdmin(
+    BaseAdmin, model=Productsection
+):  # type: ignore[call-arg]
+    name = "Раздел"
+    name_plural = "Разделы"
+    category = "Товары"
+    icon = "fa-solid fa-tags"
+
+    column_list = [  # Поля в списке
+        "name",
+        "section_id",
+        "catalog_id",
+        "code",
+        "xml_id",
+    ]
+    column_labels_local = {  # Надписи полей в списке
+        "name": "Наименование",
+        "section_id": "Родительский раздел",
+        "catalog_id": "Каталог",
+        "code": "Символьный код",
+        "xml_id": "СВнешний код",
+    }
+    column_labels = COLUMN_LABELS | column_labels_local
+    column_default_sort = [("section_id", True)]  # Сортировка по умолчанию
+    column_sortable_list = [  # Список полей по которым возможна сортировка
+        "name",
+        "section_id",
+        "catalog_id",
+        "code",
+        "xml_id",
+    ]
+    column_searchable_list = [  # Список полей по которым возможен поиск
+        "name",
+        "section_id",
+        "catalog_id",
+        "code",
+        "xml_id",
+    ]
+    form_columns = [  # Поля на форме
+        "name",
+        "section_id",
+        "catalog_id",
+        "code",
+        "xml_id",
+    ]
+    column_details_list = [
+        "name",
+        "section_id",
+        "parent_productsection",
+        "catalog_id",
+        "code",
+        "xml_id",
+        "child_productsections",
+    ]  # Поля на форме просмотра

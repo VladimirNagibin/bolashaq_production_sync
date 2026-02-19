@@ -20,6 +20,9 @@ from services.leads.lead_services import LeadClient
 from services.products.product_bitrix_services import ProductBitrixClient
 from services.products.product_repository import ProductRepository
 from services.products.product_services import ProductClient
+from services.productsections.productsection_services import (
+    ProductsectionClient,
+)
 from services.timeline_comments.timeline_comment_bitrix_services import (
     TimeLineCommentBitrixClient,
 )
@@ -60,6 +63,13 @@ async def get_department_service(
     session: AsyncSession = Depends(get_session_context),
 ) -> DepartmentClient:
     return DepartmentClient(bitrix_client=bitrix_client, session=session)
+
+
+async def get_productsection_service(
+    bitrix_client: BitrixAPIClient = Depends(get_api_client),
+    session: AsyncSession = Depends(get_session_context),
+) -> ProductsectionClient:
+    return ProductsectionClient(bitrix_client=bitrix_client, session=session)
 
 
 async def get_user_service(

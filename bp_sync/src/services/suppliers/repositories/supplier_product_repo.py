@@ -1,7 +1,7 @@
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import and_, delete, or_, select, update
+from sqlalchemy import and_, delete, insert, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -11,7 +11,7 @@ from core.exceptions.repo_exceptions import (
     EntityNotFoundError,
 )
 from models.supplier_models import SupplierProduct
-from schemas.enums import SourcesProductEnum
+from schemas.enums import SourceKeyField, SourcesProductEnum
 from schemas.supplier_schemas import (
     SupplierCharacteristicUpdate,
     SupplierComplectUpdate,
@@ -341,10 +341,12 @@ class SupplierProductRepository(BaseRepository[SupplierProduct]):
     async def get_by_filters(
         self,
         skip: int = 0,
-        limit: int = 100,
+        limit: int = 10000,
         source: SourcesProductEnum | None = None,
         is_validated: bool | None = None,
         should_export: bool | None = None,
+        external_ids: list[int] | None = None,
+        codes: list[str] | None = None,
         search: str | None = None,
     ) -> list[SupplierProductCreate]:
         """Получить товары с фильтрацией и поиском."""
@@ -375,6 +377,10 @@ class SupplierProductRepository(BaseRepository[SupplierProduct]):
                     self.model.article.ilike(f"%{search}%"),
                 )
             )
+        if external_ids is not None and external_ids:
+            stmt = stmt.where(self.model.external_id.in_(external_ids))
+        if codes is not None and codes:
+            stmt = stmt.where(self.model.code.in_(codes))
 
         stmt = (
             stmt.order_by(self.model.created_at.desc())
@@ -420,3 +426,524 @@ class SupplierProductRepository(BaseRepository[SupplierProduct]):
             stmt, operation="count_products_by_filters"
         )
         return int(result.scalar_one())
+
+    async def create_products(
+        self,
+        products: list[SupplierProductCreate],
+        key_field: SourceKeyField,
+        batch_size: int = 1000,
+        skip_duplicate_check: bool = False,
+    ) -> list[SupplierProductDetail]:
+        """
+        Пакетное создание товаров поставщиков.
+
+        Args:
+            products: Список товаров для создания
+            batch_size: Размер батча для вставки
+            skip_duplicate_check: Пропустить проверку на дубликаты
+            (для ускорения)
+
+        Returns:
+            List[SupplierProductDetail]: Созданные товары
+        """
+        if not products:
+            self.logger.info("No products to create")
+            return []
+
+        self.logger.info(
+            f"Batch creating {len(products)} supplier products",
+            extra={
+                "batch_size": batch_size,
+                "skip_duplicate_check": skip_duplicate_check,
+            },
+        )
+
+        created_products: list[SupplierProductDetail] = []
+
+        try:
+            # Проверка на дубликаты (опционально)
+            if not skip_duplicate_check:
+                products = await self._filter_duplicates(products, key_field)
+
+            # Разбиваем на батчи для оптимизации
+            for i in range(0, len(products), batch_size):
+                batch = products[i : i + batch_size]
+
+                # Преобразуем схемы в словари для вставки
+                batch_dicts: list[dict[str, Any]] = []
+                for product in batch:
+                    product_dict = product.model_dump(exclude_unset=True)
+                    # Добавляем обязательные поля
+                    # product_dict.setdefault("is_validated", False)
+                    # product_dict.setdefault("should_export_to_crm", False)
+                    batch_dicts.append(product_dict)
+
+                # Выполняем массовую вставку
+                stmt = (
+                    insert(self.model)
+                    .values(batch_dicts)
+                    .returning(self.model)
+                )
+                result = await self._execute_query(
+                    stmt,
+                    operation="batch_create_products",
+                    batch_num=i // batch_size + 1,
+                    batch_size=len(batch),
+                )
+
+                inserted_rows = result.scalars().all()
+
+                # Преобразуем в детальные схемы
+                for row in inserted_rows:
+                    created_products.append(
+                        SupplierProductDetail.model_validate(row)
+                    )
+
+                # Сбрасываем после каждого батча для получения ID
+                await self._flush(
+                    f"batch_create_products_batch_{i//batch_size + 1}"
+                )
+
+                self.logger.debug(
+                    f"Created batch {i//batch_size + 1}: "
+                    f"{len(inserted_rows)} products"
+                )
+
+            # Финальный коммит
+            await self._commit("batch_create_products")
+
+            self.logger.info(
+                f"Successfully created {len(created_products)} products in "
+                f"{(len(products) + batch_size - 1) // batch_size} batches"
+            )
+
+        except Exception as e:
+            await self.session.rollback()
+            self.logger.error(
+                f"Failed to batch create products: {str(e)}", exc_info=True
+            )
+            raise
+
+        return created_products
+
+    async def update_products(
+        self,
+        products: list[SupplierProductUpdate],
+        key_field: SourceKeyField,
+        source: SourcesProductEnum,
+        batch_size: int = 1000,
+        update_existing_only: bool = True,
+    ) -> list[SupplierProductDetail]:
+        """
+        Пакетное обновление товаров поставщиков.
+
+        Args:
+            products: Список товаров для обновления
+            batch_size: Размер батча для обновления
+            update_existing_only: Обновлять только существующие записи
+
+        Returns:
+            List[SupplierProductDetail]: Обновленные товары
+        """
+        if not products:
+            self.logger.info("No products to update")
+            return []
+
+        self.logger.info(
+            f"Batch updating {len(products)} supplier products",
+            extra={
+                "batch_size": batch_size,
+                "update_existing_only": update_existing_only,
+            },
+        )
+
+        updated_products = []
+        # failed_updates = []
+
+        try:
+            # Получаем существующие товары для проверки
+            existing_map = await self._get_existing_products_map(
+                products, key_field, source
+            )
+
+            # Разбиваем на батчи
+            for i in range(0, len(products), batch_size):
+                batch = products[i : i + batch_size]
+                batch_updates: list[dict[str, Any]] = []
+
+                for product_update in batch:
+                    # Пропускаем если товар не существует
+                    if (
+                        f"ext:{product_update.external_id}" not in existing_map
+                        and update_existing_only
+                    ):
+                        self.logger.debug(
+                            "Skipping update for non-existent product",
+                            extra={"external_id": product_update.external_id},
+                        )
+                        continue
+
+                    # Формируем данные для обновления
+                    update_data = product_update.model_dump(
+                        exclude_unset=True, exclude_none=True
+                    )
+                    # Определяем условие для обновления
+                    if (
+                        key_field == SourceKeyField.EXTERNAL_ID
+                        and product_update.external_id
+                    ):
+                        where_clause = (
+                            self.model.external_id
+                            == product_update.external_id
+                        )
+                    elif (
+                        key_field == SourceKeyField.CODE
+                        and product_update.code
+                    ):
+                        where_clause = self.model.code == product_update.code
+                    else:
+                        self.logger.warning(
+                            "Skipping update: no identifier provided",
+                            extra={"product": product_update.model_dump()},
+                        )
+                        continue
+
+                    # Добавляем обновление в батч
+                    batch_updates.append(
+                        {"where": where_clause, "values": update_data}
+                    )
+
+                if not batch_updates:
+                    continue
+
+                # Выполняем обновления в батче
+                batch_updated = await self._execute_batch_updates(
+                    batch_updates, batch_num=i // batch_size + 1
+                )
+
+                updated_products.extend(batch_updated)
+
+                self.logger.debug(
+                    f"Updated batch {i//batch_size + 1}: "
+                    f"{len(batch_updated)} products"
+                )
+
+            # Получаем полные данные обновленных товаров
+            result = []
+            for product in updated_products:
+                detail = await self.get_with_relations(product.id)
+                if detail:
+                    result.append(detail)
+
+            # Финальный коммит
+            await self._commit("batch_update_products")
+
+            self.logger.info(
+                f"Successfully updated {len(result)} products in "
+                f"{(len(products) + batch_size - 1) // batch_size} batches"
+            )
+
+        except Exception as e:
+            await self.session.rollback()
+            self.logger.error(
+                f"Failed to batch update products: {str(e)}", exc_info=True
+            )
+            raise
+
+        return result
+
+    async def upsert_products(
+        self,
+        products: list[SupplierProductCreate],
+        key_field: SourceKeyField,
+        source: SourcesProductEnum,
+        key_fields: list[str] | None = None,
+        batch_size: int = 1000,
+    ) -> list[SupplierProductDetail]:
+        """
+        Пакетное создание или обновление товаров (upsert).
+
+        Args:
+            products: Список товаров для upsert
+            key_fields: Поля для определения уникальности
+                (по умолчанию ['source', 'external_id'])
+            batch_size: Размер батча
+
+        Returns:
+            List[SupplierProductDetail]: Созданные/обновленные товары
+        """
+        if not products:
+            return []
+
+        if key_fields is None:
+            key_fields = ["source", "external_id"]
+
+        self.logger.info(
+            f"Batch upserting {len(products)} products",
+            extra={"key_fields": key_fields},
+        )
+
+        # Разделяем на создание и обновление
+        to_create = []
+        to_update = []
+
+        # Получаем существующие записи
+        existing_map = await self._get_products_map_by_keys(
+            products, key_fields, source
+        )
+
+        for product in products:
+            key = self._build_composite_key(product, key_fields)
+            if key in existing_map:
+                # Существующий товар - готовим обновление
+                # existing = existing_map[key]
+                update_data = SupplierProductUpdate(
+                    external_id=product.external_id,
+                    code=product.code,
+                    **product.model_dump(
+                        exclude={"source", "external_id", "code"},
+                        exclude_unset=True,
+                    ),
+                )
+                to_update.append(update_data)
+            else:
+                # Новый товар
+                to_create.append(product)
+
+        self.logger.debug(
+            f"Upsert split: {len(to_create)} to create, "
+            f"{len(to_update)} to update"
+        )
+
+        # Выполняем создание и обновление
+        created = await self.create_products(
+            to_create, batch_size, skip_duplicate_check=True
+        )
+        updated = await self.update_products(to_update, batch_size, source)
+
+        return created + updated
+
+    async def _filter_duplicates(
+        self,
+        products: list[SupplierProductCreate],
+        key_field: SourceKeyField,
+    ) -> list[SupplierProductCreate]:
+        """Фильтрация дубликатов перед созданием."""
+
+        unique_products: list[SupplierProductCreate] = []
+        seen_keys: set[str] = set()
+
+        for product in products:
+            # Проверяем по source + code или source + external_id
+            if key_field == SourceKeyField.EXTERNAL_ID:
+                key = f"{product.source.value}:ext:{product.external_id}"
+            elif key_field == SourceKeyField.CODE:
+                key = f"{product.source.value}:code:{product.code}"
+            else:
+                # Нет уникального идентификатора - пропускаем
+                self.logger.warning(
+                    "Skipping product without unique identifier",
+                    extra={"product": product.model_dump()},
+                )
+                continue
+
+            if key in seen_keys:
+                self.logger.debug(f"Duplicate product skipped: {key}")
+                continue
+
+            # Проверяем существование в БД
+            existing = None
+            if key_field == SourceKeyField.EXTERNAL_ID:
+                existing = await self.get_by_source_external_id(
+                    product.source, product.external_id
+                )
+            elif key_field == SourceKeyField.CODE and product.code:
+                existing = await self.get_by_source_code(
+                    product.source, product.code
+                )
+
+            if not existing:
+                unique_products.append(product)
+                seen_keys.add(key)
+
+        return unique_products
+
+    async def _get_existing_products_map(
+        self,
+        products: list[SupplierProductUpdate],
+        key_field: SourceKeyField,
+        source: SourcesProductEnum,
+    ) -> dict[str, SupplierProductUpdate]:
+        """Получение карты существующих товаров по идентификаторам."""
+
+        external_ids: list[int] = []
+        codes: list[str] = []
+
+        for product in products:
+            if key_field == SourceKeyField.EXTERNAL_ID and product.external_id:
+                external_ids.append(product.external_id)
+            elif key_field == SourceKeyField.CODE and product.code:
+                codes.append(product.code)
+
+        if not external_ids and not codes:
+            return {}
+
+        # Формируем запрос для получения существующих товаров
+        filters: dict[str, Any] = {"source": source}
+        if external_ids:
+            filters["external_ids"] = external_ids
+        if codes:
+            filters["codes"] = codes
+
+        existing = await self.get_by_filters(**filters)
+
+        # Создаем карту для быстрого доступа
+        existing_map: dict[str, SupplierProductUpdate] = {}
+        for product in existing:
+            if product.external_id:
+                existing_map[f"ext:{product.external_id}"] = product
+            if product.code:
+                existing_map[f"code:{product.code}"] = product
+
+        return existing_map
+
+    async def _get_products_map_by_keys(
+        self,
+        products: list[SupplierProductCreate],
+        key_fields: list[str],
+        source: SourcesProductEnum,
+    ) -> dict[str, SupplierProductCreate]:
+        """Получение карты товаров по составным ключам."""
+
+        # Собираем все значения ключей
+        filters: dict[str, Any] = {"source": source}
+
+        if "external_id" in key_fields:
+            external_ids = [p.external_id for p in products if p.external_id]
+            if external_ids:
+                filters["external_ids"] = external_ids
+
+        if "code" in key_fields:
+            codes = [p.code for p in products if p.code]
+            if codes:
+                filters["codes"] = codes
+
+        if not filters:
+            return {}
+
+        # Получаем существующие записи
+        existing = await self.get_by_filters(**filters)
+
+        # Строим карту по составному ключу
+        existing_map = {}
+        for product in existing:
+            key = self._build_composite_key(product, key_fields)
+            existing_map[key] = product
+
+        return existing_map
+
+    def _build_composite_key(
+        self,
+        product: SupplierProductCreate | SupplierProduct,
+        key_fields: list[str],
+    ) -> str:
+        """Построение составного ключа из указанных полей."""
+
+        key_parts = []
+        for field in key_fields:
+            value = getattr(product, field, None)
+            if value is not None:
+                if field == "source" and hasattr(value, "value"):
+                    value = value.value
+                key_parts.append(f"{field}:{value}")
+
+        return "|".join(key_parts)
+
+    async def _execute_batch_updates(
+        self,
+        updates: list[dict[str, Any]],
+        batch_num: int,
+    ) -> list[SupplierProduct]:
+        """Выполнение пакетных обновлений."""
+
+        updated_rows = []
+
+        for update_item in updates:
+            try:
+                stmt = (
+                    update(self.model)
+                    .where(update_item["where"])
+                    .values(**update_item["values"])
+                    .returning(self.model)
+                )
+
+                result = await self._execute_query(
+                    stmt, operation="batch_update", batch_num=batch_num
+                )
+
+                updated = result.scalar_one_or_none()
+                if updated:
+                    updated_rows.append(updated)
+
+            except Exception as e:
+                self.logger.error(
+                    f"Failed to update product in batch {batch_num}: {str(e)}",
+                    extra={"update_data": update_item["values"]},
+                )
+                continue
+
+        return updated_rows
+
+    async def bulk_delete(
+        self,
+        product_ids: list[UUID] | None = None,
+        source: SourcesProductEnum | None = None,
+        older_than_days: int | None = None,
+    ) -> int:
+        """
+        Массовое удаление товаров.
+
+        Args:
+            product_ids: Список ID для удаления
+            source: Источник для удаления
+            older_than_days: Удалить записи старше N дней
+
+        Returns:
+            int: Количество удаленных записей
+        """
+
+        stmt = delete(self.model)
+
+        if product_ids:
+            stmt = stmt.where(self.model.id.in_(product_ids))
+        elif source:
+            stmt = stmt.where(self.model.source == source.value)
+        elif older_than_days:
+            from datetime import datetime, timedelta
+
+            # from sqlalchemy import func
+
+            cutoff_date = datetime.now() - timedelta(days=older_than_days)
+            stmt = stmt.where(self.model.created_at < cutoff_date)
+        else:
+            raise ValueError("No delete criteria provided")
+
+        result = await self._execute_query(
+            stmt,
+            operation="bulk_delete",
+            product_ids=product_ids,
+            source=source.value if source else None,
+        )
+
+        deleted_count = result.rowcount
+        await self._commit("bulk_delete")
+
+        self.logger.info(
+            f"Bulk deleted {deleted_count} products",
+            extra={
+                "product_ids_count": len(product_ids) if product_ids else 0,
+                "source": source.value if source else None,
+            },
+        )
+
+        return int(deleted_count)

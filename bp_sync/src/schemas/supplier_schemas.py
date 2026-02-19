@@ -1,6 +1,5 @@
 from datetime import datetime
-
-# from typing import Any
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
@@ -59,7 +58,7 @@ class SupplierProductBase(BaseFields):
     xml_id: Annotated[str, StringConstraints(max_length=100)] | None = None
 
     # Цены и валюта
-    price: float | None = Field(None, ge=0)
+    price: float | None = None
     currency_id: Annotated[str, StringConstraints(max_length=10)] | None = None
 
     # Описание
@@ -106,11 +105,9 @@ class SupplierProductBase(BaseFields):
     availability_status: (
         Annotated[str, StringConstraints(max_length=50)] | None
     ) = None
-    quantity: float | None = Field(None, ge=0)
+    quantity: float | None = None
 
     # Метаданные
-    is_validated: bool = False
-    should_export_to_crm: bool = False
     internal_section_id: int | None = None
 
     # Связи
@@ -127,6 +124,8 @@ class SupplierProductCreate(SupplierProductBase):
     external_id: int = Field(description="Внешний идентификатор")
     name: Annotated[str, StringConstraints(max_length=500)]
     source: SourcesProductEnum
+    is_validated: bool = False
+    should_export_to_crm: bool = False
 
 
 class SupplierProductUpdate(SupplierProductBase):
@@ -135,6 +134,8 @@ class SupplierProductUpdate(SupplierProductBase):
     external_id: int | None = None
     name: Annotated[str, StringConstraints(max_length=500)] | None = None
     source: SourcesProductEnum | None = None
+    is_validated: bool | None = None
+    should_export_to_crm: bool | None = None
 
 
 # ----------------------------------------------------------------------
@@ -149,9 +150,11 @@ class ImportConfigBase(BaseFields):
     is_active: bool = True
 
     file_format: Annotated[str, StringConstraints(max_length=10)] | None = (
-        "XLSX"
+        None  # "XLSX"
     )
-    encoding: Annotated[str, StringConstraints(max_length=20)] | None = "UTF-8"
+    encoding: Annotated[str, StringConstraints(max_length=20)] | None = (
+        None  # "UTF-8"
+    )
     delimiter: Annotated[str, StringConstraints(max_length=5)] | None = None
 
     header_row_index: int | None = None
@@ -162,7 +165,7 @@ class ImportConfigCreate(ImportConfigBase):
     """Создание конфигурации импорта."""
 
     source: SourcesProductEnum
-    source_key_field: SourceKeyField
+    source_key_field: SourceKeyField = SourceKeyField.EXTERNAL_ID
 
 
 class ImportConfigUpdate(ImportConfigBase):
@@ -178,13 +181,10 @@ class ImportConfigUpdate(ImportConfigBase):
 class ImportColumnMappingBase(BaseFields):
     """Базовая схема маппинга колонок."""
 
-    force_import: bool = False
     data_type: Annotated[str, StringConstraints(max_length=20)] | None = None
     transformation_rule: (
         Annotated[str, StringConstraints(max_length=50)] | None
     ) = None
-
-    display_order: int = 0
 
 
 class ImportColumnMappingCreate(ImportColumnMappingBase):
@@ -194,6 +194,9 @@ class ImportColumnMappingCreate(ImportColumnMappingBase):
     target_field: Annotated[str, StringConstraints(max_length=100)]
     source_column_name: Annotated[str, StringConstraints(max_length=255)]
     source_column_index: int
+    force_import: bool = False
+    sync_with_crm: bool = False
+    display_order: int = 0
 
 
 class ImportColumnMappingUpdate(ImportColumnMappingBase):
@@ -207,6 +210,9 @@ class ImportColumnMappingUpdate(ImportColumnMappingBase):
         Annotated[str, StringConstraints(max_length=255)] | None
     ) = None
     source_column_index: int | None = None
+    force_import: bool | None = None
+    sync_with_crm: bool | None = None
+    display_order: int | None = None
 
 
 # ----------------------------------------------------------------------
@@ -272,3 +278,18 @@ class ImportConfigDetail(ImportConfigCreate):
     """Конфигурация импорта с маппингами."""
 
     column_mappings: list[ImportColumnMappingCreate] = []
+
+
+class ImportResult(BaseModel):  # type: ignore[misc]
+    """Результат импорта."""
+
+    added_count: int = 0
+    updated_count: int = 0
+    force_import_count: int = 0
+    bitrix_update_count: int = 0
+    errors: list[str] = []
+    bitrix_updates: list[Any] = []
+
+    @property
+    def total_processed(self) -> int:
+        return self.added_count + self.updated_count
