@@ -49,53 +49,55 @@ class EmailChecker:
         Получает новые письма от целевого отправителя
         """
         emails: list[EmailMessage] = []
-        # sender_emails = settings.TARGET_SENDER_EMAIL.split(",")
+        sender_emails = [email.strip() for email in settings.TARGET_SENDER_EMAIL.split(',')]
+        if not sender_emails:
+            logger.warning("No sender emails provided")
+            return emails
         try:
             # Подключение к серверу
             if not self.connect() or not self.connection:
                 logger.error("Failed to connect to email server")
                 return emails
+            for sender in sender_emails:
+                search_criteria = f'UNSEEN FROM "{sender}"'
+                logger.debug(f"Searching emails with criteria: {search_criteria}")
+                status, messages = self.connection.search(None, search_criteria)
 
-            search_criteria = f'UNSEEN FROM "{settings.TARGET_SENDER_EMAIL}"'
-
-            logger.debug(f"Searching emails with criteria: {search_criteria}")
-            status, messages = self.connection.search(None, search_criteria)
-
-            if status != "OK":
-                logger.warning("No emails found matching criteria")
-                return emails
-
-            message_ids = messages[0].split()
-            logger.info(
-                f"Found {len(message_ids)} new emails from target sender"
-            )
-
-            for msg_id in message_ids:
-                try:
-                    status, msg_data = self.connection.fetch(
-                        msg_id, "(BODY.PEEK[])"  # "(RFC822)"
-                    )
-                    if status != "OK":
-                        logger.warning(f"Failed to fetch email {msg_id}")
-                        continue
-
-                    email_body = self._safe_extract_email_body(
-                        msg_data, msg_id
-                    )
-                    if email_body is None:
-                        continue
-
-                    msg = email.message_from_bytes(email_body)
-                    parsed_email = self._parse_email(msg, msg_id)
-                    if parsed_email:
-                        emails.append(parsed_email)
-                        logger.debug(
-                            "Successfully parsed email: "
-                            f"{parsed_email.subject}"
-                        )
-                except Exception as e:
-                    logger.error(f"Error processing email {msg_id}: {e}")
+                if status != "OK":
+                    logger.warning("No emails found matching criteria")
                     continue
+
+                message_ids = messages[0].split()
+                logger.info(
+                    f"Found {len(message_ids)} new emails from target sender"
+                )
+
+                for msg_id in message_ids:
+                    try:
+                        status, msg_data = self.connection.fetch(
+                            msg_id, "(BODY.PEEK[])"  # "(RFC822)"
+                        )
+                        if status != "OK":
+                            logger.warning(f"Failed to fetch email {msg_id}")
+                            continue
+
+                        email_body = self._safe_extract_email_body(
+                            msg_data, msg_id
+                        )
+                        if email_body is None:
+                            continue
+
+                        msg = email.message_from_bytes(email_body)
+                        parsed_email = self._parse_email(msg, msg_id)
+                        if parsed_email:
+                            emails.append(parsed_email)
+                            logger.debug(
+                                "Successfully parsed email: "
+                                f"{parsed_email.subject}"
+                            )
+                    except Exception as e:
+                        logger.error(f"Error processing email {msg_id}: {e}")
+                        continue
             # self.disconnect()
             return emails
         except Exception as e:

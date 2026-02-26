@@ -43,6 +43,7 @@ class RequestParserService:
 
         Args:
             text: Строка для парсинга
+            type_event: Тип события
 
         Returns:
             ParsedRequest: Объект с распарсенными данными
@@ -55,24 +56,35 @@ class RequestParserService:
         parse_data: dict[str, Any] = {"raw_text": text.strip()}
 
         try:
-            # Пытаемся использовать комплексный паттерн для точного извлечения
-            comprehensive_match = self.comprehensive_pattern.search(text)
-            if comprehensive_match:
-                parse_data["product"] = comprehensive_match.group(1).strip()
-                parse_data["product_id"] = int(
-                    comprehensive_match.group(2).strip()
-                )
-                parse_data["name"] = comprehensive_match.group(3).strip()
-                parse_data["phone"] = comprehensive_match.group(4).strip()
-                bin_val = comprehensive_match.group(5).strip()
-                parse_data["bin_company"] = bin_val if bin_val else None
-                parse_data["comment"] = comprehensive_match.group(6).strip()
-                logger.debug("Успешный парсинг комплексным паттерном")
+            if type_event == TypeEvent.REQUEST_PRICE:
+                # Пытаемся использовать комплексный паттерн для точного извлечения
+                comprehensive_match = self.comprehensive_pattern.search(text)
+                if comprehensive_match:
+                    parse_data["product"] = comprehensive_match.group(1).strip()
+                    parse_data["product_id"] = int(
+                        comprehensive_match.group(2).strip()
+                    )
+                    parse_data["name"] = comprehensive_match.group(3).strip()
+                    parse_data["phone"] = comprehensive_match.group(4).strip()
+                    bin_val = comprehensive_match.group(5).strip()
+                    parse_data["bin_company"] = bin_val if bin_val else None
+                    parse_data["comment"] = comprehensive_match.group(6).strip()
+                    logger.debug("Успешный парсинг комплексным паттерном")
+                    return ParsedRequest(**parse_data)
+
+                # Если комплексный паттерн не сработал, парсим по отдельным полям
+                return self._parse_individual_fields(text)
+            elif type_event == TypeEvent.ORDER:
+                parse_data = self.parse_order_content(text)
+                logger.debug("Успешный парсинг")
                 return ParsedRequest(**parse_data)
-
-            # Если комплексный паттерн не сработал, парсим по отдельным полям
-            return self._parse_individual_fields(text)
-
+            elif type_event == TypeEvent.REQUEST_PRICE_LABSET:
+                parse_data = self._parse_request_price_labset(text)
+                logger.debug("Успешный парсинг")
+                return ParsedRequest(**parse_data)
+            else:
+                logger.warning(f"Не найдена обработка типа события: {type_event}")
+                return None
         except Exception as e:
             logger.error(f"Ошибка при парсинге текста: {e}")
             return None
@@ -212,6 +224,171 @@ class RequestParserService:
         }
 
         return validation
+
+    def parse_order_content(self, text: str) -> dict[str, Any]:
+        """
+        Парсит строку с запросом КП и извлекает данные клиента и товары.
+        """
+        
+        result = {
+            'raw_text': text.strip(),
+            'name': '',
+            'phone': '',
+            'email': '',
+            'bin_company': '',
+            'products': []
+        }
+
+        # Нормализуем переносы строк
+        text = text.replace('\r\n', '\n')
+   
+        # === Парсинг контактных данных ===
+        
+        # Имя
+        name_match = re.search(r'Имя:\s*([^\n]+)', text)
+        if name_match:
+            result['name'] = name_match.group(1).strip()
+        
+        # Телефон
+        phone_match = re.search(r'Телефон:\s*([^\n]+)', text)
+        if phone_match:
+            result['phone'] = phone_match.group(1).strip()
+        
+        # Email (может заканчиваться пробелами или переносом)
+        email_match = re.search(r'Email:\s*([^\s\n]+)', text)
+        if email_match:
+            result['email'] = email_match.group(1).strip()
+        
+        # БИН / Компания (может быть "—" или пусто)
+        bin_match = re.search(r'БИН / Компания:\s*\n\s*([^\n]*)', text)
+        if bin_match:
+            value = bin_match.group(1).strip()
+            # Отсекаем заголовок следующего раздела, если он "прилип" к значению
+            if 'Товары в запросе' in value:
+                value = value.split('Товары в запросе')[0].strip()
+            # Если осталось только "—", считаем поле пустым
+            if value == '—':
+                value = ''
+            result['bin_company'] = value
+        
+        # === Парсинг товаров ===
+        # Паттерн ищет блок: URL -> Артикул -> Название (ID) -> Цена
+        product_pattern = re.compile(
+            r'https://matest\.kz/catalog/[^\n]+\n\s*'      # URL товара
+            r'Артикул:\s*(\S+)\s*\n?\s*'                    # Артикул: XXX
+            r'(.+?)\s*\(ID:(\d+)\)\s*\n?\s*'                # Название (ID:XXX)
+            r'((?:[\d\s\xa0]+тенге|Цена по запросу))',      # Цена или "по запросу"
+            re.IGNORECASE | re.DOTALL
+        )
+        
+        for match in product_pattern.finditer(text):
+            article = match.group(1).strip()
+            name = match.group(2).strip()
+            product_id = int(match.group(3))
+            price_str = match.group(4).strip()
+            
+            # Парсинг цены
+            if 'Цена по запросу' in price_str:
+                price = 0
+            else:
+                # Удаляем всё, кроме цифр (пробелы, \xa0, "тенге")
+                price_clean = re.sub(r'[^\d]', '', price_str)
+                price = int(price_clean) if price_clean else 0
+            
+            result['products'].append({
+                'product': name,
+                'article': article,
+                'product_id': product_id,
+                'price': price
+            })
+        
+        return result
+
+    def _parse_request_price_labset(self, text: str) -> dict[str, Any]:
+        """
+        Парсит строку запроса КПО и извлекает данные клиента и товары.
+        """
+        result = {
+            'raw_text': text.strip(),
+            'name': '',
+            'phone': '',
+            'email': '',
+            'bin_company': '',
+            'products': []
+        }
+        
+        # === Парсинг контактных данных ===
+        # Имя: всё от "Имя:" до следующего поля (Email или Телефон)
+        name_match = re.search(r'Имя:\s*(.+?)(?=\s+(?:Email|Телефон):|$)', text)
+        if name_match:
+            result['name'] = name_match.group(1).strip()
+        
+        # Email
+        email_match = re.search(r'Email:\s*([^\s]+)', text)
+        if email_match:
+            result['email'] = email_match.group(1).strip()
+        
+        # Телефон
+        phone_match = re.search(r'Телефон:\s*(\d+)', text)
+        if phone_match:
+            result['phone'] = phone_match.group(1).strip()
+        
+        # === Парсинг товаров ===
+        # Выделяем секцию товаров: от "следующие позиции:" до "Итого"
+        products_section_match = re.search(
+            r'В запросе КП указаны следующие позиции:\s*(.+?)\s*Итого',
+            text,
+            re.DOTALL | re.IGNORECASE
+        )
+        
+        if products_section_match:
+            products_section = products_section_match.group(1)
+            
+            # 🔧 УДАЛЯЕМ заголовок таблицы, чтобы он не попал в первый товар
+            products_section = re.sub(
+                r'Продукты\s+Цена\s+Кол-во\.?\s*Промежуточный итог\s*',
+                '',
+                products_section,
+                flags=re.IGNORECASE
+            )
+            
+            # 🔧 ПАТТЕРН ТОВАРА:
+            # (.+?) — название (теперь может содержать скобки!)
+            # \(ID:\s*(\d+)\s*\) — якорь ID, по которому отсекаем название
+            product_pattern = re.compile(
+                r'(.+?)\s*\(ID:\s*(\d+)\s*\)\s+'  # Название и ID
+                r'(\d+(?:[\s\xa0]*[.,]?\d+)?)\s+'  # Цена
+                r'(\d+)\s+'                         # Количество
+                r'(\d+(?:[\s\xa0]*[.,]?\d+)?)',     # Промежуточный итог
+                re.IGNORECASE
+            )
+            
+            for match in product_pattern.finditer(products_section):
+                name = match.group(1).strip()
+                product_id = int(match.group(2))
+                
+                # Парсинг цены
+                price_str = match.group(3).replace('\xa0', '').replace(' ', '')
+                price_str = price_str.replace(',', '.')
+                try:
+                    price = float(price_str) if price_str else 0
+                except ValueError:
+                    price = 0
+                
+                # Количество
+                try:
+                    quantity = int(match.group(4))
+                except ValueError:
+                    quantity = 0
+                
+                result['products'].append({
+                    'product': name,
+                    'product_id': product_id,
+                    'price': price,
+                    'quantity': quantity
+                })
+        
+        return result
 
 
 # Фабрика для создания сервиса

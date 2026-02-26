@@ -223,7 +223,6 @@ class RabbitMQConsumer:
 
             payload = json.loads(message.body.decode("utf-8"))
             payload["message_id"] = message_id
-
             if await self.handler.handle_message(payload):
                 await message.ack()
                 logger.info(f"Сообщение {message_id} успешно обработано")

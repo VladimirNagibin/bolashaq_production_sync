@@ -17,6 +17,7 @@ site_requests_router = APIRouter(prefix="/site_request")
     description="Request handler from the website.",
 )  # type: ignore
 async def site_request(
+    type_event: str,
     phone: str,
     product_id: int,
     product_name: str | None = None,
