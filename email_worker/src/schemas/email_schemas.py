@@ -8,29 +8,44 @@ from pydantic import BaseModel
 class TypeEvent(StrEnum):
     """
     Типы событий:
-    REQUEST_PRICE - Запрос цены позиции
-    BUY_ONE_CLICK - Покупка в один клик
-    ORDER - Заказ из корзины
+    REQUEST_PRICE - Запрос КП Матест
+    BUY_ONE_CLICK - Покупка в один клик Матест
+    ORDER - Заказ из корзины Матест
+    REQUEST_PRICE_LABSET - Запрос цен от Лабсет
     """
 
     REQUEST_PRICE = auto()
     BUY_ONE_CLICK = auto()
     ORDER = auto()
+    REQUEST_PRICE_LABSET = auto()
 
 
 EVENT_ROUTING: dict[str, TypeEvent] = {
-    "Запрос цены на товар": TypeEvent.REQUEST_PRICE,
+    ("Запрос цены на товар", "no-reply@matest.kz"): TypeEvent.REQUEST_PRICE,
+    ("Запрос цены: Matest Казахстан", "sales@matest.kz"): TypeEvent.ORDER,
+    ("Лабсет: новый запрос КП", '"labset.su" <no-reply@labset.su>'): TypeEvent.REQUEST_PRICE_LABSET,
 }
 
 
-class ParsedRequest(BaseModel):  # type: ignore[misc]
+class ParsedProduct(BaseModel):  # type: ignore[misc]
     product: str
-    product_id: int
+    product_id: int | None = None
+    product_code: str | None = None
+    article: str | None = None
+    price: float | None = None
+    quantity: int | None = None
+
+
+class ParsedRequest(BaseModel):  # type: ignore[misc]
+    product: str | None = None
+    product_id: int | None = None
     name: str | None = None
-    phone: str
+    phone: str | None = None
+    email: str | None = None
     bin_company: str | None = None
     comment: str | None = None
     raw_text: str
+    products: list[ParsedProduct] | None = None
 
 
 class EmailMessage(BaseModel):  # type: ignore[misc]

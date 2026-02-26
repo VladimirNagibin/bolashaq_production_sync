@@ -116,7 +116,8 @@ class EmailWorkerService:
             self.email_client.disconnect()
 
     def _get_type_event(self, email_msg: EmailMessage) -> TypeEvent | None:
-        return EVENT_ROUTING.get(email_msg.subject)
+        # logger.info((email_msg.subject, email_msg.sender))
+        return EVENT_ROUTING.get((email_msg.subject, email_msg.sender))
 
     async def run(self) -> None:
         """Запускает основной цикл работы сервиса"""

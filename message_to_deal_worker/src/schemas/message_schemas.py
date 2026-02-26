@@ -4,24 +4,35 @@ from typing import Any
 from pydantic import UUID4, BaseModel, Field, field_validator
 
 
+class ParsedProduct(BaseModel):  # type: ignore[misc]
+    product: str
+    product_id: int | None = None
+    product_code: str | None = None
+    article: str | None = None
+    price: float | None = None
+    quantity: int | None = None
+
+
 class RequestPrice(BaseModel):  # type: ignore[misc]
     """Схема данных запроса цены."""
 
     product: str | None = None
-    product_id: int
+    product_id: int | None = None
     name: str | None = None
-    phone: str
+    phone: str | None = None
+    email: str | None = None
     bin_company: str | None = None
     comment: str | None = None
     raw_text: str | None = None
     message_id: int | None = None
+    products: list[ParsedProduct] | None = None
 
-    @field_validator("phone")  # type: ignore[misc]
-    def validate_phone(cls, v: str) -> str:
-        """Валидация номера телефона."""
-        if not v or len(v.strip()) < 3:
-            raise ValueError("Номер телефона не может быть пустым")
-        return v.strip()
+    # @field_validator("phone")  # type: ignore[misc]
+    # def validate_phone(cls, v: str) -> str:
+    #     """Валидация номера телефона."""
+    #     if not v or len(v.strip()) < 3:
+    #         raise ValueError("Номер телефона не может быть пустым")
+    #     return v.strip()
 
 
 class Email(BaseModel):  # type: ignore[misc]

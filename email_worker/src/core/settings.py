@@ -11,7 +11,7 @@ class Settings(BaseSettings):  # type: ignore
     EMAIL_USERNAME: str = "username"
     EMAIL_PASSWORD: str = "password"
     EMAIL_FOLDER: str = "INBOX"
-    TARGET_SENDER_EMAIL: str = "sender_email"
+    TARGET_SENDER_EMAIL: str = "sender_emails"
     EMAIL_CHECK_INTERVAL: int = 300  # seconds
 
     # RabbitMQ settings
