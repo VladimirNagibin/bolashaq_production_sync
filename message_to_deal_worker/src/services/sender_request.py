@@ -80,8 +80,8 @@ class SiteRequestService:
 
             logger.info(f"Отправка запроса к {url} с параметрами: {params}")
 
-            async with self.session.get(
-                url, params=params, headers=headers
+            async with self.session.post(
+                url, json=params, headers=headers
             ) as response:
                 response_text = await response.text()
 

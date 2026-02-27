@@ -1,22 +1,42 @@
+"""
+Обработчик запросов с сайта для интеграции с Bitrix24.
+
+Модуль обеспечивает создание сделок, контактов и компаний
+на основе входящих запросов с сайта.
+"""
+
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
 from fastapi import HTTPException, status
 
+from api.v1.schemas.site_request import SiteRequestPayload
 from core.logger import logger
 from core.settings import settings
 from schemas.deal_schemas import DealUpdate
-from schemas.enums import EntityTypeAbbr, StageSemanticEnum
+from schemas.enums import EntityTypeAbbr, StageSemanticEnum, TypeEvent
 from schemas.product_schemas import ListProductEntity, ProductEntityCreate
 
-from ..exceptions import BitrixApiError
+from ..exceptions import (
+    BitrixApiError,
+    SiteRequestProcessingError,
+    ManagerNotFoundError,
+    DealCreationError,
+    ContactCreationError,
+    ProductNotFoundError,
+)
 
 if TYPE_CHECKING:
     from .entities_bitrix_services import EntitiesBitrixClient
 
 DEFAULT_DEAL_TITLE = "Запрос цены с сайта"
-TAX_RATE_DEFAULT = 16
+DEFAULT_TAX_RATE = 16
 SITE_SOURCE = "WEB"
+EVENT_SOURCE_MAPPING = {
+    "order": "matest",
+    "request_price": "matest",
+    "request_price_labset": "labset",
+}
 
 
 class SiteRequestHandler:
@@ -24,10 +44,14 @@ class SiteRequestHandler:
     Обработчик событий с сайта для создания сделок в Bitrix24.
 
     Обеспечивает:
-    - Поиск/создание контактов и компаний по телефону
+    - Поиск/создание контактов и компаний по телефону/email
     - Распределение сделок между менеджерами по загрузке
     - Добавление товаров к сделкам
     - Обработку ошибок и логирование
+
+    Attributes:
+        entities_bitrix_client: Клиент для работы с сущностями Bitrix24
+        managers: Множество ID доступных менеджеров
     """
 
     def __init__(
@@ -44,7 +68,7 @@ class SiteRequestHandler:
         self.entities_bitrix_client = entities_bitrix_client
         self.managers = managers or settings.MANAGERS
 
-    async def handle_request_price(
+    async def handle_request_price_(
         self,
         phone: str,
         product_id: int,
@@ -81,7 +105,11 @@ class SiteRequestHandler:
         )
         try:
             deal_id = await self._create_deal(
-                phone, name, bin_company, comment, message_id
+                phone=phone,
+                name=name,
+                bin_company=bin_company,
+                comment=comment,
+                message_id=message_id,
             )
             if not deal_id:
                 raise HTTPException(
@@ -150,19 +178,106 @@ class SiteRequestHandler:
                 detail="Внутренняя ошибка при обработке запроса",
             )
 
+
+    async def handle_request_price(
+        self, payload: SiteRequestPayload
+    ) -> dict[str, Any]:
+        """
+        Обрабатывает запрос цены с сайта.
+
+        Args:
+            payload: Данные запроса
+ 
+        Returns:
+            dict: Результат обработки с деталями операции
+
+        Raises:
+            HTTPException: При критических ошибках обработки
+        """
+        logger.info(
+            "Обработка запроса цены",
+            extra={
+                "type_event": payload.type_event,
+                "phone": payload.phone,
+                "contact_name": payload.name,
+            },
+        )
+        try:
+            deal_id = await self._create_deal(
+                payload.phone,
+                payload.email,
+                payload.name,
+                payload.bin_company,
+                payload.comment,
+                payload.message_id,
+                payload.type_event,
+            )
+            if not deal_id:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Не удалось создать сделку",
+                )
+
+            result: dict[str, Any] = {
+                "success": True,
+                "deal_id": deal_id,
+                "message": "Запрос успешно обработан",
+            }
+            
+            await self._add_products_to_deal(deal_id, payload, result)
+
+            logger.info(
+                "Запрос цены успешно обработан",
+                extra={"deal_id": deal_id, "result": result},
+            )
+            if await self._add_timeline_comment_to_deal(
+                deal_id,
+                self._get_complex_comment(
+                    payload.product if payload.product else "",
+                    payload.comment,
+                    payload.bin_company,
+                    payload,
+                ),
+            ):
+                result["timeline_comment_added"] = True
+            else:
+                result["timeline_comment_added"] = False
+
+            return result
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(
+                "Критическая ошибка при обработке запроса цены",
+                extra={
+                    "phone": payload.type_event,
+                    "product_id": payload.name if payload.name else "not found",
+                    "error": str(e),
+                },
+                exc_info=True,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Внутренняя ошибка при обработке запроса",
+            )
+
     async def _create_deal(
         self,
-        phone: str,
+        phone: str | None = None,
+        email: str | None = None,
         name: str | None = None,
         bin_company: str | None = None,
         comment: str | None = None,
         message_id: str | None = None,
+        type_event: str | None = None,
     ) -> int | None:
         """
         Создает сделку в Bitrix24.
 
         Args:
             phone: Телефон клиента
+            email: Email клиента
             name: Имя клиента
             bin_company: БИН/Компания клиента
             comment: Комментарий
@@ -174,7 +289,7 @@ class SiteRequestHandler:
         try:
             # TODO: if bin_company not None => search company.
             # if find => check phone and added if need else next
-            result_entity = await self._get_entity_by_phone(phone, name)
+            result_entity = await self._get_entity_by_phone_email(phone, name)
             entity_type, entity_id, assigned_id = result_entity
 
             if not entity_id or not assigned_id:
@@ -182,8 +297,9 @@ class SiteRequestHandler:
                 return None
 
             # Формируем заголовок сделки
+            source_site = EVENT_SOURCE_MAPPING.get(type_event, "")
             title = (
-                f"{DEFAULT_DEAL_TITLE} #{message_id}"
+                f"{DEFAULT_DEAL_TITLE} {source_site} #{message_id}"
                 if message_id
                 else DEFAULT_DEAL_TITLE
             )
@@ -226,8 +342,11 @@ class SiteRequestHandler:
             )
             return None
 
-    async def _get_entity_by_phone(
-        self, phone: str, name: str | None = None
+    async def _get_entity_by_phone_email(
+        self,
+        phone: str | None = None,
+        name: str | None = None,
+        email: str | None = None,
     ) -> tuple[str, int, int]:
         """
         Находит или создает контакт/компанию по телефону.
@@ -239,30 +358,22 @@ class SiteRequestHandler:
         Returns:
             tuple: (тип_сущности, id_сущности, id_менеджера)
         """
-        method = "crm.duplicate.findbycomm"
-        params: dict[str, Any] = {"type": "PHONE", "values": [phone]}
         fail_result: tuple[str, int, int] = ("", 0, 0)
         try:
             bitrix_client = (
                 self.entities_bitrix_client.deal_bitrix_client.bitrix_client
             )
-            result = await bitrix_client.call_api(method, params)
-            entities = result.get("result", {})
+            if phone:
+                params: dict[str, Any] = {"type": "PHONE", "values": [phone.split()]}
+                result = await self._get_entity(params)
+                if result:
+                    return result
+            if email:    
+                params: dict[str, Any] = {"type": "EMAIL", "values": [email.split()]}
 
-            if isinstance(entities, dict):
-                contact_ids = entities.get("CONTACT", [])
-                if contact_ids:
-                    contact_id = int(contact_ids[0])
-                    assigned_id = await self._get_assigned_contact(contact_id)
-                    if assigned_id:
-                        return "contact_id", contact_id, assigned_id
-
-                company_ids = entities.get("COMPANY", [])
-                if company_ids:
-                    company_id = int(company_ids[0])
-                    assigned_id = await self._get_assigned_company(company_id)
-                    if assigned_id:
-                        return "company_id", company_id, assigned_id
+                result = await self._get_entity(params)
+                if result:
+                    return result
 
             assigned_id = await self._get_free_manager()
             if not assigned_id:
@@ -274,9 +385,12 @@ class SiteRequestHandler:
                 "fields": {
                     "NAME": name,
                     "ASSIGNED_BY_ID": assigned_id,
-                    "PHONE": [{"VALUE": phone, "VALUE_TYPE": "WORK"}],
                 }
             }
+            if phone:
+                params_contact["fields"]["PHONE"] = [{"VALUE": phone, "VALUE_TYPE": "WORK"}]
+            if email:
+                params_contact["fields"]["EMAIL"] = [{"VALUE": email, "VALUE_TYPE": "WORK"}]
 
             result = await bitrix_client.call_api(method, params_contact)
             contact_id = result.get("result")  # type: ignore[assignment]
@@ -299,6 +413,47 @@ class SiteRequestHandler:
                 exc_info=True,
             )
             return fail_result
+    
+    async def _get_entity(
+        self,
+        params: str,
+    ) -> tuple[str, int, int] | None:
+        try:
+            bitrix_client = (
+                self.entities_bitrix_client.deal_bitrix_client.bitrix_client
+            )
+            method = "crm.duplicate.findbycomm"
+            result = await bitrix_client.call_api(method, params)
+            entities = result.get("result", {})
+
+            if isinstance(entities, dict):
+                contact_ids = entities.get("CONTACT", [])
+                if contact_ids:
+                    contact_id = int(contact_ids[0])
+                    assigned_id = await self._get_assigned_contact(contact_id)
+                    if assigned_id:
+                        return "contact_id", contact_id, assigned_id
+
+                company_ids = entities.get("COMPANY", [])
+                if company_ids:
+                    company_id = int(company_ids[0])
+                    assigned_id = await self._get_assigned_company(company_id)
+                    if assigned_id:
+                        return "company_id", company_id, assigned_id
+            return None
+        except BitrixApiError as e:
+            logger.error(
+                "Ошибка Bitrix API при поиске сущности",
+                extra={"error": str(e), "params": params},
+            )
+            return None
+        except Exception as e:
+            logger.error(
+                "Неожиданная ошибка при поиске/создании сущности",
+                extra={"error": str(e), "params": params},
+                exc_info=True,
+            )
+            return None                        
 
     async def _get_free_manager(self) -> int:
         """
@@ -412,6 +567,74 @@ class SiteRequestHandler:
                 extra={"company_id": company_id, "error": str(e)},
             )
             return 0
+
+    async def _add_products_to_deal(
+        self, deal_id: int, payload: SiteRequestPayload, result: dict[str, Any]
+    ) -> None:
+        if payload.type_event == TypeEvent.REQUEST_PRICE:
+            product_added = await self._add_product_to_deal(
+                deal_id, payload.product_id, product_name=payload.product
+            )
+            if product_added:
+                result["product_added"] = True
+                result["product_id"] = payload.product_id
+            else:
+                result["product_added"] = False
+                result["warning"] = "Не удалось добавить товар к сделке"
+
+            if not product_added and payload.product:
+                comment_added = await self._add_deal_comment(
+                    deal_id,
+                    payload.product,
+                    payload.comment,
+                    payload.bin_company,
+                )
+                if comment_added:
+                    result["product_name_added"] = True
+        elif payload.type_event in (TypeEvent.ORDER, TypeEvent.REQUEST_PRICE_LABSET):
+            products = payload.products
+            if not products:
+                result["warning"] = "Не указаны това"
+                return
+            product_entities: list[ProductEntityCreate] = []
+            for product in products:
+                if payload.type_event == TypeEvent.ORDER:
+                    bitrix_product = await self._find_product_by_xml_id(
+                        str(product.product_id)
+                    )
+                elif payload.type_event == TypeEvent.REQUEST_PRICE_LABSET:
+                    bitrix_product = None
+                    # TODO: реализовать поиск или создание товара при запросе с labset 
+                if not bitrix_product:
+                    logger.warning(
+                        "Товар не найден",
+                        extra={
+                            "product_xml_id": product.product_id,
+                            "deal_id": deal_id,
+                        },
+                    )
+                    continue
+                product_name_ = bitrix_product.get(
+                    "NAME", product.product if product.product else "Товар"
+                )
+                product_data: dict[str, Any] = {
+                    "owner_id": deal_id,
+                    "owner_type": EntityTypeAbbr.DEAL,
+                    "product_id": bitrix_product["ID"],
+                    "product_name": product_name_,
+                    "quantity": product.quantity,
+                    "price": product.price,
+                    "tax_included": True,
+                    "tax_rate": DEFAULT_TAX_RATE,
+                }
+                # if discount is not None:
+                #     product_data["discount_sum"] = discount
+                product_entities.append(ProductEntityCreate(**product_data))
+    
+            result = await self._add_product_to_deal_internal(
+                deal_id=deal_id, product_entities=product_entities
+            )
+
 
     async def _add_product_to_deal(
         self,
@@ -546,11 +769,12 @@ class SiteRequestHandler:
     async def _add_product_to_deal_internal(
         self,
         deal_id: int,
-        product_id: int,
-        product_name: str,
+        product_id: int | None = None,
+        product_name: str | None = None,
         quantity: int = 0,
         price: float = 0,
         discount: float | None = None,
+        product_entities: list[ProductEntityCreate] | None = None
     ) -> bool:
         """
         Внутренний метод добавления товара к сделке.
@@ -567,22 +791,27 @@ class SiteRequestHandler:
             bool: True если операция успешна
         """
         try:
-            product_data: dict[str, Any] = {
-                "owner_id": deal_id,
-                "owner_type": EntityTypeAbbr.DEAL,
-                "product_id": product_id,
-                "product_name": product_name,
-                "quantity": quantity,
-                "price": price,
-                "tax_included": True,
-                "tax_rate": TAX_RATE_DEFAULT,
-            }
-            if discount is not None:
-                product_data["discount_sum"] = discount
+            if product_entities:
+                products = ListProductEntity(
+                    result=product_entities
+                )   
+            else:
+                product_data: dict[str, Any] = {
+                    "owner_id": deal_id,
+                    "owner_type": EntityTypeAbbr.DEAL,
+                    "product_id": product_id,
+                    "product_name": product_name,
+                    "quantity": quantity,
+                    "price": price,
+                    "tax_included": True,
+                    "tax_rate": DEFAULT_TAX_RATE,
+                }
+                if discount is not None:
+                    product_data["discount_sum"] = discount
 
-            products = ListProductEntity(
-                result=[ProductEntityCreate(**product_data)]
-            )
+                products = ListProductEntity(
+                    result=[ProductEntityCreate(**product_data)]
+                )
             result = await self._set_product_rows(
                 owner_id=deal_id,
                 owner_type=EntityTypeAbbr.DEAL,
@@ -737,16 +966,18 @@ class SiteRequestHandler:
 
     def _get_complex_comment(
         self,
-        product_name: str,
+        product_name: str | None = None,
         comment: str | None = None,
         bin_company: str | None = None,
+        payload: SiteRequestPayload | None = None,
     ) -> str:
         comments: list[str] = []
-        if bin_company:
-            comments.append(f"БИН/компания: {bin_company}")
-        if comment:
-            comments.append(comment)
-        comments.append(f"Товар: {product_name}")
+        if payload and payload.type_event == TypeEvent.REQUEST_PRICE:
+            if bin_company:
+                comments.append(f"БИН/компания: {bin_company}")
+            if comment:
+                comments.append(comment)
+            comments.append(f"Товар: {product_name}")
         return "\n".join(comments)
 
     async def _add_timeline_comment_to_deal(
