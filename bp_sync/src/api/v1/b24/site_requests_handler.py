@@ -15,52 +15,6 @@ from ..deps import verify_api_key
 site_requests_router = APIRouter(prefix="/site_request")
 
 
-@site_requests_router.get(
-    "/site-request-handler",
-    summary="Site request handler",
-    description="Request handler from the website.",
-)  # type: ignore
-async def site_request_handler(
-    type_event: str,
-    phone: str | None = None,
-    email: str | None = None,
-    product_id: int | None = None,
-    product_name: str | None = None,
-    name: str | None = None,
-    bin_company: str | None = None,
-    comment: str | None = None,
-    message_id: str | None = None,
-    products: list[dict[str, Any]] | None = None,
-    entity_client: EntitiesBitrixClient = Depends(get_entity_bitrix_client),
-    verify_api_key: str = Depends(verify_api_key),
-) -> JSONResponse:
-    logger.info(
-        f"{type_event}::{phone}::{email}::{product_id}::{product_name}::{name}::{bin_company}::{comment}::{message_id}::{products}"
-    )
-    try:
-        result = await entity_client.handle_request_price_(
-            phone,
-            product_id,
-            product_name,
-            name,
-            bin_company,
-            comment,
-            message_id,
-        )
-        return JSONResponse(
-            status_code=status.HTTP_200_OK,
-            content=result,
-        )
-    except HTTPException:
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={
-                "success": False,
-                "message": "Deal not created",
-            },
-        )
-
-
 @site_requests_router.post(
     "/site-request",
     summary="Site request handler",
@@ -80,9 +34,7 @@ async def site_request(
     )
     
     try:
-        result = await entity_client.handle_request_price(
-            payload
-        )
+        result = await entity_client.handle_request_price(payload)
         return JSONResponse(
             status_code=status.HTTP_200_OK,
             content=result,

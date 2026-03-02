@@ -29,7 +29,7 @@ class FileImportService:
     ):
         self.supplier_product_repo = supplier_product_repo
         self.product_client = product_client
-        self.open_al_service = OpenAIService()
+        self.open_ai_service = OpenAIService()
 
     async def import_file(
         self,
@@ -87,11 +87,13 @@ class FileImportService:
 
             # 3.1 TODO: Если опция "Обновить все", тогда ищем отсутствующие
             # в обновлениях и деактивируем.
+            # Получить все позиции по поставщику для порлого сравнения
 
             # 4. Подготовка пакетов для создания/обновления
             products_to_create: list[SupplierProductCreate] = []
             products_to_update: list[SupplierProductUpdate] = []
             bitrix_updates: list[ProductCreate | ProductUpdate] = []
+            # TODO: список позиций на обработку - дополнительно
 
             # 5. Обработка данных
             for row in mapped_rows:
@@ -624,7 +626,7 @@ class FileImportService:
         # TODO: Вычисляем раздел, обрабатываем описание и т.д.
         if source == SourcesProductEnum.LABSET:
             if description := data.get("description"):
-                detail = self.open_al_service.parse_product_with_deepseek(
+                detail = self.open_ai_service.parse_product_with_deepseek(
                     description,
                     name=data.get("name", ""),
                     article=data.get("article"),

@@ -29,26 +29,6 @@ class EntitiesBitrixClient:
             self._site_request_handler = SiteRequestHandler(self)
         return self._site_request_handler
 
-    async def handle_request_price_(
-        self,
-        phone: str,
-        product_id: int,
-        product_name: str | None = None,
-        name: str | None = None,
-        bin_company: str | None = None,
-        comment: str | None = None,
-        message_id: str | None = None,
-    ) -> dict[str, Any]:
-        return await self.site_request_handler.handle_request_price_(
-            phone,
-            product_id,
-            product_name,
-            name,
-            bin_company,
-            comment,
-            message_id,
-        )
-
     async def handle_request_price(
         self, payload: SiteRequestPayload
     ) -> dict[str, Any]:
