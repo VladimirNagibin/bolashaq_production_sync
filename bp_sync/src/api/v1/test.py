@@ -10,6 +10,7 @@ from services.deals.deal_bitrix_services import DealBitrixClient
 from services.deals.deal_services import DealClient
 from services.dependencies.dependencies import (
     get_deal_service,
+    get_lead_service,
     get_product_service,
 )
 from services.dependencies.dependencies_bitrix_entity import (
@@ -18,6 +19,7 @@ from services.dependencies.dependencies_bitrix_entity import (
     get_product_bitrix_client,
 )
 from services.dependencies.dependencies_repo import request_context
+from services.leads.lead_services import LeadClient
 from services.products.product_bitrix_services import ProductBitrixClient
 from services.products.product_services import ProductClient
 
@@ -44,6 +46,7 @@ async def check(
     ),
     deal_bitrix_client: DealBitrixClient = Depends(get_deal_bitrix_client),
     deal_client: DealClient = Depends(get_deal_service),
+    lead_client: LeadClient = Depends(get_lead_service),
     product_bitrix_client: ProductBitrixClient = Depends(
         get_product_bitrix_client
     ),
@@ -53,7 +56,8 @@ async def check(
     try:
         # result_ = ""
         # await deal_client.handle_deal(257)
-        await product_client.load_products_entity_to_bitrix(257)
+        # await product_client.load_products_entity_to_bitrix(257)
+        await lead_client.import_from_bitrix(entity_id=515)
         # for external_id in range(2001, 2148, 2):
         #     product_update = ProductUpdate(
         #         external_id=external_id, brend=FieldValue(value="93")

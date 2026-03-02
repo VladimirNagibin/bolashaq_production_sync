@@ -207,6 +207,7 @@ FIELDS_BY_TYPE: dict[str, Any] = {
         "UF_CRM_1763479557",  # status_deal
         # lead
         "STATUS_SEMANTIC_ID",  # "status_semantic_id",
+        "UF_CRM_1772448257",  # failure_reason
     ],
     "list": [
         # deal
@@ -378,6 +379,7 @@ FIELDS_BY_TYPE_ALT: dict[str, Any] = {
         "status_deal",
         # lead
         "status_semantic_id",
+        "failure_reason",
     ],
     "list": [
         # deal

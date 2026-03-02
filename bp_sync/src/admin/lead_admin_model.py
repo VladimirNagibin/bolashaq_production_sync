@@ -127,6 +127,7 @@ class LeadAdmin(
         "city": "Город",
         "is_deleted_in_bitrix": "Удален в Битрикс",
         "default_manager": "Менеджер по умолчанию",
+        "failure_reason": "Причина провала лида",
     }
 
     column_sortable_list = [

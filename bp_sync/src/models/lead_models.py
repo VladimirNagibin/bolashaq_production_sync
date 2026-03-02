@@ -5,7 +5,7 @@ from sqlalchemy import CheckConstraint, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import ENUM as PgEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from schemas.enums import EntityType, StageSemanticEnum
+from schemas.enums import EntityType, LeadFailureReasonEnum, StageSemanticEnum
 from schemas.lead_schemas import LeadCreate
 
 from .bases import CommunicationIntIdEntity
@@ -94,6 +94,15 @@ class Lead(CommunicationIntIdEntity):
         ),
         comment="Семантика стадии",
     )  # STATUS_SEMANTIC_ID : Статусы стадии лида
+
+    failure_reason: Mapped[LeadFailureReasonEnum | None] = mapped_column(
+        PgEnum(
+            LeadFailureReasonEnum,
+            name="lead_failure_enum",
+            create_type=False,
+        ),
+        comment="Причина провала лида",
+    )  # UF_CRM_1772448257 : Причина провала лида
 
     # Связи с другими сущностями
     deals: Mapped[list["Deal"]] = relationship(
