@@ -1,16 +1,14 @@
-from typing import Any
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 
 from core.logger import logger
-from ..schemas.site_request import SiteRequestPayload
 from services.dependencies.dependencies_bitrix_entity import (
     get_entity_bitrix_client,
 )
 from services.entities.entities_bitrix_services import EntitiesBitrixClient
 
 from ..deps import verify_api_key
+from ..schemas.site_request import SiteRequestPayload
 
 site_requests_router = APIRouter(prefix="/site_request")
 
@@ -18,7 +16,9 @@ site_requests_router = APIRouter(prefix="/site_request")
 @site_requests_router.post(
     "/site-request",
     summary="Site request handler",
-    description="Process lead/deal creation from website form or parsed email.",
+    description=(
+        "Process lead/deal creation from website form or parsed email."
+    ),
 )  # type: ignore
 async def site_request(
     payload: SiteRequestPayload,  # Данные из JSON-тела запроса
@@ -32,7 +32,7 @@ async def site_request(
         f"has_phone={bool(payload.phone)}, "
         f"products_count={len(payload.products or [])}"
     )
-    
+
     try:
         result = await entity_client.handle_request_price(payload)
         return JSONResponse(

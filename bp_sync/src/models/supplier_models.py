@@ -169,12 +169,12 @@ class SupplierProduct(Base):  # type: ignore[misc]
         default=False,
         comment="Выгружать в CRM",
     )
-    need_to_proceed: Mapped[bool] = mapped_column(
+    needs_review: Mapped[bool] = mapped_column(
         Boolean,
         server_default=true(),
         default=True,
         comment="Требует ручной обработки",
-    )   
+    )
     internal_section_id: Mapped[int | None] = mapped_column(
         Integer, comment="Раздел в CRM"
     )

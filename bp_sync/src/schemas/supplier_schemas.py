@@ -126,7 +126,7 @@ class SupplierProductCreate(SupplierProductBase):
     source: SourcesProductEnum
     is_validated: bool = False
     should_export_to_crm: bool = False
-    need_to_proceed: bool = True
+    needs_review: bool = True
 
 
 class SupplierProductUpdate(SupplierProductBase):
@@ -137,7 +137,7 @@ class SupplierProductUpdate(SupplierProductBase):
     source: SourcesProductEnum | None = None
     is_validated: bool | None = None
     should_export_to_crm: bool | None = None
-    need_to_proceed: bool | None = None
+    needs_review: bool | None = None
 
 
 # ----------------------------------------------------------------------

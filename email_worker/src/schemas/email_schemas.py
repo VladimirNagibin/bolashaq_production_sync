@@ -20,10 +20,13 @@ class TypeEvent(StrEnum):
     REQUEST_PRICE_LABSET = auto()
 
 
-EVENT_ROUTING: dict[str, TypeEvent] = {
+EVENT_ROUTING: dict[tuple[str, str], TypeEvent] = {
     ("Запрос цены на товар", "no-reply@matest.kz"): TypeEvent.REQUEST_PRICE,
     ("Запрос цены: Matest Казахстан", "sales@matest.kz"): TypeEvent.ORDER,
-    ("Лабсет: новый запрос КП", '"labset.su" <no-reply@labset.su>'): TypeEvent.REQUEST_PRICE_LABSET,
+    (
+        "Лабсет: новый запрос КП",
+        '"labset.su" <no-reply@labset.su>',
+    ): TypeEvent.REQUEST_PRICE_LABSET,
 }
 
 

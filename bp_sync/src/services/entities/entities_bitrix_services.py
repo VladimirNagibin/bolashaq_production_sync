@@ -32,6 +32,4 @@ class EntitiesBitrixClient:
     async def handle_request_price(
         self, payload: SiteRequestPayload
     ) -> dict[str, Any]:
-        return await self.site_request_handler.handle_request_price(
-            payload
-        )
+        return await self.site_request_handler.handle_request_price(payload)

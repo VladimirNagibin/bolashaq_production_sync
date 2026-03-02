@@ -17,13 +17,12 @@ from schemas.deal_schemas import DealUpdate
 from schemas.enums import EntityTypeAbbr, StageSemanticEnum, TypeEvent
 from schemas.product_schemas import ListProductEntity, ProductEntityCreate
 
-from ..exceptions import (
+from ..exceptions import (  # ProductNotFoundError,
     BitrixApiError,
-    SiteRequestProcessingError,
-    ManagerNotFoundError,
-    DealCreationError,
     ContactCreationError,
-    ProductNotFoundError,
+    DealCreationError,
+    ManagerNotFoundError,
+    SiteRequestProcessingError,
 )
 
 if TYPE_CHECKING:
@@ -68,7 +67,6 @@ class SiteRequestHandler:
         """
         self._bitrix_client = entities_bitrix_client
         self._managers = managers or settings.MANAGERS
-
 
     async def handle_request_price(
         self, payload: SiteRequestPayload
@@ -278,7 +276,7 @@ class SiteRequestHandler:
             tuple: (тип_сущности, id_сущности, id_менеджера)
         """
         # TODO: Если сущность найдена по телефону, а почта есть и не прописана,
-        # тогда добавить. Аналогично наоборот. 
+        # тогда добавить. Аналогично наоборот.
 
         # Поиск по телефону
         if phone:
@@ -293,16 +291,22 @@ class SiteRequestHandler:
                 return result
 
         # Создание нового контакта
-        return await self._create_new_contact(phone=phone, email=email, name=name)
+        return await self._create_new_contact(
+            phone=phone, email=email, name=name
+        )
 
-    async def _search_entity_by_phone(self, phone: str) -> tuple[str, int, int] | None:
+    async def _search_entity_by_phone(
+        self, phone: str
+    ) -> tuple[str, int, int] | None:
         """Ищет сущность по номеру телефона."""
         return await self._search_entity_by_communication(
             comm_type="PHONE",
             value=phone,
         )
 
-    async def _search_entity_by_email(self, email: str) -> tuple[str, int, int] | None:
+    async def _search_entity_by_email(
+        self, email: str
+    ) -> tuple[str, int, int] | None:
         """Ищет сущность по email."""
         return await self._search_entity_by_communication(
             comm_type="EMAIL",
@@ -338,10 +342,14 @@ class SiteRequestHandler:
                 return None
 
             # Приоритет: контакт -> компания
-            if contact_result := await self._extract_contact_from_search(entities):
+            if contact_result := await self._extract_contact_from_search(
+                entities
+            ):
                 return contact_result
 
-            if company_result := await self._extract_company_from_search(entities):
+            if company_result := await self._extract_company_from_search(
+                entities
+            ):
                 return company_result
 
             return None
@@ -349,13 +357,21 @@ class SiteRequestHandler:
         except BitrixApiError as e:
             logger.error(
                 "Ошибка при поиске сущности",
-                extra={"comm_type": comm_type, "value": value, "error": str(e)},
+                extra={
+                    "comm_type": comm_type,
+                    "value": value,
+                    "error": str(e),
+                },
             )
             return None
         except Exception as e:
             logger.error(
                 "Неожиданная ошибка при поиске сущности",
-                extra={"comm_type": comm_type, "value": value, "error": str(e)},
+                extra={
+                    "comm_type": comm_type,
+                    "value": value,
+                    "error": str(e),
+                },
                 exc_info=True,
             )
             return None
@@ -417,16 +433,20 @@ class SiteRequestHandler:
         try:
             manager_id = await self._get_available_manager()
 
-            contact_fields = {
+            contact_fields: dict[str, Any] = {
                 "NAME": name,
                 "ASSIGNED_BY_ID": manager_id,
             }
 
             if phone:
-                contact_fields["PHONE"] = [{"VALUE": phone, "VALUE_TYPE": "WORK"}]
+                contact_fields["PHONE"] = [
+                    {"VALUE": phone, "VALUE_TYPE": "WORK"}
+                ]
 
             if email:
-                contact_fields["EMAIL"] = [{"VALUE": email, "VALUE_TYPE": "WORK"}]
+                contact_fields["EMAIL"] = [
+                    {"VALUE": email, "VALUE_TYPE": "WORK"}
+                ]
 
             bitrix_client = self._get_bitrix_client()
             response = await bitrix_client.call_api(
@@ -493,8 +513,9 @@ class SiteRequestHandler:
                 )
 
             # Выбираем менеджера с минимальной загрузкой
-            manager_id = min(manager_loads, key=manager_loads.get)
-            load = manager_loads[manager_id]
+            # manager_id = min(manager_loads, key=manager_loads.get)
+            manager_id, load = min(manager_loads.items(), key=lambda x: x[1])
+            # load = manager_loads[manager_id]
 
             logger.info(
                 "Выбран менеджер с минимальной загрузкой",
@@ -526,7 +547,7 @@ class SiteRequestHandler:
         Returns:
             dict: Маппинг ID менеджера -> количество сделок
         """
-        filter_params = {
+        filter_params: dict[str, Any] = {
             "STAGE_SEMANTIC_ID": StageSemanticEnum.PROSPECTIVE.value,
             "ASSIGNED_BY_ID": list(self._managers),
         }
@@ -601,14 +622,19 @@ class SiteRequestHandler:
         """
         if payload.type_event == TypeEvent.REQUEST_PRICE:
             await self._add_single_product(deal_id, payload, result)
-        elif payload.type_event in (TypeEvent.ORDER, TypeEvent.REQUEST_PRICE_LABSET):
+        elif payload.type_event in (
+            TypeEvent.ORDER,
+            TypeEvent.REQUEST_PRICE_LABSET,
+        ):
             await self._add_multiple_products(deal_id, payload, result)
         else:
             logger.warning(
                 "Неизвестный тип события",
                 extra={"type_event": payload.type_event, "deal_id": deal_id},
             )
-            result["warning"] = f"Неизвестный тип события: {payload.type_event}"
+            result["warning"] = (
+                f"Неизвестный тип события: {payload.type_event}"
+            )
 
     async def _add_single_product(
         self,
@@ -688,7 +714,8 @@ class SiteRequestHandler:
                 )
             elif type_event == TypeEvent.REQUEST_PRICE_LABSET:
                 bitrix_product = None
-                # TODO: реализовать поиск или создание товара при запросе с labset 
+                # TODO: реализовать поиск или создание товара при запросе
+                # с labset
             if not bitrix_product:
                 logger.warning(
                     "Товар не найден, пропускаем",
@@ -846,11 +873,11 @@ class SiteRequestHandler:
 
     def _extract_products_list(
         self,
-        products_data: dict[str, Any] | list,
+        products_data: dict[str, Any] | list[Any],
     ) -> list[dict[str, Any]]:
         """Извлекает список товаров из ответа API."""
         if isinstance(products_data, dict) and "products" in products_data:
-            return products_data["products"]
+            return products_data["products"]  # type: ignore[no-any-return]
         if isinstance(products_data, list):
             return products_data
         return []
@@ -1084,7 +1111,9 @@ class SiteRequestHandler:
                 "phone": payload.phone if payload.phone else "-",
                 "email": payload.email if payload.email else "-",
                 "contact_name": payload.name if payload.name else "-",
-                "message_id": payload.message_id if payload.message_id else "-",
+                "message_id": (
+                    payload.message_id if payload.message_id else "-"
+                ),
             },
         )
 
