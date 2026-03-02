@@ -74,7 +74,7 @@ class WebhookService:
         try:
             # Получаем и парсим данные
             payload = await self._parse_webhook_data(request)
-
+            logger.info(f"{payload}=======")
             # Валидируем вебхук
             validated_payload = await self._validate_webhook(payload)
 
