@@ -6,9 +6,12 @@ from fastapi.responses import JSONResponse
 from core.logger import logger
 from services.base_services.base_service import BaseEntityClient
 from services.dependencies.dependencies import get_lead_service
+from services.dependencies.dependencies_repo import request_context
 from services.leads.lead_services import LeadClient
 
-lead_router = APIRouter(prefix="/entities")
+lead_router = APIRouter(
+    prefix="/entities", dependencies=[Depends(request_context)]
+)
 
 
 @lead_router.post("/handle-webhook/lead")  # type: ignore
