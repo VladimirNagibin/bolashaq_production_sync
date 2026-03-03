@@ -1,6 +1,11 @@
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any, Optional
 
+from sqlalchemy import select, func, text, and_
+from sqlalchemy.dialects.postgresql import array
+from sqlalchemy.sql.expression import literal_column
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from core.logger import logger
 from models.lead_models import Lead as LeadDB
@@ -77,3 +82,54 @@ class LeadRepository(
             "moved_by_id": (self.user_client, UserDB, False),
             "last_activity_by": (self.user_client, UserDB, False),
         }
+
+    async def get_overdue_leads(
+        self,
+        interval: int = 1, 
+    ) -> list[tuple[LeadDB, timedelta]]:
+        """
+        Получает лиды для рассылки ответственному.
+        Просрочка: (Текущее время - moved_time) > interval дней.
+
+        Args:
+        interval: Количество дней просрочки (по умолчанию 1)
+
+        Returns:
+        Список кортежей (LeadDB, idle_time)
+        """
+        status_ids = ["NEW", "IN_PROCESS", "PROCESSED"]
+        interval_expr = func.make_interval(0, 0, 0, interval, 0, 0, 0)
+        cutoff_time = func.now() - interval_expr
+        # Вычисляем срок простоя прямо в запросе
+        idle_duration_expr = (func.now() - LeadDB.moved_time).label("idle_time")
+        status_array = array(status_ids)
+
+        # status_order_expr = func.array_position(
+        #     status_array, LeadDB.status_id
+        # ).label("status_order")
+
+        stmt = (
+            select(
+                LeadDB,
+                idle_duration_expr
+            )
+            .options(
+                joinedload(LeadDB.assigned_user)
+            )
+            .where(
+                LeadDB.moved_time.isnot(None),  # Игнорируем None
+                LeadDB.is_deleted_in_bitrix.is_(False),
+                LeadDB.status_id.in_(status_ids),
+                # Фильтр: moved_time < сейчас - interval день
+                LeadDB.moved_time < cutoff_time  # func.now() - text("interval '1 day'")
+            )
+            .order_by(
+                LeadDB.assigned_by_id.asc(),
+                func.array_position(status_array, LeadDB.status_id).asc().nulls_last(),
+                # LeadDB.status_id.asc(),
+                LeadDB.moved_time.asc(),
+            )
+        )
+
+        result = await self.session.execute(stmt)
+        return result.all()  # type: ignore[return-value]

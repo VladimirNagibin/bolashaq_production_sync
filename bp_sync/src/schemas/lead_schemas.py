@@ -3,7 +3,7 @@ from typing import Any
 
 from pydantic import Field, field_validator
 
-from schemas.enums import StageSemanticEnum
+from schemas.enums import LeadFailureReasonEnum, StageSemanticEnum
 
 from .base_schemas import (
     AddressMixin,
@@ -48,6 +48,10 @@ class BaseLead:
     im: list[CommunicationChannel] | None = Field(None, alias="IM")
     link: list[CommunicationChannel] | None = Field(None, alias="LINK")
 
+    failure_reason: LeadFailureReasonEnum | None = Field(
+        None, alias="UF_CRM_1772448257"
+    )
+
     @field_validator("external_id", mode="before")  # type: ignore[misc]
     @classmethod
     def convert_str_to_int(cls, value: str | int) -> int:
@@ -55,6 +59,18 @@ class BaseLead:
         if isinstance(value, str) and value.isdigit():
             return int(value)
         return value  # type: ignore[return-value]
+
+    @field_validator("failure_reason", mode="before")  # type: ignore[misc]
+    @classmethod
+    def convert_failure_reason(cls, v: Any) -> LeadFailureReasonEnum | None:
+        if not v:
+            return None
+        try:
+            if isinstance(v, str) and v.isdigit():
+                v = int(v)
+            return LeadFailureReasonEnum(v)
+        except (ValueError, TypeError):
+            return None
 
 
 class LeadCreate(

@@ -148,7 +148,6 @@ class BaseBitrixEntityClient(Generic[SchemaTypeCreate, SchemaTypeUpdate]):
                 error=f"{action}_{self.entity_name}_failed",
                 error_description=f"Failed to {action} {self.entity_name}",
             )
-
         return result
 
     @handle_bitrix_errors()

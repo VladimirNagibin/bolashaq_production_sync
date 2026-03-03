@@ -27,7 +27,7 @@ class Settings(BaseSettings):  # type: ignore
     BASE_DIR: str = str(Path(__file__).resolve().parent.parent)
     MAX_RETRIES: int = 3
     RETRY_DELAY_MS: int = 30000
-    
+
     TYPE_EVENTS: str = ""
 
     model_config = SettingsConfigDict(

@@ -336,3 +336,33 @@ class DatabaseException(BaseAppException):
         self.details = details
         self.message = message or "Database exception"
         super().__init__(error_code, self.message)
+
+
+class SiteRequestProcessingError(Exception):
+    """Базовое исключение для ошибок обработки запроса с сайта."""
+
+    pass
+
+
+class ManagerNotFoundError(SiteRequestProcessingError):
+    """Ошибка при отсутствии доступного менеджера."""
+
+    pass
+
+
+class DealCreationError(SiteRequestProcessingError):
+    """Ошибка при создании сделки."""
+
+    pass
+
+
+class ContactCreationError(SiteRequestProcessingError):
+    """Ошибка при создании контакта."""
+
+    pass
+
+
+class ProductNotFoundError(SiteRequestProcessingError):
+    """Ошибка при поиске товара."""
+
+    pass

@@ -49,7 +49,9 @@ class EmailChecker:
         Получает новые письма от целевого отправителя
         """
         emails: list[EmailMessage] = []
-        sender_emails = [email.strip() for email in settings.TARGET_SENDER_EMAIL.split(',')]
+        sender_emails = [
+            email.strip() for email in settings.TARGET_SENDER_EMAIL.split(",")
+        ]
         if not sender_emails:
             logger.warning("No sender emails provided")
             return emails
@@ -60,8 +62,12 @@ class EmailChecker:
                 return emails
             for sender in sender_emails:
                 search_criteria = f'UNSEEN FROM "{sender}"'
-                logger.debug(f"Searching emails with criteria: {search_criteria}")
-                status, messages = self.connection.search(None, search_criteria)
+                logger.debug(
+                    f"Searching emails with criteria: {search_criteria}"
+                )
+                status, messages = self.connection.search(
+                    None, search_criteria
+                )
 
                 if status != "OK":
                     logger.warning("No emails found matching criteria")

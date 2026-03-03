@@ -1,5 +1,7 @@
 from typing import Any
 
+from api.v1.schemas.site_request import SiteRequestPayload
+
 from ..companies.company_bitrix_services import CompanyBitrixClient
 from ..contacts.contact_bitrix_services import ContactBitrixClient
 from ..deals.deal_bitrix_services import DealBitrixClient
@@ -28,21 +30,6 @@ class EntitiesBitrixClient:
         return self._site_request_handler
 
     async def handle_request_price(
-        self,
-        phone: str,
-        product_id: int,
-        product_name: str | None = None,
-        name: str | None = None,
-        bin_company: str | None = None,
-        comment: str | None = None,
-        message_id: str | None = None,
+        self, payload: SiteRequestPayload
     ) -> dict[str, Any]:
-        return await self.site_request_handler.handle_request_price(
-            phone,
-            product_id,
-            product_name,
-            name,
-            bin_company,
-            comment,
-            message_id,
-        )
+        return await self.site_request_handler.handle_request_price(payload)

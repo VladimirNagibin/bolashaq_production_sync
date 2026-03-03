@@ -197,3 +197,30 @@ class SourceKeyField(StrEnum):
 
     EXTERNAL_ID = "external_id"
     CODE = "code"
+
+
+class TypeEvent(StrEnum):
+    """
+    Типы событий:
+    REQUEST_PRICE - Запрос КП Матест
+    BUY_ONE_CLICK - Покупка в один клик Матест
+    ORDER - Заказ из корзины Матест
+    REQUEST_PRICE_LABSET - Запрос цен от Лабсет
+    """
+
+    REQUEST_PRICE = "request_price"
+    BUY_ONE_CLICK = "buy_one_click"
+    ORDER = "order"
+    REQUEST_PRICE_LABSET = "request_price_labset"
+
+
+class LeadFailureReasonEnum(IntEnum):
+    """Причины провала лида."""
+
+    SPAM = 109  # Спам
+    WRONG_CONTACT = 111  # Ошибочное обращение
+    NO_ANSWER = 113  # Недозвон / клиент недоступен
+    INVALID_CONTACT_DATA = 115  # Некорректные контактные данные
+    TEST_LEAD = 117  # Тестовая заявка
+    DUPLICATE = 119  # Дубликат
+    OTHER = 121  # Другое (укажите в комментарии)
