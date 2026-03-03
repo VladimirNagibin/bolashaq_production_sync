@@ -54,10 +54,22 @@ async def check(
 ) -> JSONResponse:
     external_id = 0
     try:
+        from datetime import date
+        # from core.logger import logger
+        lead_ids = await lead_client.bitrix_client.get_lead_ids_for_period(
+            date(2025, 10, 20), date(2026, 3, 4)
+        )
+        for lead_id in lead_ids:
+            # logger.info(f"lead_id: {lead_id}")
+            await lead_client.import_from_bitrix(entity_id=lead_id)
+        # await lead_client.send_overdue_leads_notifications()
+        # leads = await lead_client.repo.get_overdue_leads()
+        # for lead, idle_time in leads:
+        #     logger.info(f"Лид {lead.title} Ответственный {lead.assigned_user.name} Стадия {lead.status_id} лежит без продвижения {idle_time}")
         # result_ = ""
         # await deal_client.handle_deal(257)
         # await product_client.load_products_entity_to_bitrix(257)
-        await lead_client.import_from_bitrix(entity_id=515)
+
         # for external_id in range(2001, 2148, 2):
         #     product_update = ProductUpdate(
         #         external_id=external_id, brend=FieldValue(value="93")
