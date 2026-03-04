@@ -311,15 +311,8 @@ class LeadClient(BaseEntityClient[LeadDB, LeadRepository, LeadBitrixClient]):
         """
         for user_id, message in notifications:
             try:
-                # Временно для отладки
-                debug_user_id = 37
-                await self.bitrix_client.send_message_b24(
-                    debug_user_id, message
-                )
-                logger.info(
-                    f"Notification sent to user {debug_user_id} "
-                    f"(original: {user_id})"
-                )
+                await self.bitrix_client.send_message_b24(user_id, message)
+                logger.info(f"Notification sent to user {user_id} ")
             except Exception as e:
                 logger.error(
                     f"Failed to send notification to user {user_id}: {e}",
