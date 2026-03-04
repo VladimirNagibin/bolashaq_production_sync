@@ -54,14 +54,18 @@ async def check(
 ) -> JSONResponse:
     external_id = 0
     try:
-        from datetime import date
+        from services.scheduler import Scheduler
+        scheduler = Scheduler()
+        await scheduler.initialize()
+        await scheduler.my_scheduled_task()
+        # from datetime import date
         # from core.logger import logger
-        lead_ids = await lead_client.bitrix_client.get_lead_ids_for_period(
-            date(2025, 10, 20), date(2026, 3, 4)
-        )
-        for lead_id in lead_ids:
-            # logger.info(f"lead_id: {lead_id}")
-            await lead_client.import_from_bitrix(entity_id=lead_id)
+        # lead_ids = await lead_client.bitrix_client.get_lead_ids_for_period(
+        #     date(2025, 10, 20), date(2026, 3, 4)
+        # )
+        # for lead_id in lead_ids:
+        #     # logger.info(f"lead_id: {lead_id}")
+        #     await lead_client.import_from_bitrix(entity_id=lead_id)
         # await lead_client.send_overdue_leads_notifications()
         # leads = await lead_client.repo.get_overdue_leads()
         # for lead, idle_time in leads:

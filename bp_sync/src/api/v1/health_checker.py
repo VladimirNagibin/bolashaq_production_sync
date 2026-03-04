@@ -1,9 +1,9 @@
 from fastapi import APIRouter
 
-healht_router = APIRouter()
+health_router = APIRouter()
 
 
-@healht_router.get(
+@health_router.get(
     "/health",
     summary="check health",
     description="Check health.",
