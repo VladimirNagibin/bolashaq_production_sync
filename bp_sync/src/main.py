@@ -28,7 +28,8 @@ from services.leads.lead_services_factory import LeadServiceFactory
 from services.rabbitmq_client import get_rabbitmq
 
 SCHEDULER_JOB_ID = "daily_overdue_leads_notification"
-TIME_TASK = (4,0)
+TIME_TASK = (4, 0)
+
 
 async def _init_rabbitmq() -> None:
     """Инициализация клиента RabbitMQ."""
@@ -51,11 +52,13 @@ async def _shutdown_rabbitmq() -> None:
         logger.exception("Error during RabbitMQ shutdown: %s", e)
 
 
-def _configure_scheduler(scheduler: AsyncIOScheduler, lead_service: LeadServiceFactory) -> None:
+def _configure_scheduler(
+    scheduler: AsyncIOScheduler, lead_service: LeadServiceFactory
+) -> None:
     """Настройка задач планировщика."""
     scheduler.add_job(
         lead_service.send_overdue_leads_notifications,
-        trigger='cron',
+        trigger="cron",
         hour=TIME_TASK[0],
         minute=TIME_TASK[1],
         id=SCHEDULER_JOB_ID,
@@ -68,13 +71,13 @@ def _configure_scheduler(scheduler: AsyncIOScheduler, lead_service: LeadServiceF
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Управление жизненным циклом приложения (запуск и остановка)."""
     logger.info("Application startup initiated...")
-    
+
     # Инициализация ресурсов
     try:
         await init_redis()
         await _init_rabbitmq()
         await initialize_container()
-        
+
         # Инициализация сервисов
         lead_service = LeadServiceFactory()
         await lead_service.initialize()
@@ -84,7 +87,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         _configure_scheduler(scheduler, lead_service)
         scheduler.start()
         logger.info("Scheduler started.")
-        
+
     except Exception as e:
         logger.critical("Fatal error during startup: %s", e)
         # Если произошла ошибка при старте, завершаем работу
@@ -94,7 +97,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Завершение работы
     logger.info("Application shutdown initiated...")
-    
+
     if scheduler.running:
         scheduler.shutdown()
         logger.info("Scheduler stopped.")
@@ -103,7 +106,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await shutdown_container()
     await _shutdown_rabbitmq()
     await close_redis()
-    
+
     logger.info("Application shutdown complete.")
 
 
@@ -142,8 +145,9 @@ def register_exception_handler(app: FastAPI) -> None:
     ):
         """Обработчик для бизнес-исключений приложения."""
         logger.warning(
-            "Business exception occurred: %s (code: %s)", 
-            exc.message, exc.error_code
+            "Business exception occurred: %s (code: %s)",
+            exc.message,
+            exc.error_code,
         )
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -152,8 +156,10 @@ def register_exception_handler(app: FastAPI) -> None:
             ).model_dump(mode="json"),
         )
 
-    @app.exception_handler(Exception)
-    async def generic_exception_handler(request: Request, exc: Exception):
+    @app.exception_handler(Exception)  # type: ignore[misc]
+    async def generic_exception_handler(  # type: ignore
+        request: Request, exc: Exception
+    ):
         """Обработчик для неперехваченных исключений."""
         logger.exception("Unhandled exception: %s", exc)
         return JSONResponse(
@@ -181,7 +187,9 @@ def create_app() -> FastAPI:
 
 def start_server() -> None:
     """Точка входа для запуска Uvicorn сервера."""
-    logger.info("Starting server on %s:%s", settings.APP_HOST, settings.APP_PORT)
+    logger.info(
+        "Starting server on %s:%s", settings.APP_HOST, settings.APP_PORT
+    )
     uvicorn.run(
         "main:app",
         host=settings.APP_HOST,

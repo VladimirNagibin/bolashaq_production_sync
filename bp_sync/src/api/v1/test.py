@@ -55,6 +55,7 @@ async def check(
     external_id = 0
     try:
         from services.scheduler import Scheduler
+
         scheduler = Scheduler()
         await scheduler.initialize()
         await scheduler.my_scheduled_task()
@@ -69,7 +70,10 @@ async def check(
         # await lead_client.send_overdue_leads_notifications()
         # leads = await lead_client.repo.get_overdue_leads()
         # for lead, idle_time in leads:
-        #     logger.info(f"Лид {lead.title} Ответственный {lead.assigned_user.name} Стадия {lead.status_id} лежит без продвижения {idle_time}")
+        #     logger.info(
+        #         f"Лид {lead.title} Ответственный {lead.assigned_user.name} "
+        #         f"Стадия {lead.status_id} лежит без продвижения {idle_time}"
+        #     )
         # result_ = ""
         # await deal_client.handle_deal(257)
         # await product_client.load_products_entity_to_bitrix(257)
