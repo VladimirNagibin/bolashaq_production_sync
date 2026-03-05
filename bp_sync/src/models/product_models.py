@@ -279,9 +279,11 @@ class ProductSimpleProperty(IntIdEntity):
     )
 
     def __repr__(self) -> str:
+        value = self.value[:30] if self.value else "-"
         return (
             "<ProductSimpleProperty"
-            f"({self.property_code}, product_id={self.product_id}"
+            f"({self.property_code}: {value}, "
+            f"product_id={str(self.product_id)[-10:]}"
         )
 
     def to_pydantic_(self) -> FieldValue:
@@ -321,9 +323,11 @@ class ProductProperty(IntIdEntity):
     )
 
     def __repr__(self) -> str:
+        value = self.text_field[:30] if self.text_field else "-"
         return (
-            f"<ProductProperty(id={self.id}, product_id={self.product_id}, "
-            f"code='{self.property_code}')>"
+            f"<ProductProperty(id={str(self.id)[-10:]}, "
+            f"product_id={str(self.product_id)[-10:]}, "
+            f"{self.property_code}: {value})>"
         )
 
     def to_pydantic_(self) -> FieldValue:

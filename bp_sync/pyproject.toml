@@ -29,6 +29,7 @@ types-requests = "^2.32.4.20250913"
 typer = "^0.20.0"
 openai = "^2.21.0"
 APScheduler = "^3.11.2"
+tenacity = "^9.1.4"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.10.0"

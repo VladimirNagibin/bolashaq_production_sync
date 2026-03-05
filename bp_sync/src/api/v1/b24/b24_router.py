@@ -5,6 +5,7 @@ from .deals import deals_router
 from .deals_webhook import deals_webhook_router
 from .departments import departments_router
 from .leads_webhook import lead_router
+from .products import products_router
 from .productsections import productsections_router
 from .site_requests_handler import site_requests_router
 
@@ -23,3 +24,6 @@ b24_router.include_router(
     deals_webhook_router, prefix="", tags=["deals_webhook"]
 )
 b24_router.include_router(lead_router, prefix="", tags=["leads_webhook"])
+b24_router.include_router(
+    products_router, prefix="", tags=["products_webhook"]
+)

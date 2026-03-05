@@ -54,11 +54,6 @@ async def check(
 ) -> JSONResponse:
     external_id = 0
     try:
-        from services.scheduler import Scheduler
-
-        scheduler = Scheduler()
-        await scheduler.initialize()
-        await scheduler.my_scheduled_task()
         # from datetime import date
         # from core.logger import logger
         # lead_ids = await lead_client.bitrix_client.get_lead_ids_for_period(
@@ -76,7 +71,7 @@ async def check(
         #     )
         # result_ = ""
         # await deal_client.handle_deal(257)
-        # await product_client.load_products_entity_to_bitrix(257)
+        await product_client.bitrix_client.transform_product_fields(2311)
 
         # for external_id in range(2001, 2148, 2):
         #     product_update = ProductUpdate(

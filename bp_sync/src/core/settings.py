@@ -166,6 +166,7 @@ class Settings(BaseSettings):  # type: ignore
             {
                 "ONCRMPRODUCTUPDATE",
                 "ONCRMPRODUCTADD",
+                "ONCRMPRODUCTDELETE",
             },
         )
 
