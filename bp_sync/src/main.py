@@ -61,6 +61,7 @@ def _configure_scheduler(
         trigger="cron",
         hour=TIME_TASK[0],
         minute=TIME_TASK[1],
+        day_of_week="mon-fri",
         id=SCHEDULER_JOB_ID,
         replace_existing=True,
     )
