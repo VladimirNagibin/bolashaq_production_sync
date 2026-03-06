@@ -1,6 +1,7 @@
 from typing import Any
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException, Request, status
+from fastapi.responses import JSONResponse
 
 from core.logger import logger
 from core.settings import settings
@@ -335,3 +336,75 @@ class ProductClient(
                     f"ID={owner_id}"
                 ),
             ) from e
+
+    async def product_processing(self, request: Request) -> JSONResponse:
+        """
+        Основной метод обработки вебхука товаров
+        """
+        try:
+            logger.info("Starting product processing webhook")
+
+            webhook_payload = await self.webhook_service.process_webhook(
+                request
+            )
+
+            if not webhook_payload or not webhook_payload.entity_id:
+                logger.warning("Webhook received but no product ID found")
+                return self._success_response(
+                    "Webhook received but no product ID found"
+                )
+
+            product_id = webhook_payload.entity_id
+            logger.info(f"Processing product ID: {product_id}")
+            if webhook_payload.event == "ONCRMPRODUCTDELETE":
+                await self.repo.set_deleted_in_bitrix(product_id)
+                return self._success_response("Product is deleted in Bitrix")
+            success = await self.bitrix_client.transform_product_fields(
+                product_id
+            )
+            await self.import_from_bitrix(product_id)
+            if success:
+                logger.info(f"Successfully processed product ID: {product_id}")
+                return self._success_response(
+                    f"Successfully processed product ID: {product_id}"
+                )
+            else:
+                logger.error(f"Failed to process product ID: {product_id}")
+                return self._error_response(
+                    status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    f"Failed to process product ID: {product_id}",
+                    "error",
+                )
+
+        except Exception as e:
+            logger.error(
+                f"Error in product_processing: {str(e)}", exc_info=True
+            )
+            return self._error_response(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                f"Error in product_processing: {str(e)}",
+                "error",
+            )
+
+    def _success_response(self, message: str, event: str = "") -> JSONResponse:
+        """Успешный JSON response"""
+        response_data = {"status": "success", "message": message}
+        if event:
+            response_data["event"] = event
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK, content=response_data
+        )
+
+    def _error_response(
+        self, status_code: int, message: str, error_type: str
+    ) -> JSONResponse:
+        """Ответ с ошибкой"""
+        return JSONResponse(
+            status_code=status_code,
+            content={
+                "status": "error",
+                "message": message,
+                "error_type": error_type,
+            },
+        )

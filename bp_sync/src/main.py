@@ -56,15 +56,17 @@ def _configure_scheduler(
     scheduler: AsyncIOScheduler, lead_service: LeadServiceFactory
 ) -> None:
     """Настройка задач планировщика."""
-    scheduler.add_job(
-        lead_service.send_overdue_leads_notifications,
-        trigger="cron",
-        hour=TIME_TASK[0],
-        minute=TIME_TASK[1],
-        id=SCHEDULER_JOB_ID,
-        replace_existing=True,
-    )
-    logger.info("Scheduler job '%s' added.", SCHEDULER_JOB_ID)
+    if not settings.APP_RELOAD:
+        scheduler.add_job(
+            lead_service.send_overdue_leads_notifications,
+            trigger="cron",
+            hour=TIME_TASK[0],
+            minute=TIME_TASK[1],
+            day_of_week="mon-fri",
+            id=SCHEDULER_JOB_ID,
+            replace_existing=True,
+        )
+        logger.info("Scheduler job '%s' added.", SCHEDULER_JOB_ID)
 
 
 @asynccontextmanager

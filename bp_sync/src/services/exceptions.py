@@ -366,3 +366,15 @@ class ProductNotFoundError(SiteRequestProcessingError):
     """Ошибка при поиске товара."""
 
     pass
+
+
+class FileDownloadError(Exception):
+    """Исключение при скачивании файла."""
+
+    pass
+
+
+class ProductTransformationError(Exception):
+    """Ошибка при трансформации товара"""
+
+    pass

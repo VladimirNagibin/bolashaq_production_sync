@@ -70,6 +70,7 @@ class Settings(BaseSettings):  # type: ignore
     WEB_HOOK_USER_UPDATE_TOKEN: str = "user_update_token"
     WEB_HOOK_LEAD_UPDATE_TOKEN: str = "lead_update_token"
     WEB_HOOK_INVOICE_UPDATE_TOKEN: str = "invoice_update_token"
+    WEB_HOOK_PRODUCTSECTION_UPDATE_TOKEN: str = "productcection_update_token"
     WEB_HOOK_TOKEN_INCOMING: str = "token_incoming"
     MAX_AGE_WEBHOOK: int = 300  # seconds, 5 minutes
     CHAT_SUPERVISOR: int = 115
@@ -166,6 +167,18 @@ class Settings(BaseSettings):  # type: ignore
             {
                 "ONCRMPRODUCTUPDATE",
                 "ONCRMPRODUCTADD",
+                "ONCRMPRODUCTDELETE",
+            },
+        )
+
+    @property
+    def web_hook_config_productsection(self) -> dict[str, Any]:
+        return self.web_hook_config_entity(
+            self.WEB_HOOK_PRODUCTSECTION_UPDATE_TOKEN,
+            {
+                "ONCRMPRODUCTSECTIONADD",
+                "ONCRMPRODUCTSECTIONUPDATE",
+                "ONCRMPRODUCTSECTIONDELETE",
             },
         )
 

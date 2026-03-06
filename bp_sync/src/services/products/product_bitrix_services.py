@@ -11,8 +11,13 @@ from schemas.product_schemas import (  # ProductEntityCreate,
 )
 
 from ..bitrix_services.base_bitrix_services import BaseBitrixEntityClient
+from ..bitrix_services.bitrix_api_client import BitrixAPIClient
 from ..decorators import handle_bitrix_errors
-from ..exceptions import BitrixApiError
+from ..exceptions import BitrixApiError, ProductTransformationError
+from ..file_download_service import FileDownloadService
+from .product_data_raw import ProductRawDataService
+from .product_image_service import ProductImageService
+from .product_transformation_service import ProductTransformationService
 
 
 class ProductBitrixClient(
@@ -21,6 +26,44 @@ class ProductBitrixClient(
     entity_name = "product"  # "catalog.product" crm = False
     create_schema = ProductCreate
     update_schema = ProductUpdate
+
+    def __init__(
+        self,
+        bitrix_client: BitrixAPIClient,
+    ):
+        super().__init__(bitrix_client)
+        self._raw_data_service: ProductRawDataService | None = None
+        self._file_download_service: FileDownloadService | None = None
+        self._transform_service: ProductTransformationService | None = None
+        self._image_service: ProductImageService | None = None
+
+    @property
+    def raw_data_service(self) -> ProductRawDataService:
+        if not self._raw_data_service:
+            self._raw_data_service = ProductRawDataService(self.bitrix_client)
+        return self._raw_data_service
+
+    @property
+    def file_download_service(self) -> FileDownloadService:
+        if not self._file_download_service:
+            self._file_download_service = FileDownloadService()
+        return self._file_download_service
+
+    @property
+    def transformation_service(self) -> ProductTransformationService:
+        if not self._transform_service:
+            self._transform_service = ProductTransformationService(
+                self.file_download_service
+            )
+        return self._transform_service
+
+    @property
+    def image_service(self) -> ProductImageService:
+        if not self._image_service:
+            self._image_service = ProductImageService(
+                self.raw_data_service, self.file_download_service
+            )
+        return self._image_service
 
     @handle_bitrix_errors()
     async def get_entity_products(
@@ -54,7 +97,7 @@ class ProductBitrixClient(
 
     async def _get_product_catalog(self, product_id: int) -> ProductCreate:
         """Получение каталога товара"""
-        return await self.get(entity_id=product_id, crm=False)
+        return await self.get(entity_id=product_id)  # , crm=False)
 
     @handle_bitrix_errors()
     async def set_entity_products(
@@ -141,5 +184,73 @@ class ProductBitrixClient(
             logger.error(
                 f"Error updating products deal:{deal_id}, "
                 f"invoice:{invoice_id}. Error: {str(e)}"
+            )
+            return False
+
+    async def transform_product_fields(self, product_id: int) -> bool:
+        """
+        Преобразование полей товара
+
+        Args:
+            product_id: ID товара в Битрикс24
+
+        Returns:
+            bool: Успешность преобразования
+        """
+        try:
+            logger.info(
+                f"Starting field transformation for product {product_id}"
+            )
+
+            # Получаем данные товара
+            product_data = await self.get(product_id)
+            product_data_dict = await self.raw_data_service.get(product_id)
+            if not product_data or not product_data_dict:
+                logger.error(f"Product {product_id} not found or empty result")
+                return False
+
+            text_fields, image_fields = (
+                await self.transformation_service.transform_product_fields(
+                    product_data=product_data,
+                    product_id=product_id,
+                    product_data_dict=product_data_dict,
+                )
+            )
+
+            # Обновляем текстовые поля
+            if text_fields:
+                logger.info(
+                    f"Updating {len(text_fields)} text fields for product "
+                    f"{product_id}"
+                )
+                text_fields["external_id"] = product_id
+                product_update = ProductUpdate(**text_fields)
+                await self.update(product_update)
+
+            # Обновляем изображение
+            if image_fields:
+                logger.info(f"Updating image for product {product_id}")
+                success = await self.raw_data_service.update(
+                    product_id, image_fields
+                )
+                if not success:
+                    logger.error(
+                        f"Failed to update image for product {product_id}"
+                    )
+                    return False
+
+            if not text_fields and not image_fields:
+                logger.info(f"No fields to update for product {product_id}")
+
+            logger.info(f"Successfully transformed product {product_id}")
+            return True
+
+        except ProductTransformationError as e:
+            logger.error(f"Transformation error for product {product_id}: {e}")
+            return False
+        except Exception as e:
+            logger.error(
+                f"Unexpected error transforming product {product_id}: {e}",
+                exc_info=True,
             )
             return False
