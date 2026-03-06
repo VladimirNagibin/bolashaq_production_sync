@@ -223,4 +223,5 @@ class LeadFailureReasonEnum(IntEnum):
     INVALID_CONTACT_DATA = 115  # Некорректные контактные данные
     TEST_LEAD = 117  # Тестовая заявка
     DUPLICATE = 119  # Дубликат
+    NOT_WHOLESALE = 151  # Не относится к процессу продажи
     OTHER = 121  # Другое (укажите в комментарии)
