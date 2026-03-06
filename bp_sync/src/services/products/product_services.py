@@ -356,7 +356,9 @@ class ProductClient(
 
             product_id = webhook_payload.entity_id
             logger.info(f"Processing product ID: {product_id}")
-
+            if webhook_payload.event == "ONCRMPRODUCTDELETE":
+                await self.repo.set_deleted_in_bitrix(product_id)
+                return self._success_response("Product is deleted in Bitrix")
             success = await self.bitrix_client.transform_product_fields(
                 product_id
             )
