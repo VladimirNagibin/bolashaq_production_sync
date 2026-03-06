@@ -19,7 +19,9 @@ from .product_admin_model import (
     ProductAdmin,
     ProductAgreementSupervisorAdmin,
     ProductEntityAdmin,
+    ProductPropertyAdmin,
     ProductsectionAdmin,
+    ProductSimplePropertyAdmin,
 )
 from .supplier_admin_model import (
     ColumnMappingAdmin,
@@ -232,3 +234,5 @@ def register_models(admin: Admin) -> None:
     admin.add_view(SupplierCharacteristicAdmin)
     admin.add_view(SupplierComplectAdmin)
     admin.add_view(ProductsectionAdmin)
+    admin.add_view(ProductSimplePropertyAdmin)
+    admin.add_view(ProductPropertyAdmin)
