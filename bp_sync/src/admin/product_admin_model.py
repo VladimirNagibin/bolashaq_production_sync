@@ -150,6 +150,7 @@ class ProductsectionAdmin(
         "catalog_id",
         "code",
         "xml_id",
+        "is_deleted_in_bitrix",
     ]
     column_labels_local = {  # Надписи полей в списке
         "name": "Наименование",
@@ -180,6 +181,7 @@ class ProductsectionAdmin(
         "catalog_id",
         "code",
         "xml_id",
+        "is_deleted_in_bitrix",
     ]
     column_details_list = [
         "name",
@@ -189,4 +191,5 @@ class ProductsectionAdmin(
         "code",
         "xml_id",
         "child_productsections",
+        "is_deleted_in_bitrix",
     ]  # Поля на форме просмотра
