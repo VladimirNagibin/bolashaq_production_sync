@@ -145,6 +145,7 @@ class ProductsectionAdmin(
     icon = "fa-solid fa-tags"
 
     column_list = [  # Поля в списке
+        "external_id",
         "name",
         "section_id",
         "catalog_id",
@@ -157,7 +158,7 @@ class ProductsectionAdmin(
         "section_id": "Родительский раздел",
         "catalog_id": "Каталог",
         "code": "Символьный код",
-        "xml_id": "СВнешний код",
+        "xml_id": "Внешний код",
     }
     column_labels = COLUMN_LABELS | column_labels_local
     column_default_sort = [("section_id", True)]  # Сортировка по умолчанию
@@ -176,6 +177,7 @@ class ProductsectionAdmin(
         "xml_id",
     ]
     form_columns = [  # Поля на форме
+        "external_id",
         "name",
         "section_id",
         "catalog_id",
@@ -184,6 +186,7 @@ class ProductsectionAdmin(
         "is_deleted_in_bitrix",
     ]
     column_details_list = [
+        "external_id",
         "name",
         "section_id",
         "parent_productsection",
