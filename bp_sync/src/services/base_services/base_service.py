@@ -4,6 +4,7 @@ from typing import Any, Generic, Protocol, TypeVar
 
 from fastapi import Request, status
 from fastapi.responses import JSONResponse
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 from core.logger import logger
 from models.bases import IntIdEntity
@@ -27,6 +28,22 @@ class BitrixClientProtocol(Protocol):
     @abstractmethod
     def get_default_create_schema(self, external_id: int | str) -> Any:
         """Получает дефолтную схему для создания сущности"""
+        ...
+
+    @abstractmethod
+    async def list(
+        self,
+        select: list[str] | None = None,
+        filter_entity: dict[str, Any] | None = None,
+        order: dict[str, str] | None = None,
+        start: int = 0,
+        entity_type_id: int | None = None,
+        crm: bool = True,
+    ) -> Any:
+        """
+        Получает список сущностей из Bitrix24 с возможностью фильтрации,
+        сортировки и постраничной выборки.
+        """
         ...
 
 
@@ -344,3 +361,40 @@ class BaseEntityClient(ABC, Generic[T, R, C]):
                 "timestamp": time.time(),
             },
         )
+
+    async def reload_all_entities(
+        self, entity_type_id: int | None = None
+    ) -> None:
+        entity_ids = await self._get_entity_ids()
+        for entity_id in entity_ids:
+            await self._reload_entity(entity_id, entity_type_id)
+
+    async def _get_entity_ids(self) -> list[ExternalIdType]:
+        ENTITIES_BATCH_SIZE = 50
+        entity_ids: list[ExternalIdType] = []
+        select = ["ID"]
+        start = 0
+        while True:
+            result = await self.bitrix_client.list(select=select, start=start)
+            if not result:
+                break
+            entity_batch = result.result
+            entity_ids.extend(
+                entity.external_id
+                for entity in entity_batch
+                if entity.external_id is not None
+            )
+            if not result.next or len(entity_batch) < ENTITIES_BATCH_SIZE:
+                break
+            start = result.next
+        return entity_ids
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        reraise=True,
+    )  # type: ignore[misc]
+    async def _reload_entity(
+        self, entity_id: ExternalIdType, entity_type_id: int | None = None
+    ) -> None:
+        await self.import_from_bitrix(entity_id, entity_type_id)

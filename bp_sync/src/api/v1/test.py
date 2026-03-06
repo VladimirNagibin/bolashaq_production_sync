@@ -71,7 +71,7 @@ async def check(
         #     )
         # result_ = ""
         # await deal_client.handle_deal(257)
-        await product_client.bitrix_client.transform_product_fields(2311)
+        await product_client.reload_all_entities()
 
         # for external_id in range(2001, 2148, 2):
         #     product_update = ProductUpdate(
