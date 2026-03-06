@@ -11,9 +11,12 @@ from schemas.product_schemas import (  # ProductEntityCreate,
 )
 
 from ..bitrix_services.base_bitrix_services import BaseBitrixEntityClient
+from ..bitrix_services.bitrix_api_client import BitrixAPIClient
 from ..decorators import handle_bitrix_errors
 from ..exceptions import BitrixApiError, ProductTransformationError
 from ..file_download_service import FileDownloadService
+from .product_data_raw import ProductRawDataService
+from .product_image_service import ProductImageService
 from .product_transformation_service import ProductTransformationService
 
 
@@ -24,13 +27,43 @@ class ProductBitrixClient(
     create_schema = ProductCreate
     update_schema = ProductUpdate
 
-    def __init__(self, *args: Any, **kwargs: Any):
-        super().__init__(*args, **kwargs)
+    def __init__(
+        self,
+        bitrix_client: BitrixAPIClient,
+    ):
+        super().__init__(bitrix_client)
+        self._raw_data_service: ProductRawDataService | None = None
+        self._file_download_service: FileDownloadService | None = None
+        self._transform_service: ProductTransformationService | None = None
+        self._image_service: ProductImageService | None = None
 
-        self.file_download_service = FileDownloadService()
-        self.transformation_service = ProductTransformationService(
-            file_download_service=self.file_download_service
-        )
+    @property
+    def raw_data_service(self) -> ProductRawDataService:
+        if not self._raw_data_service:
+            self._raw_data_service = ProductRawDataService(self.bitrix_client)
+        return self._raw_data_service
+
+    @property
+    def file_download_service(self) -> FileDownloadService:
+        if not self._file_download_service:
+            self._file_download_service = FileDownloadService()
+        return self._file_download_service
+
+    @property
+    def transformation_service(self) -> ProductTransformationService:
+        if not self._transform_service:
+            self._transform_service = ProductTransformationService(
+                self.file_download_service
+            )
+        return self._transform_service
+
+    @property
+    def image_service(self) -> ProductImageService:
+        if not self._image_service:
+            self._image_service = ProductImageService(
+                self.raw_data_service, self.file_download_service
+            )
+        return self._image_service
 
     @handle_bitrix_errors()
     async def get_entity_products(
@@ -171,7 +204,7 @@ class ProductBitrixClient(
 
             # Получаем данные товара
             product_data = await self.get(product_id)
-            product_data_dict = await self._get_product_data(product_id)
+            product_data_dict = await self.raw_data_service.get(product_id)
             if not product_data or not product_data_dict:
                 logger.error(f"Product {product_id} not found or empty result")
                 return False
@@ -197,7 +230,9 @@ class ProductBitrixClient(
             # Обновляем изображение
             if image_fields:
                 logger.info(f"Updating image for product {product_id}")
-                success = await self._update_product(product_id, image_fields)
+                success = await self.raw_data_service.update(
+                    product_id, image_fields
+                )
                 if not success:
                     logger.error(
                         f"Failed to update image for product {product_id}"
@@ -218,57 +253,4 @@ class ProductBitrixClient(
                 f"Unexpected error transforming product {product_id}: {e}",
                 exc_info=True,
             )
-            return False
-
-    async def _get_product_data(
-        self, product_id: int
-    ) -> dict[str, Any] | None:
-        """Получение данных товара по ID"""
-        try:
-            result = await self.bitrix_client.call_api(
-                "crm.product.get", {"id": product_id}
-            )
-            if result:
-                return result.get("result", None)  # type:ignore[no-any-return]
-            return None
-        except Exception as e:
-            logger.error(f"Error getting product {product_id} data: {str(e)}")
-            return None
-
-    async def _update_product(
-        self, product_id: int, fields: dict[str, Any]
-    ) -> bool:
-        """
-        Обновление товара в Битрикс24
-
-        Args:
-            product_id: ID товара
-            fields: Поля для обновления
-
-        Returns:
-            bool: Успешность обновления
-        """
-        try:
-            logger.debug(
-                f"Updating product {product_id} with fields: "
-                f"{list(fields.keys())}"
-            )
-            payload: dict[str, Any] = {"id": product_id, "fields": fields}
-
-            response = await self.bitrix_client.call_api(
-                "crm.product.update", payload
-            )
-
-            if response.get("result"):
-                logger.debug(f"Successfully updated product {product_id}")
-                return True
-            else:
-                logger.error(
-                    "Bitrix API error updating product "
-                    f"{product_id}: {response}"
-                )
-                return False
-
-        except Exception as e:
-            logger.error(f"Error updating product {product_id}: {str(e)}")
             return False

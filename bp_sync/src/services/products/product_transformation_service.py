@@ -377,7 +377,7 @@ class ProductTransformationService:
                 self.logger.info(
                     f"Successfully downloaded gallery image for product "
                     f"{product_id}: {image_data['filename']} "
-                    "({image_data['file_size']} bytes)"
+                    f"({image_data['file_size']} bytes)"
                 )
 
             return image_data  # type:ignore[no-any-return]

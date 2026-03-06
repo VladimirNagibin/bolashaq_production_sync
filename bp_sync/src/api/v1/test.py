@@ -71,7 +71,14 @@ async def check(
         #     )
         # result_ = ""
         # await deal_client.handle_deal(257)
-        await product_client.reload_all_entities()
+        await product_client.bitrix_client.image_service.set_detail_picture(
+            product_id=2323,
+            # picture_id=6689
+            picture_url=(
+                "https://labset.su/wp-content/uploads/2023/10/"
+                "2587-202110181149019900.jpg"
+            ),
+        )
 
         # for external_id in range(2001, 2148, 2):
         #     product_update = ProductUpdate(
