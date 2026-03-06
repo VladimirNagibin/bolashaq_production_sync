@@ -282,7 +282,6 @@ class BaseEntityClient(ABC, Generic[T, R, C]):
         """
         Основной метод обработки вебхука сущности
         """
-        # ADMIN_ID = 171
         try:
             webhook_payload = await self.webhook_service.process_webhook(
                 request
@@ -301,6 +300,12 @@ class BaseEntityClient(ABC, Generic[T, R, C]):
                         "Entity type ID mismatch",
                         "TypeMismatchError",
                     )
+            if "DELETE" in webhook_payload.event:
+                await self.repo.set_deleted_in_bitrix(entity_id)
+                return self._success_response(
+                    "Webhook received but no entity ID found",
+                    webhook_payload.event,
+                )
             await self.import_from_bitrix(entity_id, entity_type_id)
             return self._success_response(
                 f"{self.entity_name} {entity_id} processed successfully",
