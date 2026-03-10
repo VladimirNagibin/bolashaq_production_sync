@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, ClassVar, Optional, Type
 from uuid import UUID
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    DateTime,
     ForeignKey,
     Index,
     Integer,
@@ -67,8 +69,8 @@ class SupplierProduct(Base):  # type: ignore[misc]
         return str(self.name)
 
     # Основные данные товара
-    external_id: Mapped[int] = mapped_column(
-        unique=True,
+    external_id: Mapped[int | None] = mapped_column(
+        # unique=True,
         comment="ID во внешней системе",
     )
     name: Mapped[str] = mapped_column(
@@ -519,3 +521,70 @@ class SupplierComplect(Base):  # type: ignore[misc]
         foreign_keys=[supplier_product_id],
         back_populates="complects",
     )
+
+
+class SupplierProductChangeLog(Base):  # type: ignore[misc]
+    """
+    Лог изменений полей товара поставщика для ручной обработки.
+    """
+
+    __tablename__ = "supplier_product_change_log"
+
+    # Ссылка на товар, который меняли
+    supplier_product_id: Mapped[UUID] = mapped_column(
+        ForeignKey("supplier_products.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        comment="ID товара поставщика",
+    )
+
+    supplier_product: Mapped["SupplierProduct"] = relationship(
+        "SupplierProduct", backref="change_logs"
+    )
+
+    source: Mapped[SourcesProductEnum] = mapped_column(
+        String(20), comment="Источник данных"
+    )
+    config_name: Mapped[str | None] = mapped_column(
+        String(100), comment="Источник импорта (название файла или конфига)"
+    )
+
+    # Какое поле изменилось (например, 'price', 'quantity')
+    field_name: Mapped[str] = mapped_column(
+        String(50), nullable=False, comment="Название измененного поля"
+    )
+
+    # Старое и новое значение. Храним как строку для универсальности
+    old_value: Mapped[str | None] = mapped_column(
+        Text, comment="Значение ДО изменения"
+    )
+    new_value: Mapped[str | None] = mapped_column(
+        Text, comment="Значение ПОСЛЕ изменения"
+    )
+    value_type: Mapped[str | None] = mapped_column(
+        comment="Тип значения (int, float, str, bool)"
+    )
+
+    # Поля для ручной обработки
+    is_processed: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default="false",
+        comment="Проверено вручную?",
+    )
+    processed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="Когда проверили"
+    )
+    processed_by_user_id: Mapped[int | None] = mapped_column(
+        nullable=True, comment="ID пользователя, который проверил"
+    )
+    comment: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="Комментарий менеджера при проверке"
+    )
+
+    def __str__(self) -> str:
+        return str(self.field_name)
+        # return str(
+        #     f"{self.field_name}: {self.old_value[:10] if self.old_value} -> "
+        #     f"{self.new_value[:10] if self.new_value}"
+        # )
