@@ -18,6 +18,7 @@ from schemas.product_schemas import (
 )
 
 from .bases import IntIdEntity
+from .product_images_models import ProductImage
 from .user_models import User
 
 if TYPE_CHECKING:
@@ -206,6 +207,14 @@ class Product(IntIdEntity):
         back_populates="product",
         lazy="selectin",
         viewonly=True,
+    )
+
+    images: Mapped[list["ProductImage"]] = relationship(
+        "ProductImage",
+        back_populates="product",
+        foreign_keys="[ProductImage.product_id]",
+        # lazy="selectin",
+        # viewonly=True,
     )
 
     async def to_pydantic(

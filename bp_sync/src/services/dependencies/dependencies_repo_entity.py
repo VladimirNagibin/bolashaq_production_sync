@@ -5,6 +5,9 @@ from services.companies.company_repository import CompanyRepository
 from services.contacts.contact_repository import ContactRepository
 from services.deals.deal_repository import DealRepository
 from services.leads.lead_repository import LeadRepository
+from services.product_images.product_image_repository import (
+    ProductImageRepository,
+)
 from services.products.product_repository import ProductRepository
 from services.timeline_comments.timeline_comment_repository import (
     TimelineCommentRepository,
@@ -54,3 +57,9 @@ async def get_product_repo(
     session: AsyncSession = Depends(get_session_context),
 ) -> ProductRepository:
     return ProductRepository(session=session)
+
+
+async def get_product_image_repo(
+    session: AsyncSession = Depends(get_session_context),
+) -> ProductImageRepository:
+    return ProductImageRepository(session=session)

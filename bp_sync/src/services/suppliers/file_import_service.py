@@ -303,13 +303,13 @@ class FileImportService:
 
         for mapping in config.column_mappings:
             col_idx = None
-            if (
+            if mapping.source_column_index:
+                col_idx = mapping.source_column_index
+            elif (
                 mapping.source_column_name
                 and mapping.source_column_name in col_name_to_index
             ):
                 col_idx = col_name_to_index[mapping.source_column_name]
-            elif mapping.source_column_index:
-                col_idx = mapping.source_column_index
 
             # Если колонка не найдена, пропускаем этот маппинг
             if col_idx is None:
@@ -358,6 +358,8 @@ class FileImportService:
         self, value: Any, rule: str | None
     ) -> Any:
         """Применение правил трансформации к значению."""
+        # список true значений для bool преобразования для поставщиков
+        true_values = ["true", "yes", "1", "да"]
         if value is None:
             return None
 
@@ -377,7 +379,7 @@ class FileImportService:
                 return int(float(value))
             elif rule == "bool" and value is not None:
                 if isinstance(value, str):
-                    return value.lower() in ["true", "yes", "1", "да"]
+                    return value.lower() in true_values
                 return bool(value)
             elif rule.startswith("re:") and isinstance(value, str):
                 pattern = rule[3:]
@@ -386,12 +388,18 @@ class FileImportService:
             elif rule.startswith("def:") and value is not None:
                 method = rule[4:]
                 return getattr(self, method)(value)
-        except (ValueError, TypeError, AttributeError):
+        except (ValueError, TypeError, AttributeError) as e:
             logger.debug(
-                f"Transformation failed for value '{value}' with rule '{rule}'"
+                f"Transformation failed for value '{value}' with rule "
+                f"'{rule}': {e}"
             )
             return None
-
+        except Exception as e:
+            logger.debug(
+                f"Transformation error for value '{value}' with rule "
+                f"'{rule}': {e}"
+            )
+            return None
         return value
 
     def _upd_price(self, value: Any) -> float:
@@ -473,7 +481,7 @@ class FileImportService:
         if not existing_record:
             # Создание нового товара
             new_product = await self._build_create_model(
-                row_data, config.source
+                row_data, config.source, config.config_name
             )
             create_list.append(new_product)
             result.added_count += 1
@@ -497,6 +505,7 @@ class FileImportService:
         self,
         data: dict[str, Any],
         source: SourcesProductEnum,
+        config_name: str | None = None,
     ) -> SupplierProductCreate:
         """Формирование модели для создания."""
 
@@ -506,6 +515,7 @@ class FileImportService:
             "source": source,
             "is_validated": False,
             "should_export_to_crm": False,
+            "needs_review": True,
         }
 
         # Добавляем остальные поля
@@ -518,9 +528,11 @@ class FileImportService:
                 product_data[field] = wrapper.get("value")
 
         # Предварительная обработка данных
-        product_data = await self._preprocess_data(source, product_data)
+        processed_product_data = await self._preprocess_data(
+            source, product_data, config_name
+        )
 
-        return SupplierProductCreate(**product_data)
+        return SupplierProductCreate(**processed_product_data)
 
     async def _prepare_updates(
         self,
@@ -622,6 +634,7 @@ class FileImportService:
         self,
         source: SourcesProductEnum,
         data: dict[str, Any],
+        config_name: str | None = None,
     ) -> dict[str, Any]:
         # TODO: Вычисляем раздел, обрабатываем описание и т.д.
         if source == SourcesProductEnum.LABSET:

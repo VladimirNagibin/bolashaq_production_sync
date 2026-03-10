@@ -138,6 +138,9 @@ class SupplierProduct(Base):  # type: ignore[misc]
     preview_picture_description: Mapped[str | None] = mapped_column(
         String(255), comment="Описание для картинки анонса"
     )
+    more_photo: Mapped[str | None] = mapped_column(
+        Text, comment="Дополнительные картинки"
+    )
     preview_text: Mapped[str | None] = mapped_column(
         Text, comment="Описание для анонса"
     )

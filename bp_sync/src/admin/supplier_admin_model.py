@@ -66,6 +66,7 @@ class SupplierProductAdmin(
         "description_for_offer": "Описание для предложения",
         "characteristics": "Связь с характеристиками",
         "complects": "Связь с комплектующими",
+        "more_photo": "Дополнительные картинки",
     }
     column_default_sort = [("source", True)]  # Сортировка по умолчанию
     column_sortable_list = [  # Список полей по которым возможна сортировка
@@ -97,6 +98,7 @@ class SupplierProductAdmin(
         "detail_picture_description",
         "preview_picture",
         "preview_picture_description",
+        "more_photo",
         "preview_text",
         "preview_text_type",
         "availability_status",
@@ -135,6 +137,7 @@ class SupplierProductAdmin(
         "detail_picture_description",
         "preview_picture",
         "preview_picture_description",
+        "more_photo",
         "preview_text",
         "preview_text_type",
         "availability_status",

@@ -2,6 +2,7 @@ import re
 from typing import Any
 
 from core.logger import logger
+from schemas.enums import ImageType
 from schemas.product_schemas import (
     FieldText,
     FieldValue,
@@ -40,8 +41,8 @@ class ProductTransformationService:
 
         # Конфигурация изображений
         self.image_config: dict[str, Any] = {
-            "source_property": "property101",  # Галерея изображений
-            "target_field": "DETAIL_PICTURE",  # Детальная картинка
+            "source_property": ImageType.MORE_PHOTO.value,  # Галерея
+            "target_field": ImageType.DETAIL_PICTURE.name,  # Детальная
             "property_id": 101,
             "description": "основного изображения",
         }
@@ -336,7 +337,7 @@ class ProductTransformationService:
         """
         try:
             preview_pictures: dict[str, Any] | None = product_data.get(
-                "DETAIL_PICTURE", {}
+                ImageType.DETAIL_PICTURE.name, {}
             )
             if isinstance(preview_pictures, dict):
                 if int(preview_pictures.get("id", 0)) > 0:

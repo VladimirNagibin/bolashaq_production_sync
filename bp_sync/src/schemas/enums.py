@@ -139,6 +139,7 @@ class EntityType(StrEnum):
     TIMELINE_COMMENT = "TimelineComment"
     PRODUCT = "Product"
     SUPPLIER_PRODUCT = "SupplierProduct"
+    PRODUCT_IMAGE = "ProductImage"
 
 
 class CommunicationType(StrEnum):
@@ -225,3 +226,11 @@ class LeadFailureReasonEnum(IntEnum):
     DUPLICATE = 119  # Дубликат
     NOT_WHOLESALE = 151  # Не относится к процессу продажи
     OTHER = 121  # Другое (укажите в комментарии)
+
+
+class ImageType(StrEnum):
+    """Типы изображений."""
+
+    DETAIL_PICTURE = "detailPicture"
+    PREVIEW_PICTURE = "previewPicture"
+    MORE_PHOTO = "property101"

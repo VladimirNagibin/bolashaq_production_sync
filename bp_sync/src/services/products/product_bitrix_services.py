@@ -15,8 +15,8 @@ from ..bitrix_services.bitrix_api_client import BitrixAPIClient
 from ..decorators import handle_bitrix_errors
 from ..exceptions import BitrixApiError, ProductTransformationError
 from ..file_download_service import FileDownloadService
+from ..product_images.product_image_bitrix_service import ProductImageService
 from .product_data_raw import ProductRawDataService
-from .product_image_service import ProductImageService
 from .product_transformation_service import ProductTransformationService
 
 
