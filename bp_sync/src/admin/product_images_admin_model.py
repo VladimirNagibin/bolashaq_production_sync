@@ -1,0 +1,58 @@
+from models.product_images_models import ProductImage
+
+from .base_admin import BaseAdmin
+from .mixins import COLUMN_LABELS
+
+
+class ProductImageAdmin(
+    BaseAdmin, model=ProductImage
+):  # type: ignore[call-arg]
+    name = "Изображение товара"
+    name_plural = "Изображения товаров"
+    category = "Товары"
+    icon = "fa-solid fa-tags"
+
+    column_list = [  # Поля в списке
+        "name",
+        "product",
+        "image_type",
+        "source",
+    ]
+    column_labels_local = {  # Надписи полей в списке
+        "name": "Наименование файла",
+        "product_id": "ИД товара",
+        "product": "Товар",
+        "detail_url": "Ссылка на картинку",
+        "image_type": "Тип картинки",
+        "source": "Источник данных",
+        "supplier_image_url": "Ссылка поставщика на картинку",
+    }
+    column_labels = COLUMN_LABELS | column_labels_local
+    column_default_sort = [("product_id", True)]  # Сортировка по умолчанию
+    column_sortable_list = [  # Список полей по которым возможна сортировка
+        "product_id",
+    ]
+    column_searchable_list = [  # Список полей по которым возможен поиск
+        "product_id",
+    ]
+    form_columns = [  # Поля на форме
+        "external_id",
+        "product_id",
+        "name",
+        "detail_url",
+        "image_type",
+        "source",
+        "supplier_image_url",
+        "is_deleted_in_bitrix",
+    ]
+    column_details_list = [
+        "external_id",
+        "product_id",
+        "product",
+        "name",
+        "detail_url",
+        "image_type",
+        "source",
+        "supplier_image_url",
+        "is_deleted_in_bitrix",
+    ]  # Поля на форме просмотра

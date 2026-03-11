@@ -68,6 +68,7 @@ class ProductAdmin(BaseAdmin, model=Product):  # type: ignore[call-arg]
         "code": "Код",
         "currency_id": "Валюта",
         "status_deal": "Статус сделки",
+        "images": "Изображения",
     }
     column_labels = COLUMN_LABELS | column_labels_local
     column_default_sort = [("name", True)]  # Сортировка по умолчанию

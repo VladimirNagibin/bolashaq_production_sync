@@ -96,6 +96,7 @@ class SupplierProductBase(BaseFields):
     preview_picture_description: (
         Annotated[str, StringConstraints(max_length=255)] | None
     ) = None
+    more_photo: str | None = None
     preview_text: str | None = None
     preview_text_type: (
         Annotated[str, StringConstraints(max_length=10)] | None

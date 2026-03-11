@@ -19,7 +19,13 @@ from services.dependencies.dependencies_bitrix_entity import (
     get_product_bitrix_client,
 )
 from services.dependencies.dependencies_repo import request_context
+from services.dependencies.dependencies_repo_entity import (
+    get_product_image_repo,
+)
 from services.leads.lead_services import LeadClient
+from services.product_images.product_image_repository import (
+    ProductImageRepository,
+)
 from services.products.product_bitrix_services import ProductBitrixClient
 from services.products.product_services import ProductClient
 
@@ -50,12 +56,30 @@ async def check(
     product_bitrix_client: ProductBitrixClient = Depends(
         get_product_bitrix_client
     ),
+    product_image_repo: ProductImageRepository = Depends(
+        get_product_image_repo
+    ),
     product_client: ProductClient = Depends(get_product_service),
 ) -> JSONResponse:
     external_id = 0
     try:
-        # from datetime import date
+        ...
         # from core.logger import logger
+        # from schemas.enums import SourcesProductEnum
+        # from schemas.product_image_schemas import ProductImageCreate
+        # product_image_create = ProductImageCreate(
+        #     external_id=3,
+        #     name="test77777777777",
+        #     product_id=801,
+        #     source=SourcesProductEnum.MATEST,
+        #     detail_url="https:",
+        #     image_type="MORE_IMAGE",
+        # )
+        # await product_image_repo.create_or_update(product_image_create)
+        # image = await product_image_repo.get(3)
+        # logger.info(type(image))
+        # from datetime import date
+
         # lead_ids = await lead_client.bitrix_client.get_lead_ids_for_period(
         #     date(2025, 10, 20), date(2026, 3, 4)
         # )
@@ -71,14 +95,6 @@ async def check(
         #     )
         # result_ = ""
         # await deal_client.handle_deal(257)
-        await product_client.bitrix_client.image_service.set_detail_picture(
-            product_id=2323,
-            # picture_id=6689
-            picture_url=(
-                "https://labset.su/wp-content/uploads/2023/10/"
-                "2587-202110181149019900.jpg"
-            ),
-        )
 
         # for external_id in range(2001, 2148, 2):
         #     product_update = ProductUpdate(

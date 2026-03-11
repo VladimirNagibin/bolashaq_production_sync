@@ -1,11 +1,13 @@
 from typing import Any
 
 from core.logger import logger
+from core.settings import settings
+from schemas.enums import ImageType
 
 from ..file_download_service import FileDownloadService
-from .product_data_raw import ProductRawDataService
+from ..products.product_data_raw import ProductRawDataService
 
-DETAIL_PICTURE = "DETAIL_PICTURE"
+DETAIL_PICTURE = ImageType.DETAIL_PICTURE.name
 
 
 class ProductImageService:
@@ -95,11 +97,13 @@ class ProductImageService:
             )
             return False
 
-    async def get_detail_picture_id(self, product_id: int) -> int | None:
+    async def get_detail_picture_id(
+        self, product_id: int, image_type: ImageType = ImageType.DETAIL_PICTURE
+    ) -> int | None:
         """Получение id детальной картинки"""
         try:
             exists_detail_picture = await self.product_data_raw.get_field(
-                product_id, DETAIL_PICTURE
+                product_id, image_type.name
             )
             if (
                 exists_detail_picture
@@ -166,7 +170,7 @@ class ProductImageService:
             picture_update_data: dict[str, Any] = {
                 "fields": {
                     "productId": product_id,
-                    "type": "MORE_PHOTO",  # DETAIL_PICTURE, PREVIEW_PICTURE
+                    "type": ImageType.MORE_PHOTO.name,
                 },
                 "fileContent": [image_data["filename"], image_data["content"]],
             }
@@ -193,3 +197,18 @@ class ProductImageService:
                 f":{str(e)}"
             )
             return None
+
+    def get_download_image_url(
+        self, product_id: int, image_id: int, image_type: str
+    ) -> str:
+        """Получение URL для скачивания изображения"""
+        base_url = settings.BITRIX_PORTAL.rstrip("/")
+        webhook_path = settings.WEB_HOOK_TOKEN.lstrip("/")
+
+        return (
+            f"{base_url}/{webhook_path}"
+            f"catalog.product.download?"
+            f"fields%5BfieldName%5D={image_type}&"
+            f"fields%5BfileId%5D={image_id}&"
+            f"fields%5BproductId%5D={product_id}"
+        )
