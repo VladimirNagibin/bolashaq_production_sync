@@ -10,7 +10,8 @@ from core.exceptions.repo_exceptions import (
     DuplicateEntityError,
     EntityNotFoundError,
 )
-from models.supplier_models import SupplierProduct
+from models.supplier_models import SupplierProduct, SupplierProductChangeLog
+from schemas.change_log_schemas import ChangeLogBase, ChangeLogInDB
 from schemas.enums import SourceKeyField, SourcesProductEnum
 from schemas.supplier_schemas import (
     SupplierCharacteristicUpdate,
@@ -947,3 +948,61 @@ class SupplierProductRepository(BaseRepository[SupplierProduct]):
         )
 
         return int(deleted_count)
+
+    async def bulk_create_change_logs(
+        self,
+        changes: list[ChangeLogBase],
+        batch_size: int = 1000,
+    ) -> list[ChangeLogInDB]:
+        """
+        Массовое создание логов изменений
+        """
+        if not changes:
+            self.logger.info("No changing logs ts to create")
+            return []
+
+        created_logs: list[ChangeLogInDB] = []
+
+        for i in range(0, len(changes), batch_size):
+            batch = changes[i : i + batch_size]
+
+            batch_dicts: list[dict[str, Any]] = []
+            for change_data in batch:
+                change_dict = change_data.model_dump(exclude_unset=True)
+                batch_dicts.append(change_dict)
+
+            stmt = (
+                insert(SupplierProductChangeLog)
+                .values(batch_dicts)
+                .returning(SupplierProductChangeLog)
+            )
+            result = await self._execute_query(
+                stmt,
+                operation="batch_create_change_log",
+                batch_num=i // batch_size + 1,
+                batch_size=len(batch),
+            )
+            inserted_rows = result.scalars().all()
+
+            # Преобразуем в детальные схемы
+            for row in inserted_rows:
+                created_logs.append(ChangeLogInDB.model_validate(row))
+
+            # Сбрасываем после каждого батча для получения ID
+            await self._flush(
+                f"batch_create_change_logs_batch_{i//batch_size + 1}"
+            )
+
+            self.logger.debug(
+                f"Created batch {i//batch_size + 1}: "
+                f"{len(inserted_rows)} products"
+            )
+
+            # Финальный коммит
+        await self._commit("batch_create_change_logs")
+
+        self.logger.info(
+            f"Successfully created {len(created_logs)} products in "
+            f"{(len(changes) + batch_size - 1) // batch_size} batches"
+        )
+        return created_logs

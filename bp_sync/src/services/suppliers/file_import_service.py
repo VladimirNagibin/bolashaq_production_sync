@@ -5,6 +5,7 @@ import pandas as pd
 
 from core.logger import logger
 from models.supplier_models import SupplierProduct
+from schemas.change_log_schemas import ChangeLogBase
 from schemas.enums import SourceKeyField, SourcesProductEnum
 from schemas.product_schemas import ProductCreate, ProductUpdate
 from schemas.supplier_schemas import (
@@ -93,7 +94,7 @@ class FileImportService:
             products_to_create: list[SupplierProductCreate] = []
             products_to_update: list[SupplierProductUpdate] = []
             bitrix_updates: list[ProductCreate | ProductUpdate] = []
-            # TODO: список позиций на обработку - дополнительно
+            change_logs_to_create: list[ChangeLogBase] = []
 
             # 5. Обработка данных
             for row in mapped_rows:
@@ -103,9 +104,10 @@ class FileImportService:
                         existing_map=existing_products_map,
                         config=config,
                         result=result,
-                        create_list=products_to_create,
+                        # create_list=products_to_create,
                         update_list=products_to_update,
                         bitrix_list=bitrix_updates,
+                        change_list=change_logs_to_create,
                     )
                 except Exception as e:
                     error_msg = f"Error processing row: {str(e)}"
@@ -129,6 +131,15 @@ class FileImportService:
                 )
                 await self.supplier_product_repo.update_products(
                     products_to_update, config.source_key_field, config.source
+                )
+
+            if change_logs_to_create:
+                logger.info(
+                    f"{log_prefix}: Creating {len(change_logs_to_create)} "
+                    "changing logs..."
+                )
+                await self.supplier_product_repo.bulk_create_change_logs(
+                    change_logs_to_create
                 )
 
             # 7. Синхронизация с Битрикс
@@ -324,7 +335,6 @@ class FileImportService:
                     "sync_with_crm": mapping.sync_with_crm,
                 }
             )
-
         mapped_data: list[dict[str, Any]] = []
 
         # Оптимизация: itertuples значительно быстрее iterrows
@@ -462,12 +472,12 @@ class FileImportService:
         existing_map: dict[str, SupplierProductCreate],
         config: ImportConfigDetail,
         result: ImportResult,
-        create_list: list[SupplierProductCreate],
+        # create_list: list[SupplierProductCreate],
         update_list: list[SupplierProductUpdate],
         bitrix_list: list[ProductCreate | ProductUpdate],
+        change_list: list[ChangeLogBase],
     ) -> None:
         """Обработка одной строки данных."""
-
         key_val_obj = row_data.get(config.source_key_field.value, {})
         # Гарантируем, что ключ есть, иначе создадим дубликат или пропустим
         raw_key = key_val_obj.get("value")
@@ -480,10 +490,10 @@ class FileImportService:
 
         if not existing_record:
             # Создание нового товара
-            new_product = await self._build_create_model(
+            change_logs = await self._build_create_model(
                 row_data, config.source, config.config_name
             )
-            create_list.append(new_product)
+            change_list.extend(change_logs)
             result.added_count += 1
         else:
             # Обновление существующего
@@ -501,22 +511,31 @@ class FileImportService:
                 bitrix_list.append(updates[1])
                 result.bitrix_update_count += 1
 
+            if updates[2]:
+                change_list.extend(updates[2])
+
     async def _build_create_model(
         self,
         data: dict[str, Any],
         source: SourcesProductEnum,
         config_name: str | None = None,
-    ) -> SupplierProductCreate:
+    ) -> list[ChangeLogBase]:
         """Формирование модели для создания."""
 
+        change_logs: list[ChangeLogBase] = []
+        external_id = data.get("external_id", {}).get("value")
+        code = data.get("code", {}).get("value")
+        # name = data.get("name", {}).get("value")
         product_data: dict[str, Any] = {
-            "external_id": int(data.get("external_id", {}).get("value", 0)),
-            "name": data.get("name", {}).get("value", ""),
             "source": source,
             "is_validated": False,
             "should_export_to_crm": False,
             "needs_review": True,
         }
+        if external_id:
+            product_data["external_id"] = external_id
+        if code:
+            product_data["code"] = code
 
         # Добавляем остальные поля
         for field, wrapper in data.items():
@@ -525,26 +544,46 @@ class FileImportService:
                 and wrapper
                 and wrapper.get("value") is not None
             ):
-                product_data[field] = wrapper.get("value")
+                value = wrapper.get("value")
+                product_data[field] = value
+                if wrapper.get("sync_with_crm"):
+                    change_log_data: dict[str, Any] = {
+                        "supplier_product_id": None,
+                        "source": source,
+                        "config_name": config_name,
+                        "field_name": field,
+                        "old_value": None,
+                        "new_value": str(value),
+                        "value_type": type(value).__name__,
+                    }
+                    change_logs.append(ChangeLogBase(**change_log_data))
 
         # Предварительная обработка данных
-        processed_product_data = await self._preprocess_data(
-            source, product_data, config_name
+        # processed_product_data = await self._preprocess_data(
+        #     source, product_data, config_name
+        # )
+        supplier_product_create = SupplierProductCreate(**product_data)
+        supplier_product_detail = await self.supplier_product_repo.create(
+            supplier_product_create
         )
-
-        return SupplierProductCreate(**processed_product_data)
+        for change_log in change_logs:
+            change_log.supplier_product_id = supplier_product_detail.id
+        return change_logs
 
     async def _prepare_updates(
         self,
         existing_product: SupplierProductCreate,
         new_row_data: dict[str, Any],
         source: SourcesProductEnum,
+        config_name: str | None = None,
     ) -> tuple[
-        SupplierProductUpdate | None, ProductCreate | ProductUpdate | None
+        SupplierProductUpdate | None,
+        ProductCreate | ProductUpdate | None,
+        list[ChangeLogBase],
     ]:
         """
         Подготовка моделей обновления.
-        Возвращает кортеж (local_update, bitrix_update).
+        Возвращает кортеж (local_update, bitrix_update, change_update).
         """
         local_update: dict[str, Any] = {
             "external_id": existing_product.external_id,
@@ -554,7 +593,7 @@ class FileImportService:
         #     external_id=existing_product.external_id,
         #     code=existing_product.code,
         # )
-
+        change_logs: list[ChangeLogBase] = []
         has_local_changes = False
         bitrix_update: ProductCreate | ProductUpdate | None = None
         needs_bitrix_update = False
@@ -564,11 +603,14 @@ class FileImportService:
             bitrix_update = ProductUpdate(
                 internal_id=existing_product.product_id
             )
-        else:
-            bitrix_update = ProductCreate(name=existing_product.name)
+        # else:
+        #     bitrix_update = ProductCreate(name=existing_product.name)
 
         # Логика синхронизации
-        if not existing_product.should_export_to_crm:
+        if (
+            not existing_product.should_export_to_crm
+            and not existing_product.needs_review
+        ):
             # Простое обновление локальных данных
             for field, new_wrapper in new_row_data.items():
                 if (
@@ -587,6 +629,7 @@ class FileImportService:
                     has_local_changes = True
         else:
             # Сложная логика с синхронизацией с CRM
+            needs_review = getattr(existing_product, "needs_review")
             for field, new_wrapper in new_row_data.items():
                 if (
                     not hasattr(existing_product, field)
@@ -609,17 +652,31 @@ class FileImportService:
                 force_import = new_wrapper.get("force_import")
                 sync_with_crm = new_wrapper.get("sync_with_crm")
 
-                if force_import and hasattr(bitrix_update, field):
+                if (
+                    force_import
+                    and bitrix_update
+                    and hasattr(bitrix_update, field)
+                ):
                     setattr(bitrix_update, field, new_val)
                     needs_bitrix_update = True
-
-                if sync_with_crm:
-                    # TODO: Логика пометки для ручной обработки
-                    pass
+                elif sync_with_crm:
+                    change_log_data: dict[str, Any] = {
+                        "supplier_product_id": existing_product.id,
+                        "source": source,
+                        "config_name": config_name,
+                        "field_name": field,
+                        "old_value": str(old_val),
+                        "new_value": str(new_val),
+                        "value_type": type(old_val).__name__,
+                    }
+                    change_logs.append(ChangeLogBase(**change_log_data))
+                    if not needs_review:
+                        local_update["needs_review"] = True
+                        has_local_changes = True
 
         # Предварительная обработка данных
-        if has_local_changes:
-            local_update = await self._preprocess_data(source, local_update)
+        # if has_local_changes:
+        #     local_update = await self._preprocess_data(source, local_update)
 
         return (
             (
@@ -628,6 +685,7 @@ class FileImportService:
                 else None
             ),
             bitrix_update if needs_bitrix_update else None,
+            change_logs,
         )
 
     async def _preprocess_data(
