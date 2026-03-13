@@ -84,6 +84,7 @@ class SupplierProductBase(BaseFields):
     supplier_subcategory: (
         Annotated[str, StringConstraints(max_length=150)] | None
     ) = None
+    brend: Annotated[str, StringConstraints(max_length=150)] | None = None
 
     # Медиа
     detail_picture: (

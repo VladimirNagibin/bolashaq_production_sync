@@ -134,6 +134,9 @@ class SupplierProduct(Base):  # type: ignore[misc]
     supplier_subcategory: Mapped[str | None] = mapped_column(
         String(150), index=True, comment="Подкатегория в системе поставщика"
     )
+    brend: Mapped[str | None] = mapped_column(
+        String(150), index=True, comment="Бренд"
+    )
 
     # Медиа
     detail_picture: Mapped[str | None] = mapped_column(

@@ -69,6 +69,7 @@ class SupplierProductAdmin(
         "complects": "Связь с комплектующими",
         "more_photo": "Дополнительные картинки",
         "change_logs": "История изменений",
+        "brend": "Бренд",
     }
     column_default_sort = [("source", True)]  # Сортировка по умолчанию
     column_sortable_list = [  # Список полей по которым возможна сортировка
@@ -96,6 +97,7 @@ class SupplierProductAdmin(
         "article",
         "supplier_category",
         "supplier_subcategory",
+        "brend",
         "detail_picture",
         "detail_picture_description",
         "preview_picture",
@@ -135,6 +137,7 @@ class SupplierProductAdmin(
         "article",
         "supplier_category",
         "supplier_subcategory",
+        "brend",
         "detail_picture",
         "detail_picture_description",
         "preview_picture",

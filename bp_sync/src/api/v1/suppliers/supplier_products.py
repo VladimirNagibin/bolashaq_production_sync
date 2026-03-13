@@ -43,7 +43,7 @@ async def test(
     """
 
     logger.info("test supplier service")
-    from schemas.enums import SourcesProductEnum  # SourceKeyField,
+    # from schemas.enums import SourcesProductEnum  # SourceKeyField,
 
     # from schemas.supplier_schemas import (
     #     SupplierProductCreate,
@@ -54,18 +54,21 @@ async def test(
     # SupplierComplectUpdate,;
     # SupplierProductUpdate,
     try:
-        repo = supp_client.supplier_product_repo
+        import uuid
+
+        # repo = supp_client.supplier_product_repo
         # su = SupplierProductCreate(
         #     external_id=12,
         #     name="str",
         #     source=SourcesProductEnum.LABSET,
         # )
-        result = await repo.get_supplier_products_with_unprocessed_logs(
-            source_value=SourcesProductEnum.LABSET
+        prod, dik1, dik2 = await supp_client.get_supplier_product_review_data(
+            uuid.UUID("b8025b0b-b7e6-4616-a377-c989872a101e")
         )
-        for product in result:
+        # logger.info(prod)
+        # logger.info(dik1)
+        # logger.info(dik2)
 
-            logger.info(product)
         # res = [r.model_dump_json() for r in result]
         return JSONResponse(
             status_code=status.HTTP_200_OK,

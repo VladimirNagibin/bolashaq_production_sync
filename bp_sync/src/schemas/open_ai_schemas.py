@@ -1,4 +1,4 @@
-# from typing import Any
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -14,10 +14,10 @@ class ProductCharacteristic(BaseModel):  # type: ignore[misc]
 class KitItem(BaseModel):  # type: ignore[misc]
     """Модель для элемента комплектации"""
 
-    code: str  # артикул, например "S245-01"
+    code: str | None = None  # артикул, например "S245-01"
     name: str  # название
-    description: str  # описание
-    specifications: dict[str, str]  # технические характеристики
+    description: str | None = None  # описание
+    specifications: dict[str, Any] = {}  # технические характеристики
 
 
 class ProductSection(BaseModel):  # type: ignore[misc]
@@ -25,5 +25,5 @@ class ProductSection(BaseModel):  # type: ignore[misc]
 
     announcement: str  # анонс/назначение
     description: str  # подробное описание
-    characteristics: list[ProductCharacteristic]  # характеристики
-    kit: list[KitItem]  # комплектация
+    characteristics: list[ProductCharacteristic] = []  # характеристики
+    kit: list[KitItem] = []  # комплектация

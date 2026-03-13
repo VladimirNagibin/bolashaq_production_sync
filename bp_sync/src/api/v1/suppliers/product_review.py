@@ -85,7 +85,7 @@ async def review_product(
     Страница редактирования.
     Загружает SupplierProduct, его логи (не обработанные) и связанный Product.
     """
-    supp_product = await supplier_service.get_supplier_product_data_for_review(
+    supp_product = await supplier_service.get_supplier_product_review_data(
         supp_product_id
     )
     product = None
@@ -136,7 +136,7 @@ async def process_review(
     снимает флаг needs_review.
     """
     # form_data = await request.form()
-    supp_product = await supplier_service.get_supplier_product_data_for_review(
+    supp_product = await supplier_service.get_supplier_product_review_data(
         supp_product_id
     )
     # # 1. Загружаем объекты снова
