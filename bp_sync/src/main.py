@@ -5,7 +5,10 @@ from typing import AsyncIterator
 import uvicorn
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, Request, status
-from fastapi.responses import JSONResponse, ORJSONResponse
+from fastapi.responses import (
+    JSONResponse,
+    ORJSONResponse,
+)
 from sqladmin import Admin
 
 from admin.admin_models import register_models

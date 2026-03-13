@@ -3,7 +3,7 @@ from uuid import UUID
 
 from sqlalchemy import and_, delete, insert, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import contains_eager, selectinload
 
 # from core.logger import logger
 from core.exceptions.repo_exceptions import (
@@ -11,7 +11,6 @@ from core.exceptions.repo_exceptions import (
     EntityNotFoundError,
 )
 from models.supplier_models import SupplierProduct, SupplierProductChangeLog
-from schemas.change_log_schemas import ChangeLogBase, ChangeLogInDB
 from schemas.enums import SourceKeyField, SourcesProductEnum
 from schemas.supplier_schemas import (
     SupplierCharacteristicUpdate,
@@ -22,6 +21,7 @@ from schemas.supplier_schemas import (
 )
 
 from .base_repository import BaseRepository
+from .change_log_repo import ChangeLogRepository
 from .supplier_characteristic_repo import SupplierCharacteristicRepository
 from .supplier_complect_repo import SupplierComplectRepository
 
@@ -33,6 +33,31 @@ class SupplierProductRepository(BaseRepository[SupplierProduct]):
 
     def __init__(self, session: AsyncSession):
         super().__init__(session, entity_name="SupplierProduct")
+        self._characteristic_repo: SupplierCharacteristicRepository | None = (
+            None
+        )
+        self._complect_repo: SupplierComplectRepository | None = None
+        self._change_log_repo: ChangeLogRepository | None = None
+
+    @property
+    def characteristic_repo(self) -> SupplierCharacteristicRepository:
+        if not self._characteristic_repo:
+            self._characteristic_repo = SupplierCharacteristicRepository(
+                self.session
+            )
+        return self._characteristic_repo
+
+    @property
+    def complect_repo(self) -> SupplierComplectRepository:
+        if not self._complect_repo:
+            self._complect_repo = SupplierComplectRepository(self.session)
+        return self._complect_repo
+
+    @property
+    def change_log_repo(self) -> ChangeLogRepository:
+        if not self._change_log_repo:
+            self._change_log_repo = ChangeLogRepository(self.session)
+        return self._change_log_repo
 
     async def create(
         self,
@@ -78,13 +103,13 @@ class SupplierProductRepository(BaseRepository[SupplierProduct]):
 
         # Добавляем характеристики
         if characteristics:
-            char_repo = SupplierCharacteristicRepository(self.session)
-            await char_repo.create_bulk(product.id, characteristics)
+            await self.characteristic_repo.create_bulk(
+                product.id, characteristics
+            )
 
         # Добавляем комплектующие
         if complects:
-            comp_repo = SupplierComplectRepository(self.session)
-            await comp_repo.create_bulk(product.id, complects)
+            await self.complect_repo.create_bulk(product.id, complects)
 
         await self._commit("create_product")
 
@@ -949,60 +974,77 @@ class SupplierProductRepository(BaseRepository[SupplierProduct]):
 
         return int(deleted_count)
 
-    async def bulk_create_change_logs(
-        self,
-        changes: list[ChangeLogBase],
-        batch_size: int = 1000,
-    ) -> list[ChangeLogInDB]:
+    async def get_supplier_products_with_unprocessed_logs(
+        self, source_value: SourcesProductEnum
+    ) -> list[SupplierProduct]:
         """
-        Массовое создание логов изменений
+        Возвращает SupplierProduct по указанному source,
+        у которых needs_review=True.
+        Подгружает связанные Product и только те SupplierProductChangeLog,
+        у которых is_processed=False.
         """
-        if not changes:
-            self.logger.info("No changing logs ts to create")
-            return []
-
-        created_logs: list[ChangeLogInDB] = []
-
-        for i in range(0, len(changes), batch_size):
-            batch = changes[i : i + batch_size]
-
-            batch_dicts: list[dict[str, Any]] = []
-            for change_data in batch:
-                change_dict = change_data.model_dump(exclude_unset=True)
-                batch_dicts.append(change_dict)
-
-            stmt = (
-                insert(SupplierProductChangeLog)
-                .values(batch_dicts)
-                .returning(SupplierProductChangeLog)
+        query = (
+            select(SupplierProduct)
+            .outerjoin(
+                SupplierProductChangeLog,
+                and_(
+                    SupplierProductChangeLog.supplier_product_id
+                    == SupplierProduct.id,
+                    SupplierProductChangeLog.is_processed.is_(False),
+                ),
             )
-            result = await self._execute_query(
-                stmt,
-                operation="batch_create_change_log",
-                batch_num=i // batch_size + 1,
-                batch_size=len(batch),
+            .where(SupplierProduct.source == source_value)
+            .where(SupplierProduct.needs_review)
+            .options(
+                contains_eager(SupplierProduct.change_logs),
+                selectinload(SupplierProduct.product),
             )
-            inserted_rows = result.scalars().all()
+            .order_by(SupplierProduct.id)
+            .distinct()
+        )
 
-            # Преобразуем в детальные схемы
-            for row in inserted_rows:
-                created_logs.append(ChangeLogInDB.model_validate(row))
+        result = await self._execute_query(
+            query,
+            operation="get_supplier_products_with_unprocessed_logs",
+            source_value=source_value.value,
+        )
 
-            # Сбрасываем после каждого батча для получения ID
-            await self._flush(
-                f"batch_create_change_logs_batch_{i//batch_size + 1}"
-            )
-
-            self.logger.debug(
-                f"Created batch {i//batch_size + 1}: "
-                f"{len(inserted_rows)} products"
-            )
-
-            # Финальный коммит
-        await self._commit("batch_create_change_logs")
+        products = result.unique().scalars().all()
 
         self.logger.info(
-            f"Successfully created {len(created_logs)} products in "
-            f"{(len(changes) + batch_size - 1) // batch_size} batches"
+            "Fetched supplier products need review",
+            extra={"source": str(source_value), "count": len(products)},
         )
-        return created_logs
+
+        return products  # type: ignore[no-any-return]
+
+    async def get_supplier_products_by_source(
+        self, source_value: SourcesProductEnum
+    ) -> list[SupplierProduct]:
+        """
+        Возвращает SupplierProduct по указанному source,
+        у которых needs_review=True.
+        Подгружает связанные Product и только те SupplierProductChangeLog,
+        у которых is_processed=False.
+        """
+        query = (
+            select(SupplierProduct)
+            .where(SupplierProduct.source == source_value)
+            .where(SupplierProduct.needs_review)
+            .order_by(SupplierProduct.name)
+        )
+
+        result = await self._execute_query(
+            query,
+            operation="get_supplier_products_by_source_for_review",
+            source_value=source_value.value,
+        )
+
+        products = result.scalars().all()
+
+        self.logger.info(
+            "Fetched supplier products need review",
+            extra={"source": str(source_value), "count": len(products)},
+        )
+
+        return products  # type: ignore[no-any-return]

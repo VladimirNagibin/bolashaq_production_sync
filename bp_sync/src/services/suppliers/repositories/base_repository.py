@@ -30,7 +30,7 @@ class BaseRepository(Generic[T]):
     ) -> Result[Any] | ScalarResult[Any]:
         """Выполнить запрос с логгированием и обработкой ошибок."""
         context_str = f" {context}" if context else ""
-        self.logger.debug(f"Executing {operation}{context_str}")
+        self.logger.debug(f"Executing {operation}: {context_str}")
 
         try:
             result = await self.session.execute(stmt)

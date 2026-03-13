@@ -29,7 +29,6 @@ from schemas.supplier_schemas import (
 )
 from services.products.product_services import ProductClient
 
-from ..open_ai_services import OpenAIService
 from .repositories.supplier_product_repo import SupplierProductRepository
 
 
@@ -45,7 +44,6 @@ class FileImportService:
     ) -> None:
         self._repo = supplier_product_repo
         self._product_client = product_client
-        self._openai_service = OpenAIService()
 
     async def import_file(
         self,
@@ -921,7 +919,7 @@ class FileImportService:
                     f"{len(processing_result.change_logs)} "
                     "change logs..."
                 )
-                await self._repo.bulk_create_change_logs(
+                await self._repo.change_log_repo.bulk_create_change_logs(
                     processing_result.change_logs
                 )
 
@@ -945,29 +943,3 @@ class FileImportService:
                 f"{log_context}: Bitrix sync failed: {str(e)}", exc_info=True
             )
             # Не прерываем основной импорт из-за ошибки Битрикса
-
-    async def _preprocess_data(
-        self,
-        source: SourcesProductEnum,
-        data: dict[str, Any],
-        config_name: str | None = None,
-    ) -> dict[str, Any]:
-        # TODO: Вычисляем раздел, обрабатываем описание и т.д.
-        if source == SourcesProductEnum.LABSET:
-            if description := data.get("description"):
-                detail = self._openai_service.parse_product_with_deepseek(
-                    description,
-                    name=data.get("name", ""),
-                    article=data.get("article"),
-                    brend=data.get("brend"),
-                )
-                if announce := detail.announcement:
-                    data["preview_for_offer"] = announce
-                if descr := detail.description:
-                    data["description_for_offer"] = descr
-                if characts := detail.characteristics:
-                    data["characteristics"] = characts
-                if kit := detail.kit:
-                    data["complects"] = kit
-
-        return data
