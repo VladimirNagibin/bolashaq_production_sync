@@ -30,6 +30,7 @@ from .supplier_admin_model import (
     SupplierCharacteristicAdmin,
     SupplierComplectAdmin,
     SupplierProductAdmin,
+    SupplierProductChangeLogAdmin,
 )
 from .user_admin_model import ManagerAdmin, UserAdmin
 
@@ -238,3 +239,4 @@ def register_models(admin: Admin) -> None:
     admin.add_view(ProductSimplePropertyAdmin)
     admin.add_view(ProductPropertyAdmin)
     admin.add_view(ProductImageAdmin)
+    admin.add_view(SupplierProductChangeLogAdmin)

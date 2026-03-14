@@ -4,7 +4,6 @@ from fastapi import APIRouter, Depends, File, UploadFile, status  # Request,
 from fastapi.responses import JSONResponse
 
 from core.logger import logger
-from services.dependencies.dependencies_repo import request_context
 from services.dependencies.dependencies_suppliers import (
     get_supplier_service,
 )
@@ -12,9 +11,7 @@ from services.suppliers.supplier_services import SupplierClient
 
 from ..schemas.response_schemas import SuccessResponse
 
-supplier_product_router = APIRouter(
-    prefix="/suppliers", dependencies=[Depends(request_context)]
-)
+supplier_product_router = APIRouter()
 
 
 @supplier_product_router.post("/import/{config}")  # type: ignore
@@ -44,8 +41,10 @@ async def test(
     """
     test
     """
-    logger.info("Received Bitrix24 webhook request")
+
+    logger.info("test supplier service")
     # from schemas.enums import SourcesProductEnum  # SourceKeyField,
+
     # from schemas.supplier_schemas import (
     #     SupplierProductCreate,
     # )
@@ -55,22 +54,25 @@ async def test(
     # SupplierComplectUpdate,;
     # SupplierProductUpdate,
     try:
-        repo = supp_client.supplier_product_repo
+        import uuid
+
+        # repo = supp_client.supplier_product_repo
         # su = SupplierProductCreate(
         #     external_id=12,
         #     name="str",
         #     source=SourcesProductEnum.LABSET,
         # )
-        result = await repo.count_by_filters(
-            search="COD"
-            # "1e496625-896c-47ca-aaae-491dc8a6aa74",
-            # SupplierProductUpdate(name="asdfg", code="CODE")
+        prod, dik1, dik2 = await supp_client.get_supplier_product_review_data(
+            uuid.UUID("b8025b0b-b7e6-4616-a377-c989872a101e")
         )
-        print(result)
+        # logger.info(prod)
+        # logger.info(dik1)
+        # logger.info(dik2)
+
         # res = [r.model_dump_json() for r in result]
         return JSONResponse(
             status_code=status.HTTP_200_OK,
-            content=result.model_dump_json(),
+            content="result.model_dump_json()",
         )
     except Exception as e:
         logger.error(f"Unhandled error: {e}")

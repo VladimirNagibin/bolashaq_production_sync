@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Обработка товара</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="container mt-5">
+
+    <div class="mb-4">
+        <a href="/api/v1/suppliers/products/?source={{ supplier_product.source }}" class="btn btn-secondary">&larr; Назад к списку</a>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12">
+            <h2>Обработка: {{ supplier_product.name }}</h2>
+            <p class="text-muted">Source: {{ supplier_product.source }} | ID: {{ supplier_product.id }}</p>
+
+            {% if not product %}
+            <div class="alert alert-warning">
+                <strong>Внимание:</strong> Данный товар поставщика не привязан к товару в Битрикс.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <form method="post" action="/api/v1/suppliers/review/{{ supplier_product.id }}">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                Изменения полей
+            </div>
+            <div class="card-body">
+                {% if not review_data %}
+                <p>Нет необработанных изменений логов.</p>
+                {% else %}
+                <table class="table table-bordered">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Поле</th>
+                            <th>Старое значение (Log)</th>
+                            <th>Новое значение (Log)</th>
+                            <th>Текущее значение в Product</th>
+                            <th>Значение для сохранения</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in review_data %}
+                        <tr>
+                            <td><strong>{{ item.field_name }}</strong></td>
+                            <td class="text-muted">{{ item.old_value or '-' }}</td>
+                            <td>{{ item.new_value or '-' }}</td>
+                            <td>
+                                <span class="badge bg-info text-dark">{{ item.current_product_value or '-' }}</span>
+                            </td>
+                            <td>
+                                <input type="text"
+                                       class="form-control"
+                                       name="field_{{ item.log_id }}"
+                                       value="{{ item.new_value }}"
+                                       {% if not product %}disabled{% endif %}
+                                >
+                                <small class="text-muted d-block mt-1">Принять или изменить</small>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% endif %}
+            </div>
+            <div class="card-footer text-end">
+                <button type="submit" class="btn btn-success btn-lg">Подтвердить изменения</button>
+            </div>
+        </div>
+    </form>
+
+</body>
+</html>

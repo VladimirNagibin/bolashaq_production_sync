@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Список товаров к проверке: {{ source }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="container mt-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Требуют проверки: {{ source }}</h2>
+        <a href="/api/v1/suppliers/" class="btn btn-secondary">Вернуться к источникам</a>
+    </div>
+
+    {% if products %}
+    <table class="table table-striped table-hover">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Название</th>
+                <th>Код (Code)</th>
+                <th>Внешний ID</th>
+                <th>Действие</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in products %}
+            <tr>
+                <td>{{ p.id }}</td>
+                <td>{{ p.name }}</td>
+                <td>{{ p.code }}</td>
+                <td>{{ p.external_id }}</td>
+                <td>
+                    <a href="/api/v1/suppliers/review/{{ p.id }}" class="btn btn-sm btn-success">Обработать</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="alert alert-info">Товаров, требующих проверки, для этого источника не найдено.</div>
+    {% endif %}
+</body>
+</html>

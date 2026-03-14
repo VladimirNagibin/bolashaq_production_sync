@@ -30,6 +30,7 @@ from models.supplier_models import (  # noqa: F401
     SupplierCharacteristic,
     SupplierComplect,
     SupplierProduct,
+    SupplierProductChangeLog,
 )
 from models.timeline_comment_models import TimelineComment  # noqa: F401
 from models.user_models import Manager, User  # noqa: F401

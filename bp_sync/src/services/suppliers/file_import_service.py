@@ -1,35 +1,49 @@
 import re
 from typing import Any
+from uuid import UUID
 
 import pandas as pd
 
+from core.exceptions.supplier_exceptions import (
+    DatabaseError,
+    DataMappingError,
+    FileProcessingError,
+    ImportError,
+)
 from core.logger import logger
 from models.supplier_models import SupplierProduct
-from schemas.enums import SourceKeyField, SourcesProductEnum
-from schemas.product_schemas import ProductCreate, ProductUpdate
+from schemas.change_log_schemas import ChangeLogBase
+from schemas.enums import (
+    SourceKeyField,
+    SourcesProductEnum,
+    TransformationRule,
+)
+from schemas.product_schemas import ProductUpdate
 from schemas.supplier_schemas import (
     ImportConfigDetail,
     ImportResult,
+    ProcessingResult,
     SupplierProductCreate,
     SupplierProductUpdate,
+    UpdateResult,
 )
 from services.products.product_services import ProductClient
 
-from ..open_ai_services import OpenAIService
 from .repositories.supplier_product_repo import SupplierProductRepository
 
 
 class FileImportService:
     """Сервис для импорта файлов с настройками из БД."""
 
+    TRUE_VALUES = {"true", "yes", "1", "да", "y", "t", "1.0"}
+
     def __init__(
         self,
         supplier_product_repo: SupplierProductRepository,
         product_client: ProductClient,
-    ):
-        self.supplier_product_repo = supplier_product_repo
-        self.product_client = product_client
-        self.open_ai_service = OpenAIService()
+    ) -> None:
+        self._repo = supplier_product_repo
+        self._product_client = product_client
 
     async def import_file(
         self,
@@ -47,41 +61,47 @@ class FileImportService:
 
         Returns:
             ImportResult с результатами импорта
+
+        Raises:
+            ImportError: При критических ошибках импорта
         """
         result = ImportResult()
-        log_prefix = f"FileImport [{filename or 'unknown'}]"
+        log_context = f"FileImport [{filename or 'unknown'}]"
 
-        logger.info(f"{log_prefix}: Starting import process")
+        logger.info(f"{log_context}: Starting import process")
 
         try:
             # 1. Чтение файла согласно настройкам
-            df = await self._load_dataframe(
+            dataframe = await self._load_dataframe(
                 file_content,
                 config,
-                log_prefix,
+                log_context,
             )
-            if df.empty:
+
+            if dataframe.empty:
                 logger.warning(
-                    f"{log_prefix}: File is empty or no data found."
+                    f"{log_context}: File is empty or no data found."
                 )
                 return result
 
-            logger.info(f"{log_prefix}: Loaded {len(df)} rows from file.")
+            logger.info(
+                f"{log_context}: Loaded {len(dataframe)} rows from file."
+            )
 
             # 2. Трансформация данных и маппинг колонок
-            mapped_rows = await self._transform_and_map_rows(df, config)
+            mapped_rows = await self._map_dataframe_columns(dataframe, config)
             if not mapped_rows:
-                logger.warning(f"{log_prefix}: No data after mapping.")
+                logger.warning(f"{log_context}: No data after mapping.")
                 return result
 
             # 3. Загрузка существующих записей для сравнения
-            existing_products_map = await self._fetch_existing_products(
+            existing_products = await self._fetch_existing_products(
                 source=config.source,
                 mapped_rows=mapped_rows,
                 key_field=config.source_key_field,
             )
             logger.info(
-                f"{log_prefix}: Found {len(existing_products_map)} existing "
+                f"{log_context}: Found {len(existing_products)} existing "
                 "records in DB."
             )
 
@@ -90,321 +110,436 @@ class FileImportService:
             # Получить все позиции по поставщику для порлого сравнения
 
             # 4. Подготовка пакетов для создания/обновления
-            products_to_create: list[SupplierProductCreate] = []
-            products_to_update: list[SupplierProductUpdate] = []
-            bitrix_updates: list[ProductCreate | ProductUpdate] = []
-            # TODO: список позиций на обработку - дополнительно
+            processing_result = await self._process_mapped_data(
+                mapped_rows=mapped_rows,
+                existing_products=existing_products,
+                config=config,
+                log_context=log_context,
+            )
 
-            # 5. Обработка данных
-            for row in mapped_rows:
-                try:
-                    await self._process_single_row(
-                        row_data=row,
-                        existing_map=existing_products_map,
-                        config=config,
-                        result=result,
-                        create_list=products_to_create,
-                        update_list=products_to_update,
-                        bitrix_list=bitrix_updates,
-                    )
-                except Exception as e:
-                    error_msg = f"Error processing row: {str(e)}"
-                    logger.error(f"{log_prefix}: {error_msg}", exc_info=True)
-                    result.errors.append(error_msg)
+            # 5. Сохранение изменений в БД
+            await self._save_import_results(
+                processing_result, log_context, config
+            )
 
-            # 6. Сохранение изменений в БД
-            if products_to_create:
-                logger.info(
-                    f"{log_prefix}: Creating {len(products_to_create)} "
-                    "new products..."
-                )
-                await self.supplier_product_repo.create_products(
-                    products_to_create, config.source_key_field
+            # 6. Синхронизация с Битрикс
+            if processing_result.bitrix_updates:
+                await self._sync_with_bitrix(
+                    processing_result.bitrix_updates, log_context
                 )
 
-            if products_to_update:
-                logger.info(
-                    f"{log_prefix}: Updating {len(products_to_update)} "
-                    "existing products..."
-                )
-                await self.supplier_product_repo.update_products(
-                    products_to_update, config.source_key_field, config.source
-                )
-
-            # 7. Синхронизация с Битрикс
-            if bitrix_updates:
-                logger.info(
-                    f"{log_prefix}: Sending {len(bitrix_updates)} "
-                    "updates to Bitrix24..."
-                )
-                # await self.product_client.create_or_update_product(
-                #     bitrix_updates
-                # )
+            # Обновляем счетчики в результате
+            result.added_count = len(processing_result.products_to_create)
+            result.updated_count = len(processing_result.products_to_update)
+            result.bitrix_update_count = len(processing_result.bitrix_updates)
+            result.errors = processing_result.errors
 
             logger.info(
-                f"{log_prefix}: Import finished successfully. "
+                f"{log_context}: Import finished successfully. "
                 f"Added: {result.added_count}, "
                 f"Updated: {result.updated_count}, "
                 f"Bitrix: {result.bitrix_update_count}"
             )
 
-        except ValueError as e:
-            error_msg = f"Validation/Configuration error: {str(e)}"
-            logger.error(f"{log_prefix}: {error_msg}")
+        except FileProcessingError as e:
+            error_msg = f"File processing error: {str(e)}"
+            logger.error(f"{log_context}: {error_msg}")
             result.errors.append(error_msg)
+        except DataMappingError as e:
+            error_msg = f"Data mapping error: {str(e)}"
+            logger.error(f"{log_context}: {error_msg}")
+            result.errors.append(error_msg)
+        except DatabaseError as e:
+            error_msg = f"Database error: {str(e)}"
+            logger.error(f"{log_context}: {error_msg}", exc_info=True)
+            result.errors.append(error_msg)
+            raise ImportError(error_msg) from e
         except Exception as e:
             error_msg = f"Critical import failure: {str(e)}"
-            logger.error(f"{log_prefix}: {error_msg}", exc_info=True)
+            logger.error(f"{log_context}: {error_msg}", exc_info=True)
             result.errors.append(error_msg)
-            # В зависимости от логики, можно пробрасывать исключение дальше
-            # raise
+            raise ImportError(error_msg) from e
 
         return result
 
     async def _load_dataframe(
-        self, content: bytes, config: ImportConfigDetail, log_prefix: str
+        self, content: bytes, config: ImportConfigDetail, log_context: str
     ) -> pd.DataFrame:
         """Чтение файла в DataFrame согласно формату."""
-
         file_format = (config.file_format or "XLSX").upper()
 
         try:
             import io
 
+            read_params: dict[str, Any] = {
+                "header": None,
+                "dtype": str,
+                "keep_default_na": False,
+                "na_values": [""],
+            }
+
             if file_format == "CSV":
-                # Для CSV файлов
-                df = pd.read_csv(
-                    io.BytesIO(content),
-                    encoding=config.encoding or "utf-8",
-                    delimiter=config.delimiter or ";",
-                    header=None,
-                    dtype=str,
+                read_params.update(
+                    {
+                        "encoding": config.encoding or "utf-8",
+                        "sep": config.delimiter or ";",
+                    }
                 )
+                dataframe = pd.read_csv(io.BytesIO(content), **read_params)
+                # # Для CSV файлов
+                # df = pd.read_csv(
+                #     io.BytesIO(content),
+                #     encoding=config.encoding or "utf-8",
+                #     delimiter=config.delimiter or ";",
+                #     header=None,
+                #     dtype=str,
+                # )
             elif file_format == "XLSX":
-                # Для Excel файлов
-                df = pd.read_excel(
-                    io.BytesIO(content),
-                    header=None,
-                    dtype=str,
-                    engine="openpyxl",
-                )
+                read_params["engine"] = "openpyxl"
+                dataframe = pd.read_excel(io.BytesIO(content), **read_params)
+                # # Для Excel файлов
+                # df = pd.read_excel(
+                #     io.BytesIO(content),
+                #     header=None,
+                #     dtype=str,
+                #     engine="openpyxl",
+                # )
             else:
                 raise ValueError(
                     f"Неподдерживаемый формат файла: {file_format}"
                 )
 
-            logger.info(
-                f"{log_prefix}: Загружено {df.shape[0]} строк, "
-                f"{df.shape[1]} колонок"
+            logger.debug(
+                f"{log_context}: Raw data shape: {dataframe.shape}, "
+                f"first 3 rows:\n{dataframe.head(3)}"
             )
-
-            # Логируем первые строки для отладки
-            logger.debug(f"{log_prefix}: Первые 3 строки:\n{df.head(3)}")
 
             # Применяем настройки строк
-            df = self._apply_row_settings(df, config, log_prefix)
-
-            return df
-
-        except Exception as e:
-            logger.error(
-                f"{log_prefix}: Ошибка чтения файла: {str(e)}", exc_info=True
+            dataframe = self._apply_row_settings(
+                dataframe, config, log_context
             )
-            raise ValueError(f"Ошибка чтения файла: {str(e)}")
+
+            return dataframe
+
+        except pd.errors.EmptyDataError:
+            raise FileProcessingError("File is empty")
+        except pd.errors.ParserError as e:
+            raise FileProcessingError(f"Failed to parse file: {str(e)}")
+        except Exception as e:
+            raise FileProcessingError(f"Error reading file: {str(e)}")
 
     def _apply_row_settings(
-        self, df: pd.DataFrame, config: ImportConfigDetail, log_prefix: str
+        self,
+        dataframe: pd.DataFrame,
+        config: ImportConfigDetail,
+        log_context: str,
     ) -> pd.DataFrame:
         """Применение настроек строк к DataFrame."""
+        df = dataframe.copy()
 
         # Обработка заголовков
         if config.header_row_index is not None:
-            header_idx = config.header_row_index
-
-            if 0 <= header_idx < len(df):
-                # Получаем заголовки из указанной строки
-                headers = df.iloc[header_idx].astype(str)
-
-                # Очищаем заголовки
-                headers = headers.str.strip()
-                headers = headers.replace(
-                    ["", "nan", "None", "NaN"], "column_"
-                )
-
-                # Если заголовок пустой, даем имя по индексу
-                for i, h in enumerate(headers):
-                    if pd.isna(h) or h == "" or h == "nan":
-                        headers.iloc[i] = f"column_{i}"
-
-                # Устанавливаем заголовки
-                df.columns = headers
-
-                # Удаляем строку заголовка из данных
-                df = df.drop(index=header_idx)
-
-                logger.info(
-                    f"{log_prefix}: Заголовки установлены из строки "
-                    f"{header_idx}: {list(df.columns)}"
-                )
-            else:
-                logger.warning(
-                    f"{log_prefix}: Строка заголовка {header_idx} "
-                    f"вне диапазона (0-{len(df)-1})"
-                )
+            df = self._set_headers_from_row(
+                df, config.header_row_index, log_context
+            )
 
         # Пропуск строк до начала данных
         if config.data_start_row is not None:
-            start_idx = config.data_start_row
+            df = self._slice_data_start(df, config, log_context)
 
-            # Корректируем индекс если уже удалили строку заголовка
-            if (
-                config.header_row_index is not None
-                and config.header_row_index < start_idx
-            ):
-                start_idx -= 1
+        # Очистка данных
+        df = self._clean_dataframe(df, log_context)
 
-            if 0 <= start_idx < len(df):
-                df = df.iloc[start_idx:]
-                logger.info(
-                    f"{log_prefix}: Данные обрезаны до строки "
-                    f"{config.data_start_row}, осталось {len(df)} строк"
-                )
-            else:
-                logger.warning(
-                    f"{log_prefix}: Строка начала данных {start_idx} "
-                    "вне диапазона"
-                )
+        return df
 
-        # Сброс индекса
-        df = df.reset_index(drop=True)
+    def _set_headers_from_row(
+        self, df: pd.DataFrame, header_idx: int, log_context: str
+    ) -> pd.DataFrame:
+        """Установка заголовков из указанной строки."""
+        if not 0 <= header_idx < len(df):
+            logger.warning(
+                f"{log_context}: Header row {header_idx} out of range "
+                f"(0-{len(df)-1})"
+            )
+            return df
 
-        # Удаляем пустые строки
-        before = len(df)
-        df = df.dropna(how="all")
-        if len(df) < before:
+        # Получаем и очищаем заголовки
+        headers = df.iloc[header_idx].astype(str)
+        headers = headers.str.strip()
+        headers = headers.replace(["", "nan", "None", "NaN", "NaT"], "")
+
+        # Генерируем имена для пустых колонок
+        for i, header in enumerate(headers):
+            if not header or pd.isna(header):
+                headers.iloc[i] = f"column_{i}"
+
+        # Устанавливаем заголовки и удаляем строку заголовка
+        df.columns = headers
+        df = df.drop(index=header_idx)
+
+        logger.info(
+            f"{log_context}: Headers set from row {header_idx}: "
+            f"{list(df.columns)}"
+        )
+
+        return df
+
+    def _slice_data_start(
+        self, df: pd.DataFrame, config: ImportConfigDetail, log_context: str
+    ) -> pd.DataFrame:
+        """Обрезка данных до указанной строки начала."""
+        if config.data_start_row is None:
+            return df
+
+        start_idx = config.data_start_row
+
+        # Корректируем индекс, если уже удалили строку заголовка
+        if (
+            config.header_row_index is not None
+            and config.header_row_index < start_idx
+        ):
+            start_idx -= 1
+
+        if 0 <= start_idx < len(df):
+            df = df.iloc[start_idx:]
             logger.info(
-                f"{log_prefix}: Удалено {before - len(df)} пустых строк"
+                f"{log_context}: Data trimmed to row {config.data_start_row}, "
+                f"remaining {len(df)} rows"
+            )
+        else:
+            logger.warning(
+                f"{log_context}: Data start row {start_idx} out of range"
             )
 
         return df
 
-    async def _transform_and_map_rows(
-        self, df: pd.DataFrame, config: ImportConfigDetail
-    ) -> list[dict[str, Any]]:
-        """Применение маппинга колонок к DataFrame."""
+    def _clean_dataframe(
+        self, df: pd.DataFrame, log_context: str
+    ) -> pd.DataFrame:
+        """Очистка DataFrame от пустых строк."""
+        df = df.reset_index(drop=True)
 
-        # Предварительная подготовка маппинга для быстрого доступа по индексу
-        # Создаем словарь: {target_field:
-        # (source_index_or_name, transformation_rule, force, sync)}
-        field_mappings: list[dict[str, Any]] = []
+        # Удаляем полностью пустые строки
+        before = len(df)
+        df = df.dropna(how="all")
 
-        # Формируем карту имен колонок -> индексы для быстрого поиска
-        col_name_to_index = {name: i for i, name in enumerate(df.columns)}
-
-        for mapping in config.column_mappings:
-            col_idx = None
-            if mapping.source_column_index:
-                col_idx = mapping.source_column_index
-            elif (
-                mapping.source_column_name
-                and mapping.source_column_name in col_name_to_index
-            ):
-                col_idx = col_name_to_index[mapping.source_column_name]
-
-            # Если колонка не найдена, пропускаем этот маппинг
-            if col_idx is None:
-                continue
-
-            field_mappings.append(
-                {
-                    "target_field": mapping.target_field,
-                    "col_idx": col_idx,
-                    "rule": mapping.transformation_rule,
-                    "force_import": mapping.force_import,
-                    "sync_with_crm": mapping.sync_with_crm,
-                }
+        if len(df) < before:
+            logger.info(
+                f"{log_context}: Removed {before - len(df)} empty rows"
             )
 
-        mapped_data: list[dict[str, Any]] = []
+        return df
 
-        # Оптимизация: itertuples значительно быстрее iterrows
-        # для больших объемов name=None возвращает обычные кортежи,
-        # что еще быстрее
-        for row_tuple in df.itertuples(index=False, name=None):
-            row_dict: dict[str, Any] = {}
+    async def _map_dataframe_columns(
+        self, dataframe: pd.DataFrame, config: ImportConfigDetail
+    ) -> list[dict[str, Any]]:
+        """Применение маппинга колонок к DataFrame."""
+        try:
+            # Создаем карту колонок для быстрого доступа
+            column_mappings = self._build_column_mappings(dataframe, config)
 
-            for fm in field_mappings:
-                try:
-                    raw_value = row_tuple[fm["col_idx"]]
-                except IndexError:
-                    raw_value = None
+            if not column_mappings:
+                raise DataMappingError("No valid column mappings found")
 
-                # Применение трансформации
-                value = await self._apply_value_transformation(
-                    raw_value, fm["rule"]
+            # Преобразуем строки в словари
+            mapped_data: list[dict[str, Any]] = []
+            for row_tuple in dataframe.itertuples(index=False, name=None):
+                mapped_row = self._map_single_row(row_tuple, column_mappings)
+                if mapped_row:  # Только непустые строки
+                    mapped_data.append(mapped_row)
+
+            return mapped_data
+
+        except Exception as e:
+            raise DataMappingError(f"Failed to map columns: {str(e)}")
+
+    def _build_column_mappings(
+        self, df: pd.DataFrame, config: ImportConfigDetail
+    ) -> list[dict[str, Any]]:
+        """Построение карты маппинга колонок."""
+        column_name_to_index = {
+            name: idx for idx, name in enumerate(df.columns)
+        }
+        mappings: list[dict[str, Any]] = []
+
+        for db_mapping in config.column_mappings:
+            # Определяем индекс колонки
+            col_idx = None
+
+            if db_mapping.source_column_index is not None:
+                col_idx = db_mapping.source_column_index
+            elif (
+                db_mapping.source_column_name
+                and db_mapping.source_column_name in column_name_to_index
+            ):
+                col_idx = column_name_to_index[db_mapping.source_column_name]
+
+            if col_idx is not None and 0 <= col_idx < len(df.columns):
+                mappings.append(
+                    {
+                        "target_field": db_mapping.target_field,
+                        "column_index": col_idx,
+                        "transformation_rule": db_mapping.transformation_rule,
+                        "force_import": db_mapping.force_import,
+                        "sync_with_crm": db_mapping.sync_with_crm,
+                    }
                 )
 
-                row_dict[fm["target_field"]] = {
-                    "value": value,
-                    "force_import": fm["force_import"],
-                    "sync_with_crm": fm["sync_with_crm"],
-                }
+        return mappings
 
-            mapped_data.append(row_dict)
+    def _map_single_row(
+        self, row: tuple[Any], column_mappings: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Маппинг одной строки данных."""
+        mapped_row: dict[str, Any] = {}
 
-        return mapped_data
+        for mapping in column_mappings:
+            try:
+                raw_value = row[mapping["column_index"]]
 
-    async def _apply_value_transformation(
-        self, value: Any, rule: str | None
-    ) -> Any:
-        """Применение правил трансформации к значению."""
-        # список true значений для bool преобразования для поставщиков
-        true_values = ["true", "yes", "1", "да"]
+                # Пропускаем пустые значения
+                if self._is_empty_value(raw_value):
+                    continue
+
+                # Применяем трансформацию
+                transformed_value = self._apply_transformation(
+                    raw_value, mapping["transformation_rule"]
+                )
+
+                if transformed_value is not None:
+                    mapped_row[mapping["target_field"]] = {
+                        "value": transformed_value,
+                        "force_import": mapping["force_import"],
+                        "sync_with_crm": mapping["sync_with_crm"],
+                    }
+
+            except (IndexError, TypeError) as e:
+                logger.debug(f"Error mapping row: {e}")
+                continue
+
+        return mapped_row
+
+    def _is_empty_value(self, value: Any) -> bool:
+        """Проверка на пустое значение."""
         if value is None:
-            return None
+            return True
+        if isinstance(value, (float, int)) and pd.isna(value):
+            return True
+        if isinstance(value, str) and not value.strip():
+            return True
+        return False
 
-        if not rule:
+    def _apply_transformation(self, value: Any, rule: str | None) -> Any:
+        """Применение правил трансформации к значению."""
+        if value is None or not rule:
             return value
 
         try:
-            if rule == "strip" and isinstance(value, str):
+            # String transformations
+            if rule == TransformationRule.STRIP and isinstance(value, str):
                 return value.strip()
-            elif rule == "upper" and isinstance(value, str):
+            elif rule == TransformationRule.UPPER and isinstance(value, str):
                 return value.upper()
-            elif rule == "lower" and isinstance(value, str):
+            elif rule == TransformationRule.LOWER and isinstance(value, str):
                 return value.lower()
-            elif rule == "float" and value is not None:
-                return float(value)
-            elif rule == "int" and value is not None:
-                return int(float(value))
-            elif rule == "bool" and value is not None:
-                if isinstance(value, str):
-                    return value.lower() in true_values
-                return bool(value)
-            elif rule.startswith("re:") and isinstance(value, str):
-                pattern = rule[3:]
-                match = re.search(pattern, value)
-                return match.group(1) if match else None
-            elif rule.startswith("def:") and value is not None:
-                method = rule[4:]
-                return getattr(self, method)(value)
-        except (ValueError, TypeError, AttributeError) as e:
+
+            # Numeric transformations
+            elif rule == TransformationRule.TO_FLOAT:
+                return self._safe_float_conversion(value)
+            elif rule == TransformationRule.TO_INT:
+                return self._safe_int_conversion(value)
+            elif rule == TransformationRule.TO_BOOL:
+                return self._safe_bool_conversion(value)
+
+            # Regex transformation
+            elif rule and rule.startswith(TransformationRule.REGEX):
+                return self._apply_regex_transformation(value, rule[3:])
+
+            # Custom transformation
+            elif rule and rule.startswith(TransformationRule.CUSTOM):
+                method_name = rule[4:]
+                return self._apply_custom_transformation(value, method_name)
+
+        except Exception as e:
             logger.debug(
                 f"Transformation failed for value '{value}' with rule "
                 f"'{rule}': {e}"
             )
             return None
-        except Exception as e:
-            logger.debug(
-                f"Transformation error for value '{value}' with rule "
-                f"'{rule}': {e}"
-            )
-            return None
+
         return value
 
-    def _upd_price(self, value: Any) -> float:
-        """Пример преобразования цены из _apply_value_transformation."""
-        return float(value)
+    def _safe_float_conversion(self, value: Any) -> float | None:
+        """Безопасное преобразование в float."""
+        try:
+            if isinstance(value, (int, float)):
+                return float(value)
+            if isinstance(value, str):
+                cleaned = value.strip().replace(",", ".")
+                return float(cleaned)
+        except (ValueError, TypeError):
+            pass
+        return None
+
+    def _safe_int_conversion(self, value: Any) -> int | None:
+        """Безопасное преобразование в int."""
+        try:
+            if isinstance(value, (int, float)):
+                return int(value)
+            if isinstance(value, str):
+                cleaned = value.strip()
+                return int(float(cleaned))
+        except (ValueError, TypeError):
+            pass
+        return None
+
+    def _safe_bool_conversion(self, value: Any) -> bool | None:
+        """Безопасное преобразование в bool."""
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return bool(value)
+        if isinstance(value, str):
+            return value.lower().strip() in self.TRUE_VALUES
+        return None
+
+    def _apply_regex_transformation(
+        self, value: str, pattern: str
+    ) -> str | None:
+        """Применение регулярного выражения."""
+        try:
+            match = re.search(pattern, value)
+            return match.group(1) if match and match.groups() else None
+        except re.error as e:
+            logger.debug(f"Regex error: {e}")
+            return None
+
+    def _apply_custom_transformation(
+        self, value: Any, method_name: str
+    ) -> Any:
+        """Применение пользовательского метода трансформации."""
+        method = getattr(self, method_name, None)
+        if method and callable(method):
+            try:
+                return method(value)
+            except Exception as e:
+                logger.debug(
+                    f"Custom transformation '{method_name}' failed: {e}"
+                )
+        return value
+
+    def _transform_price(self, value: Any) -> float | None:
+        """Пример пользовательской трансформации для цены."""
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            # Удаляем валюту и пробелы
+            cleaned = re.sub(r"[^\d,.]", "", value).replace(",", ".")
+            try:
+                return float(cleaned)
+            except ValueError:
+                pass
+        return None
 
     async def _fetch_existing_products(
         self,
@@ -413,245 +548,398 @@ class FileImportService:
         key_field: SourceKeyField,
     ) -> dict[str, SupplierProductCreate]:
         """Получение существующих записей из БД."""
-
-        key_values: list[Any] = []
-        for row in mapped_rows:
-            val = row.get(key_field.value, {}).get("value")
-            if val is not None:
-                # Приводим тип ключа к строке или int в зависимости от поля
-                if key_field == SourceKeyField.EXTERNAL_ID:
-                    try:
-                        key_values.append(int(val))
-                    except (ValueError, TypeError):
-                        pass
-                else:
-                    key_values.append(str(val))
+        key_values = self._extract_key_values(mapped_rows, key_field)
 
         if not key_values:
             return {}
 
+        try:
+            filters = self._build_fetch_filters(source, key_field, key_values)
+            records = await self._repo.get_by_filters(**filters)
+
+            return {
+                self._extract_record_key(record, key_field): record
+                for record in records
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to fetch existing records: {e}")
+            raise DatabaseError(f"Error fetching existing products: {str(e)}")
+
+    def _extract_key_values(
+        self, mapped_rows: list[dict[str, Any]], key_field: SourceKeyField
+    ) -> list[Any]:
+        """Извлечение значений ключевого поля из строк."""
+        key_values: list[Any] = []
+        key_field_name = key_field.value
+
+        for row in mapped_rows:
+            value_wrapper = row.get(key_field_name, {})
+            raw_value = value_wrapper.get("value")
+
+            if raw_value is not None:
+                # Приводим тип ключа в зависимости от поля
+                if key_field == SourceKeyField.EXTERNAL_ID:
+                    try:
+                        key_values.append(int(raw_value))
+                    except (ValueError, TypeError):
+                        pass
+                else:
+                    key_values.append(str(raw_value))
+
+        return key_values
+
+    def _build_fetch_filters(
+        self,
+        source: SourcesProductEnum,
+        key_field: SourceKeyField,
+        key_values: list[Any],
+    ) -> dict[str, Any]:
+        """Построение фильтров для запроса к БД."""
         filters: dict[str, Any] = {"source": source}
+
         if key_field == SourceKeyField.EXTERNAL_ID:
             filters["external_ids"] = key_values
         else:
-            filters["codes"] = key_values
+            filters["codes"] = [str(v) for v in key_values]
 
-        try:
-            records = await self.supplier_product_repo.get_by_filters(
-                **filters
-            )
+        return filters
 
-            return {
-                self._get_record_key(rec, key_field): rec for rec in records
-            }
-        except Exception as e:
-            logger.error(f"Failed to fetch existing records: {e}")
-            return {}
-
-    def _get_record_key(
+    def _extract_record_key(
         self, record: SupplierProductCreate, key_field: SourceKeyField
     ) -> str:
-        """Получение значения ключевого поля из записи."""
+        """Извлечение значения ключевого поля из записи."""
         if key_field == SourceKeyField.EXTERNAL_ID:
-            return str(record.external_id)
+            return (
+                str(record.external_id)
+                if record.external_id is not None
+                else ""
+            )
         return record.code or ""
+
+    async def _process_mapped_data(
+        self,
+        mapped_rows: list[dict[str, Any]],
+        existing_products: dict[str, SupplierProductCreate],
+        config: ImportConfigDetail,
+        log_context: str,
+    ) -> ProcessingResult:
+        """Обработка всех строк данных."""
+        result = ProcessingResult()
+        for idx, row in enumerate(mapped_rows):
+            try:
+                await self._process_single_row(
+                    row_data=row,
+                    existing_products=existing_products,
+                    config=config,
+                    result=result,
+                )
+            except Exception as e:
+                error_msg = f"Error processing row {idx}: {str(e)}"
+                logger.error(f"{log_context}: {error_msg}", exc_info=True)
+                result.errors.append(error_msg)
+        return result
 
     async def _process_single_row(
         self,
         row_data: dict[str, Any],
-        existing_map: dict[str, SupplierProductCreate],
+        existing_products: dict[str, SupplierProductCreate],
         config: ImportConfigDetail,
-        result: ImportResult,
-        create_list: list[SupplierProductCreate],
-        update_list: list[SupplierProductUpdate],
-        bitrix_list: list[ProductCreate | ProductUpdate],
+        result: ProcessingResult,
     ) -> None:
         """Обработка одной строки данных."""
+        # Получаем значение ключевого поля
+        key_field_name = config.source_key_field.value
+        key_wrapper = row_data.get(key_field_name, {})
+        raw_key = key_wrapper.get("value")
 
-        key_val_obj = row_data.get(config.source_key_field.value, {})
-        # Гарантируем, что ключ есть, иначе создадим дубликат или пропустим
-        raw_key = key_val_obj.get("value")
         if raw_key is None:
             logger.warning("Skipping row with null key field")
             return
 
         row_key = str(raw_key)
-        existing_record = existing_map.get(row_key)
+        existing_record = existing_products.get(row_key)
 
         if not existing_record:
             # Создание нового товара
-            new_product = await self._build_create_model(
+            creates = await self._prepare_new_product(
                 row_data, config.source, config.config_name
             )
-            create_list.append(new_product)
-            result.added_count += 1
+            result.change_logs.extend(creates.change_logs)
+            if creates.local_create:
+                result.products_to_create.append(creates.local_create)
         else:
             # Обновление существующего
-            updates = await self._prepare_updates(
+            updates = await self._prepare_product_updates(
                 existing_product=existing_record,
                 new_row_data=row_data,
                 source=config.source,
+                config_name=config.config_name,
             )
 
-            if updates[0]:
-                update_list.append(updates[0])
-                result.updated_count += 1
+            if updates.local_update:
+                result.products_to_update.append(updates.local_update)
 
-            if updates[1]:
-                bitrix_list.append(updates[1])
-                result.bitrix_update_count += 1
+            if updates.bitrix_update:
+                result.bitrix_updates.append(updates.bitrix_update)
 
-    async def _build_create_model(
+            if updates.change_logs:
+                result.change_logs.extend(updates.change_logs)
+
+    async def _prepare_new_product(
         self,
         data: dict[str, Any],
         source: SourcesProductEnum,
         config_name: str | None = None,
-    ) -> SupplierProductCreate:
-        """Формирование модели для создания."""
+    ) -> UpdateResult:
+        """Подготовка данных для создания нового товара."""
+        result = UpdateResult()
 
+        # Извлекаем значения полей
+        external_id = self._extract_field_value(data, "external_id")
+        code = self._extract_field_value(data, "code")
         product_data: dict[str, Any] = {
-            "external_id": int(data.get("external_id", {}).get("value", 0)),
-            "name": data.get("name", {}).get("value", ""),
             "source": source,
             "is_validated": False,
             "should_export_to_crm": False,
             "needs_review": True,
         }
 
+        if external_id is not None:
+            product_data["external_id"] = external_id
+        if code is not None:
+            product_data["code"] = code
+
         # Добавляем остальные поля
         for field, wrapper in data.items():
-            if (
-                hasattr(SupplierProduct, field)
-                and wrapper
-                and wrapper.get("value") is not None
-            ):
-                product_data[field] = wrapper.get("value")
+            if self._is_valid_field(field, wrapper):
+                value = wrapper.get("value")
+                product_data[field] = value
 
-        # Предварительная обработка данных
-        processed_product_data = await self._preprocess_data(
-            source, product_data, config_name
+                if wrapper.get("sync_with_crm"):
+                    result.change_logs.append(
+                        self._create_change_log(
+                            supplier_product_id=None,
+                            source=source,
+                            config_name=config_name,
+                            field_name=field,
+                            old_value=None,
+                            new_value=value,
+                        )
+                    )
+        # Сохраняем товар
+        supplier_product = SupplierProductCreate(**product_data)
+        created_product = await self._repo.create(supplier_product)
+        result.local_create = supplier_product
+
+        # Обновляем ID в логах
+        for log in result.change_logs:
+            log.supplier_product_id = created_product.id
+        return result
+
+    def _extract_field_value(
+        self, data: dict[str, Any], field_name: str
+    ) -> Any:
+        """Извлечение значения поля из данных."""
+        wrapper = data.get(field_name, {})
+        return wrapper.get("value")
+
+    def _is_valid_field(self, field_name: str, wrapper: Any) -> bool:
+        """Проверка валидности поля."""
+        return (
+            hasattr(SupplierProduct, field_name)
+            and wrapper
+            and isinstance(wrapper, dict)
+            and wrapper.get("value") is not None
         )
 
-        return SupplierProductCreate(**processed_product_data)
+    def _create_change_log(
+        self,
+        supplier_product_id: UUID | None,
+        source: SourcesProductEnum,
+        config_name: str | None,
+        field_name: str,
+        old_value: Any,
+        new_value: Any,
+    ) -> ChangeLogBase:
+        """Создание объекта лога изменений."""
+        return ChangeLogBase(
+            supplier_product_id=supplier_product_id,
+            source=source,
+            config_name=config_name,
+            field_name=field_name,
+            old_value=str(old_value) if old_value is not None else None,
+            new_value=str(new_value) if new_value is not None else None,
+            value_type=(
+                type(new_value).__name__ if new_value is not None else None
+            ),
+        )
 
-    async def _prepare_updates(
+    async def _prepare_product_updates(
         self,
         existing_product: SupplierProductCreate,
         new_row_data: dict[str, Any],
         source: SourcesProductEnum,
-    ) -> tuple[
-        SupplierProductUpdate | None, ProductCreate | ProductUpdate | None
-    ]:
-        """
-        Подготовка моделей обновления.
-        Возвращает кортеж (local_update, bitrix_update).
-        """
-        local_update: dict[str, Any] = {
+        config_name: str | None = None,
+    ) -> UpdateResult:
+        """Подготовка моделей обновления."""
+        result = UpdateResult()
+
+        local_update_data: dict[str, Any] = {
             "external_id": existing_product.external_id,
             "code": existing_product.code,
         }
-        # local_update = SupplierProductUpdate(
-        #     external_id=existing_product.external_id,
-        #     code=existing_product.code,
-        # )
 
         has_local_changes = False
-        bitrix_update: ProductCreate | ProductUpdate | None = None
         needs_bitrix_update = False
 
-        # Инициализация модели Битрикса
-        if existing_product.product_id:
-            bitrix_update = ProductUpdate(
-                internal_id=existing_product.product_id
-            )
-        else:
-            bitrix_update = ProductCreate(name=existing_product.name)
+        # Подготовка модели Битрикса
+        bitrix_update = self._prepare_bitrix_model(existing_product)
 
-        # Логика синхронизации
-        if not existing_product.should_export_to_crm:
-            # Простое обновление локальных данных
-            for field, new_wrapper in new_row_data.items():
-                if (
-                    not hasattr(existing_product, field)
-                    or not new_wrapper
-                    or new_wrapper.get("value") is None
-                ):
-                    continue
-
-                new_val = new_wrapper.get("value")
-                old_val = getattr(existing_product, field)
-
-                if old_val != new_val:
-                    # setattr(local_update, field, new_val)
-                    local_update[field] = new_val
-                    has_local_changes = True
-        else:
-            # Сложная логика с синхронизацией с CRM
-            for field, new_wrapper in new_row_data.items():
-                if (
-                    not hasattr(existing_product, field)
-                    or not new_wrapper
-                    or new_wrapper.get("value") is None
-                ):
-                    continue
-
-                new_val = new_wrapper.get("value")
-                old_val = getattr(existing_product, field)
-
-                if old_val == new_val:
-                    continue
-
-                # Обновляем локальную модель в любом случае (как в оригинале)
-                # setattr(local_update, field, new_val)
-                local_update[field] = new_val
-                has_local_changes = True
-
-                force_import = new_wrapper.get("force_import")
-                sync_with_crm = new_wrapper.get("sync_with_crm")
-
-                if force_import and hasattr(bitrix_update, field):
-                    setattr(bitrix_update, field, new_val)
-                    needs_bitrix_update = True
-
-                if sync_with_crm:
-                    # TODO: Логика пометки для ручной обработки
-                    pass
-
-        # Предварительная обработка данных
-        if has_local_changes:
-            local_update = await self._preprocess_data(source, local_update)
-
-        return (
-            (
-                SupplierProductUpdate(**local_update)
-                if has_local_changes
-                else None
-            ),
-            bitrix_update if needs_bitrix_update else None,
+        # Определяем режим обработки
+        is_simple_mode = not (
+            existing_product.should_export_to_crm
+            or existing_product.needs_review
         )
 
-    async def _preprocess_data(
-        self,
-        source: SourcesProductEnum,
-        data: dict[str, Any],
-        config_name: str | None = None,
-    ) -> dict[str, Any]:
-        # TODO: Вычисляем раздел, обрабатываем описание и т.д.
-        if source == SourcesProductEnum.LABSET:
-            if description := data.get("description"):
-                detail = self.open_ai_service.parse_product_with_deepseek(
-                    description,
-                    name=data.get("name", ""),
-                    article=data.get("article"),
-                    brend=data.get("brend"),
-                )
-                if announce := detail.announcement:
-                    data["preview_for_offer"] = announce
-                if descr := detail.description:
-                    data["description_for_offer"] = descr
-                if characts := detail.characteristics:
-                    data["characteristics"] = characts
-                if kit := detail.kit:
-                    data["complects"] = kit
+        for field, wrapper in new_row_data.items():
+            if not self._is_valid_field(field, wrapper):
+                continue
 
-        return data
+            new_value = wrapper.get("value")
+            old_value = getattr(existing_product, field, None)
+
+            if old_value == new_value:
+                continue
+
+            # Обновляем локальные данные
+            local_update_data[field] = new_value
+            has_local_changes = True
+
+            if is_simple_mode:
+                continue
+
+            # Обработка для CRM-режима
+            needs_review = self._process_crm_update(
+                field=field,
+                new_value=new_value,
+                old_value=old_value,
+                wrapper=wrapper,
+                existing_product=existing_product,
+                bitrix_update=bitrix_update,
+                source=source,
+                config_name=config_name,
+                result=result,
+            )
+
+            if wrapper.get("force_import"):
+                needs_bitrix_update = True
+
+            if needs_review:
+                local_update_data["needs_review"] = True
+                has_local_changes = True
+
+        # Формируем результат
+        if has_local_changes:
+            result.local_update = SupplierProductUpdate(**local_update_data)
+
+        if needs_bitrix_update and bitrix_update:
+            result.bitrix_update = bitrix_update
+
+        return result
+
+    def _prepare_bitrix_model(
+        self, existing_product: SupplierProductCreate
+    ) -> ProductUpdate | None:
+        """Подготовка модели для Битрикса."""
+        if existing_product.product_id:
+            return ProductUpdate(internal_id=existing_product.product_id)
+        return None
+
+    def _process_crm_update(
+        self,
+        field: str,
+        new_value: Any,
+        old_value: Any,
+        wrapper: dict[str, Any],
+        existing_product: SupplierProductCreate,
+        bitrix_update: ProductUpdate | None,
+        source: SourcesProductEnum,
+        config_name: str | None,
+        result: UpdateResult,
+    ) -> bool:
+        """Обработка обновления для CRM."""
+        force_import = wrapper.get("force_import")
+        sync_with_crm = wrapper.get("sync_with_crm")
+
+        # Принудительный импорт в CRM
+        if force_import and bitrix_update and hasattr(bitrix_update, field):
+            setattr(bitrix_update, field, new_value)
+
+        # Синхронизация через лог изменений
+        elif sync_with_crm:
+            change_log = self._create_change_log(
+                supplier_product_id=existing_product.id,
+                source=source,
+                config_name=config_name,
+                field_name=field,
+                old_value=old_value,
+                new_value=new_value,
+            )
+            result.change_logs.append(change_log)
+
+            # Если товар не требует проверки, помечаем
+            if not existing_product.needs_review:
+                return True
+        return False
+
+    async def _save_import_results(
+        self,
+        processing_result: ProcessingResult,
+        log_context: str,
+        config: ImportConfigDetail,
+    ) -> None:
+        """Сохранение результатов импорта в БД."""
+        try:
+            if processing_result.products_to_update:
+                logger.info(
+                    f"{log_context}: Updating "
+                    f"{len(processing_result.products_to_update)} "
+                    "existing products..."
+                )
+                await self._repo.update_products(
+                    processing_result.products_to_update,
+                    config.source_key_field,
+                    config.source,
+                )
+
+            if processing_result.change_logs:
+                logger.info(
+                    f"{log_context}: Creating "
+                    f"{len(processing_result.change_logs)} "
+                    "change logs..."
+                )
+                await self._repo.change_log_repo.bulk_create_change_logs(
+                    processing_result.change_logs
+                )
+
+        except Exception as e:
+            raise DatabaseError(f"Failed to save import results: {str(e)}")
+
+    async def _sync_with_bitrix(
+        self, bitrix_updates: list[ProductUpdate], log_context: str
+    ) -> None:
+        """Синхронизация с Битрикс24."""
+        try:
+            logger.info(
+                f"{log_context}: Sending {len(bitrix_updates)} "
+                "updates to Bitrix24..."
+            )
+            # await self._product_client.create_or_update_product(
+            #     bitrix_updates
+            #     )
+        except Exception as e:
+            logger.error(
+                f"{log_context}: Bitrix sync failed: {str(e)}", exc_info=True
+            )
+            # Не прерываем основной импорт из-за ошибки Битрикса

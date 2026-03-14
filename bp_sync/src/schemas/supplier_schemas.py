@@ -5,7 +5,9 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from typing_extensions import Annotated
 
+from schemas.change_log_schemas import ChangeLogBase
 from schemas.enums import SourceKeyField, SourcesProductEnum
+from schemas.product_schemas import ProductUpdate
 
 
 class BaseFields(BaseModel):  # type: ignore[misc]
@@ -82,6 +84,7 @@ class SupplierProductBase(BaseFields):
     supplier_subcategory: (
         Annotated[str, StringConstraints(max_length=150)] | None
     ) = None
+    brend: Annotated[str, StringConstraints(max_length=150)] | None = None
 
     # Медиа
     detail_picture: (
@@ -296,3 +299,22 @@ class ImportResult(BaseModel):  # type: ignore[misc]
     @property
     def total_processed(self) -> int:
         return self.added_count + self.updated_count
+
+
+class ProcessingResult(BaseModel):  # type: ignore[misc]
+    """Результат обработки данных."""
+
+    products_to_create: list[SupplierProductCreate] = []
+    products_to_update: list[SupplierProductUpdate] = []
+    bitrix_updates: list[ProductUpdate] = []
+    change_logs: list[ChangeLogBase] = []
+    errors: list[str] = []
+
+
+class UpdateResult(BaseModel):  # type: ignore[misc]
+    """Результат подготовки обновлений."""
+
+    local_create: SupplierProductCreate | None = None
+    local_update: SupplierProductUpdate | None = None
+    bitrix_update: ProductUpdate | None = None
+    change_logs: list[ChangeLogBase] = []

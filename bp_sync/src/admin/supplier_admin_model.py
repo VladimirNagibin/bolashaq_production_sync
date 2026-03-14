@@ -4,6 +4,7 @@ from models.supplier_models import (
     SupplierCharacteristic,
     SupplierComplect,
     SupplierProduct,
+    SupplierProductChangeLog,
 )
 
 from .base_admin import BaseAdmin
@@ -67,6 +68,8 @@ class SupplierProductAdmin(
         "characteristics": "Связь с характеристиками",
         "complects": "Связь с комплектующими",
         "more_photo": "Дополнительные картинки",
+        "change_logs": "История изменений",
+        "brend": "Бренд",
     }
     column_default_sort = [("source", True)]  # Сортировка по умолчанию
     column_sortable_list = [  # Список полей по которым возможна сортировка
@@ -94,6 +97,7 @@ class SupplierProductAdmin(
         "article",
         "supplier_category",
         "supplier_subcategory",
+        "brend",
         "detail_picture",
         "detail_picture_description",
         "preview_picture",
@@ -133,6 +137,7 @@ class SupplierProductAdmin(
         "article",
         "supplier_category",
         "supplier_subcategory",
+        "brend",
         "detail_picture",
         "detail_picture_description",
         "preview_picture",
@@ -153,6 +158,7 @@ class SupplierProductAdmin(
         "description_for_offer",
         "characteristics",
         "complects",
+        "change_logs",
     ]
 
 
@@ -344,6 +350,68 @@ class SupplierCharacteristicAdmin(
         "supplier_product_id",
         "supplier_product",
     ]
+
+
+class SupplierProductChangeLogAdmin(
+    BaseAdmin, model=SupplierProductChangeLog
+):  # type: ignore[call-arg]
+
+    name = "Лог изменения поля товара"
+    name_plural = "Логи изменений полей товаров"
+    category = "Поставщики"
+    icon = "fa-solid fa-id-card"
+
+    column_list = [  # Поля в списке
+        "field_name",
+        "source",
+        "value_type",
+        "supplier_product_id",
+        "supp_product",
+    ]
+    column_labels = {  # Надписи полей в списке
+        "field_name": "Название измененного поля",
+        "source": "Источник данных",
+        "value_type": "Тип значения",
+        "config_name": "Название конфигурации",
+        "supplier_product_id": "Ссылка на товар поставщика",
+        "supp_product": "Связь с товаром поставщика",
+        "old_value": "Значение ДО изменения",
+        "new_value": "Значение ПОСЛЕ изменения",
+        "is_processed": "Обработано",
+        "processed_at": "Дата обработки",
+        "processed_by_user_id": "Обработано пользователем",
+        "comment": "Комментарий",
+    }
+    column_default_sort = [
+        ("supplier_product_id", True)
+    ]  # Сортировка по умолчанию
+    column_sortable_list = [  # Список полей по которым возможна сортировка
+        "supplier_product_id",
+        "field_name",
+        "source",
+    ]
+    column_searchable_list = [  # Список полей по которым возможен поиск
+        "old_value",
+        "new_value",
+        "supplier_product_id",
+    ]
+    # form_columns = [
+    #     "name",
+    #     "code",
+    #     "description",
+    #     "specifications",
+    #     "supplier_product_id",
+    #     "supplier_product",
+    # ]
+
+    # column_details_list = [
+    #     "name",
+    #     "code",
+    #     "description",
+    #     "specifications",
+    #     "supplier_product_id",
+    #     "supplier_product",
+    # ]
 
 
 class SupplierComplectAdmin(

@@ -47,6 +47,7 @@ class SupplierProduct(Base):  # type: ignore[misc]
     __table_args__ = (
         Index("ix_supplier_products_source", "source"),
         Index("ix_supplier_products_code", "code"),
+        Index("ix_supplier_products_external_id", "external_id"),
         Index("ix_supplier_products_product_id", "product_id"),
         CheckConstraint(
             "price >= 0", name="ck_supplier_products_price_positive"
@@ -55,6 +56,9 @@ class SupplierProduct(Base):  # type: ignore[misc]
             "quantity >= 0", name="ck_supplier_products_quantity_positive"
         ),
         UniqueConstraint("source", "code", name="uq_supplier_source_code"),
+        UniqueConstraint(
+            "source", "external_id", name="uq_supplier_source_external_id"
+        ),
     )
 
     @property
@@ -66,14 +70,18 @@ class SupplierProduct(Base):  # type: ignore[misc]
         return self.__tablename__
 
     def __str__(self) -> str:
-        return str(self.name)
+        return (
+            f"{self.name if self.name else 'no name'}: "
+            f"{self.external_id if self.external_id else 'no external_id'}, "
+            f"{self.code if self.code else 'no code'}"
+        )
 
     # Основные данные товара
     external_id: Mapped[int | None] = mapped_column(
         # unique=True,
         comment="ID во внешней системе",
     )
-    name: Mapped[str] = mapped_column(
+    name: Mapped[str | None] = mapped_column(
         String(500),
         comment="Название товара",
     )
@@ -125,6 +133,9 @@ class SupplierProduct(Base):  # type: ignore[misc]
     )
     supplier_subcategory: Mapped[str | None] = mapped_column(
         String(150), index=True, comment="Подкатегория в системе поставщика"
+    )
+    brend: Mapped[str | None] = mapped_column(
+        String(150), index=True, comment="Бренд"
     )
 
     # Медиа
@@ -218,6 +229,14 @@ class SupplierProduct(Base):  # type: ignore[misc]
     complects: Mapped[list["SupplierComplect"]] = relationship(
         "SupplierComplect",
         back_populates="supplier_product",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    # Связь с логом изменений
+    change_logs: Mapped[list["SupplierProductChangeLog"]] = relationship(
+        "SupplierProductChangeLog",
+        back_populates="supp_product",
         cascade="all, delete-orphan",
         lazy="selectin",
     )
@@ -372,11 +391,11 @@ class SourceColumnMapping(Base):  # type: ignore[misc]
     # TODO: _schema_class = SourceColumnMappingCreate
 
     __table_args__ = (
-        UniqueConstraint(
-            "config_id",
-            "source_column_index",
-            name="uq_column_mapping_config_index",
-        ),
+        # UniqueConstraint(
+        #     "config_id",
+        #     "source_column_index",
+        #     name="uq_column_mapping_config_index",
+        # ),
         UniqueConstraint(
             "config_id", "target_field", name="uq_column_mapping_config_target"
         ),
@@ -538,8 +557,8 @@ class SupplierProductChangeLog(Base):  # type: ignore[misc]
         comment="ID товара поставщика",
     )
 
-    supplier_product: Mapped["SupplierProduct"] = relationship(
-        "SupplierProduct", backref="change_logs"
+    supp_product: Mapped["SupplierProduct"] = relationship(
+        "SupplierProduct", back_populates="change_logs"
     )
 
     source: Mapped[SourcesProductEnum] = mapped_column(

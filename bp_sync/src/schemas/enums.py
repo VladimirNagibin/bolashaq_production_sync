@@ -234,3 +234,16 @@ class ImageType(StrEnum):
     DETAIL_PICTURE = "detailPicture"
     PREVIEW_PICTURE = "previewPicture"
     MORE_PHOTO = "property101"
+
+
+class TransformationRule(StrEnum):
+    """Правила трансформации данных."""
+
+    STRIP = "strip"
+    UPPER = "upper"
+    LOWER = "lower"
+    TO_FLOAT = "float"
+    TO_INT = "int"
+    TO_BOOL = "bool"
+    REGEX = "re:"
+    CUSTOM = "def:"
