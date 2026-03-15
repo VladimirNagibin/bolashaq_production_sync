@@ -64,7 +64,9 @@ async def check(
     external_id = 0
     try:
         ...
-        # from core.logger import logger
+        from core.logger import logger
+
+        logger.info("---")
         # from schemas.enums import SourcesProductEnum
         # from schemas.product_image_schemas import ProductImageCreate
         # product_image_create = ProductImageCreate(
@@ -79,7 +81,6 @@ async def check(
         # image = await product_image_repo.get(3)
         # logger.info(type(image))
         # from datetime import date
-
         # lead_ids = await lead_client.bitrix_client.get_lead_ids_for_period(
         #     date(2025, 10, 20), date(2026, 3, 4)
         # )
@@ -95,7 +96,6 @@ async def check(
         #     )
         # result_ = ""
         # await deal_client.handle_deal(257)
-
         # for external_id in range(2001, 2148, 2):
         #     product_update = ProductUpdate(
         #         external_id=external_id, brend=FieldValue(value="93")
@@ -104,11 +104,14 @@ async def check(
         #     print(f"UPDATED {external_id}")
         # pr = await product_bitrix_client.get(349)
         # print(product_update)
-
         # result_ = result[0].to_pydantic().model_dump_json()
-        # result = await product_client.import_from_bitrix(801)
-        # result_ = await result[0].to_pydantic()
-        # print(result_)
+        # result = await product_client.import_from_bitrix(2350)
+        # result = await product_client.repo.get_by_id(
+        #     "90909a41-8222-45b9-b9ed-d50e1a0cbd7b"
+        # )
+        # result_ = await result[0].to_pydantic()=======================")
+        # await result.to_pydantic()
+        # logger.info(f"{await result.to_pydantic()}====================")
     except Exception as e:
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

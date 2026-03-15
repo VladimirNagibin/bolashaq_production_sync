@@ -1,15 +1,21 @@
+import json
 from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, UploadFile, status
+from redis.asyncio import Redis
+from starlette.datastructures import FormData
 
 from core.logger import logger
 from schemas.enums import SourcesProductEnum
+from schemas.fields import FIELDS_SUPPLIER_PRODUCT
+from schemas.product_schemas import ProductCreate
 from schemas.supplier_schemas import (
     ImportConfigDetail,
     ImportResult,
     SupplierProductDetail,
 )
+from services.products.product_services import ProductClient
 
 from ..open_ai_services import OpenAIService
 from .file_import_service import FileImportService
@@ -179,7 +185,9 @@ class SupplierClient:
             ) from e
 
     async def get_supplier_product_review_data(
-        self, supp_product_id: UUID
+        self,
+        supp_product_id: UUID,
+        redis_client: Redis,
     ) -> tuple[
         SupplierProductDetail,
         dict[str, dict[str, Any]],
@@ -228,11 +236,27 @@ class SupplierClient:
         # Трансформируем логи
         transformed_logs = self._transform_change_log(change_logs)
 
-        # Предобрабатываем данные через AI и правила
-        preprocessed_data = await self._preprocess_supplier_data(
-            supp_product, transformed_logs
-        )
+        cache_key = f"supplier_review:{supp_product_id}"
+        cached_json = await redis_client.get(cache_key)
 
+        preprocessed_data = {}
+        if cached_json:
+            try:
+                preprocessed_data = json.loads(cached_json)
+            except Exception as e:
+                logger.error(f"Failed to load cached data: {e}")
+        else:
+            logger.warning(f"No cached data found for {supp_product_id}")
+        # Предобрабатываем данные через AI и правила
+        if not preprocessed_data:
+            preprocessed_data = await self._preprocess_supplier_data(
+                supp_product, transformed_logs
+            )
+            await redis_client.set(
+                cache_key,
+                json.dumps(preprocessed_data),
+                ex=1800,  # Время жизни 30 минут (1800 сек)
+            )
         logger.info(
             "Review data prepared",
             extra={
@@ -398,8 +422,10 @@ class SupplierClient:
         Returns:
             Dict[str, Dict[str, Any]]: Обработанные AI данные
         """
-        result: dict[str, dict[str, Any]] = {}
+        import time
 
+        result: dict[str, dict[str, Any]] = {"time": {"c_time": time.time()}}
+        return result  # =====================================================
         # Получаем новое значение описания
         new_description = description_data.get("new_value")
         if not new_description or not isinstance(new_description, str):
@@ -564,17 +590,16 @@ class SupplierClient:
         for field_name in source_fields:
             if field_data.get(field_name):
                 field_value = field_data[field_name].get("new_value")
-                processed_value, new_name = (
-                    self._process_source_specific_field(
-                        source, field_name, field_value
-                    )
+                processed_values = self._process_source_specific_field(
+                    source, field_name, field_value
                 )
 
-                if processed_value is not None:
-                    result[new_name] = {
-                        "old_value": None,
-                        "new_value": processed_value,
-                    }
+                if processed_values:
+                    for new_name, processed_value in processed_values.items():
+                        result[new_name] = {
+                            "old_value": None,
+                            "new_value": processed_value,
+                        }
 
         return result
 
@@ -583,7 +608,7 @@ class SupplierClient:
         source: SourcesProductEnum,
         field_name: str,
         field_value: Any,
-    ) -> tuple[Any, str]:
+    ) -> dict[str, Any]:
         """
         Обрабатывает специфичное для источника поле.
 
@@ -595,16 +620,197 @@ class SupplierClient:
         Returns:
             Any: Обработанное значение
         """
+        result: dict[str, Any] = {}
         if source == SourcesProductEnum.LABSET and field_name == "more_photo":
             if isinstance(field_value, str):
                 # Разделяем строку с фото по разделителю
-                return (
-                    [
-                        url.strip()
-                        for url in field_value.split("|")
-                        if url.strip()
-                    ],
-                    "more_photos",
-                )
+                more_photos = [
+                    url.strip()
+                    for url in field_value.split("|")
+                    if url.strip()
+                ]
+                if more_photos:
+                    result["detail_picture_process"] = more_photos[0]
 
-        return field_value, field_name
+                    # Оставшиеся фото -> more_photo (если есть)
+                    if len(more_photos) > 1:
+                        result["more_photo_process"] = more_photos[1:]
+        return result
+
+    async def get_review_data(
+        self,
+        supp_product: SupplierProductDetail,
+        transformed_logs: dict[str, dict[str, Any]],
+        preprocessed_data: dict[str, dict[str, Any]],
+        product: ProductCreate | None = None,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        simple_fields = FIELDS_SUPPLIER_PRODUCT.get("simple_fields", ())
+        complex_fields = FIELDS_SUPPLIER_PRODUCT.get("complex_fields", ())
+        # individual_fields = FIELDS_SUPPLIER_PRODUCT.get(
+        #     "individual_fields", ()
+        # )
+        review_data: list[dict[str, Any]] = []
+        review_complex_data: list[dict[str, Any]] = []
+        for field_name, value_type in simple_fields:
+            if field_name not in transformed_logs:
+                continue
+            value = transformed_logs[field_name]
+            review_data.append(
+                {
+                    "field_name": field_name,
+                    "old_value": value.get("old_value"),
+                    "new_value": value.get("new_value"),
+                    "current_product_value": getattr(
+                        product, field_name, None
+                    ),
+                    "value_type": value_type,
+                }
+            )
+        for field_name, value_type in complex_fields:
+            if field_name not in transformed_logs:
+                continue
+            value = transformed_logs[field_name]
+            current_product_value = None
+            product_value = getattr(product, field_name, None)
+            if product_value:
+                current_product_value = product_value.value
+            review_data.append(
+                {
+                    "field_name": field_name,
+                    "old_value": value.get("old_value"),
+                    "new_value": value.get("new_value"),
+                    "current_product_value": current_product_value,
+                    "value_type": value_type,
+                }
+            )
+
+        # TODO: added data to review_complex_data
+
+        return review_data, review_complex_data
+
+    async def process_review(
+        self,
+        supp_product_id: UUID,
+        product_service: ProductClient,
+        form_data: FormData,
+        redis_client: Redis,
+    ) -> SourcesProductEnum:
+        is_validated = form_data.get("is_validated") == "on"
+        should_export_to_crm = form_data.get("should_export_to_crm") == "on"
+        needs_review = form_data.get("needs_review") == "on"
+        is_deleted_in_bitrix = form_data.get("is_deleted_in_bitrix") == "on"
+        logger.info(
+            f"is_validated:{is_validated}, "
+            f"should_export_to_crm:{should_export_to_crm}, "
+            f"needs_review:{needs_review}, "
+            f"is_deleted_in_bitrix:{is_deleted_in_bitrix}"
+        )
+
+        supp_product = await self.supplier_product_repo.get_with_relations(
+            supp_product_id
+        )
+        if not supp_product:
+            error_msg = ""
+            raise HTTPException(status_code=404, detail=error_msg)
+        product = None
+        if product_id := supp_product.product_id:
+            product = await product_service.repo.get_by_id(product_id)
+        simple_fields = FIELDS_SUPPLIER_PRODUCT.get("simple_fields", ())
+        complex_fields = FIELDS_SUPPLIER_PRODUCT.get("complex_fields", ())
+        # individual_fields = FIELDS_SUPPLIER_PRODUCT.get(
+        #     "individual_fields", ()
+        # )
+        for field_name, value_type in simple_fields:
+            form_field_name = f"field_{field_name}"
+            if form_field_name not in form_data:
+                continue
+            logger.info(
+                f"{form_data.get(form_field_name, '')}****{field_name}***"
+                f"{value_type}******************************"
+            )
+        for field_name, value_type in complex_fields:
+            form_field_name = f"field_{field_name}"
+            if form_field_name not in form_data:
+                continue
+            logger.info(
+                f"{form_data.get(form_field_name, '')}****{field_name}***"
+                f"{value_type}******************************"
+            )
+
+        logger.info(product)
+
+        cache_key = f"supplier_review:{supp_product_id}"
+        cached_json = await redis_client.get(cache_key)
+
+        preprocessed_data: dict[str, Any] = {}
+        if cached_json:
+            try:
+                preprocessed_data = json.loads(cached_json)
+                await redis_client.delete(cache_key)
+            except Exception as e:
+                logger.error(f"Failed to load cached data: {e}")
+        else:
+            logger.warning(f"No cached data found for {supp_product_id}")
+        logger.info(preprocessed_data)
+        # # Если привязки к Product нет, мы не можем сохранить изменения в
+        # # карточку товара.
+        # # Логика может быть разной: либо создавать товар, либо игнорировать.
+        # # Здесь предположим, что товар ДОЛЖЕН существовать,
+        # # иначе просто отмечаем логи.
+
+        # if product:
+        #     # Проходимся по данным формы
+        #     # Ключи в форме будут вида "field_{log_id}"
+        #     for key, value in form_data.items():
+        #         if key.startswith("field_"):
+        #             log_id_str = key.replace("field_", "")
+        #             try:
+        #                 log_id = uuid.UUID(log_id_str)
+
+        #                 # Находим лог, чтобы知道 какое поле обновляем
+        #                 log_query = select(SupplierProductChangeLog).where(
+        #                     SupplierProductChangeLog.id == log_id,
+        #                     SupplierProductChangeLog.supplier_product_id
+        #                      == supplier_product_id
+        #                 )
+        #                 log_res = await db.execute(log_query)
+        #                 log = log_res.scalar_one_or_none()
+
+        #                 if log:
+        # Обновляем поле в Product
+        # Примечание: Здесь нужна осторожность с типами данных.
+        # form_data возвращает строки. Лучше привести к типу поля или
+        # использовать Pydantic для валидации. Для простоты - setattr.
+        # Можно добавить логику преобразования типов на основе log.value_type
+
+        #                     final_value = value
+        #                     if log.value_type == "int":
+        #                         final_value = int(value) if value else None
+        #                     elif log.value_type == "float":
+        #                         final_value = float(value) if value else None
+        #                     elif log.value_type == "bool":
+        #                         final_value = (
+        #                             value.lower() in ['true', '1', 'yes']
+        #                         )
+
+        #                     setattr(product, log.field_name, final_value)
+
+        #                     # Помечаем лог как обработанный
+        #                     log.is_processed = True
+        #                     # (Опционально) можно заполнить кто и когда
+        #                     # обработал
+        #                     # log.processed_at = datetime.now()
+
+        #             except ValueError:
+        #                 continue # Неверный формат ID
+        # else:
+        #     # Если продукта нет, просто помечаем логи
+        #     # как просмотренные/обработанные
+        #     # чтобы они исчезли из списка задач
+        #     pass
+
+        # # Снимаем флаг needs_review с SupplierProduct
+        # supplier_product.needs_review = False
+
+        # await db.commit()
+        return supp_product.source

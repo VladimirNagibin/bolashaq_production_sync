@@ -232,15 +232,17 @@ class ProductSimplePropertyAdmin(
     column_searchable_list = [  # Список полей по которым возможен поиск
         "product_id",
         "property_code",
-        "xmvaluel_id",
+        "value",
     ]
     form_columns = [  # Поля на форме
+        "external_id",
         "property_code",
         "value",
         "product",
         "is_deleted_in_bitrix",
     ]
     column_details_list = [
+        "external_id",
         "property_code",
         "value",
         "product",
@@ -279,12 +281,14 @@ class ProductPropertyAdmin(
         "value",
     ]
     form_columns = [  # Поля на форме
+        "external_id",
         "property_code",
         "text_field",
         "product",
         "is_deleted_in_bitrix",
     ]
     column_details_list = [
+        "external_id",
         "property_code",
         "text_field",
         "product",

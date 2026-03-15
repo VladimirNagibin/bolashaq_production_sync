@@ -1,5 +1,6 @@
 from collections.abc import Awaitable
 from typing import Any, Callable, Generic, Type, TypeVar
+from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import Integer, delete, exists, select, update
@@ -28,6 +29,7 @@ class BaseRepository(
     """Базовый репозиторий для CRUD операций"""
 
     model: Type[ModelType]
+    schema_update_class: Type[SchemaTypeUpdate]
     _default_related_checks: list[tuple[str, Type[Base], str]] = []
     """
     Список проверок по умолчанию в формате:
@@ -191,6 +193,25 @@ class BaseRepository(
             logger.exception(
                 f"Database error fetching {self.model.__name__} "
                 f"ID={external_id}: {str(e)}"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Database operation failed",
+            ) from e
+
+    async def get_by_id(self, id: UUID) -> SchemaTypeCreate | None:
+        try:
+
+            stmt = select(self.model).where(self.model.id == id)
+            result = await self.session.execute(stmt)
+            entity = result.scalar_one_or_none()
+            if not entity:
+                logger.debug(f"{self.model.__name__} not found: ID={id}")
+            return await entity.to_pydantic()  # type: ignore[no-any-return]
+        except SQLAlchemyError as e:
+            logger.exception(
+                f"Database error fetching {self.model.__name__} "
+                f"ID={id}: {str(e)}"
             )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -542,3 +563,20 @@ class BaseRepository(
             return await self.create(data, pre_commit_hook, post_commit_hook)
         except ConflictException:
             return await self.update(data, pre_commit_hook, post_commit_hook)
+
+    async def get_entities(
+        self, fields_name: list[str]
+    ) -> list[SchemaTypeUpdate]:
+        entities: list[SchemaTypeUpdate] = []
+        stmt = select(self.model).where(
+            self.model.is_deleted_in_bitrix.is_(False)
+        )  # .limit(500)
+        result = await self.session.execute(stmt)
+        available_entities = result.scalars().all()
+        for available_entity in available_entities:
+            entity = self.schema_update_class()
+            for field_name in fields_name:
+                if value := getattr(available_entity, field_name, None):
+                    setattr(entity, field_name, value)
+            entities.append(entity)
+        return entities

@@ -253,10 +253,10 @@ class Product(IntIdEntity):
                 data.update(self._transform_field_value(field_name, value))
         if hasattr(self, "id"):
             data["internal_id"] = self.id
-        # for property in self.simple_properties:
-        #     data[property.property_code] = property.to_pydantic_()
-        # for property in self.properties:
-        #     data[property.property_code] = property.to_pydantic_()
+        for property in self.simple_properties:
+            data[property.property_code] = property.to_pydantic_()
+        for property in self.properties:
+            data[property.property_code] = property.to_pydantic_()
         return schema_class(**data)
 
 
@@ -297,7 +297,7 @@ class ProductSimpleProperty(IntIdEntity):
 
     def to_pydantic_(self) -> FieldValue:
         data: dict[str, Any] = {
-            "value_id": self.external_id,
+            "value_id": int(self.external_id) if self.external_id else None,
             "value": self.value,
         }
         return FieldValue(**data)

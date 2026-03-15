@@ -1,4 +1,4 @@
-from typing import Any
+# from typing import Any
 from uuid import UUID
 
 from fastapi import (
@@ -6,13 +6,17 @@ from fastapi import (
     Depends,
     HTTPException,
     Request,
+    status,
 )
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from redis.asyncio import Redis
 
-from core.logger import logger
+# from core.logger import logger
 from core.settings import settings
+from db.redis import get_redis
 from schemas.enums import SourcesProductEnum
+from schemas.supplier_schemas import SupplierProductUpdate
 from services.dependencies.dependencies import get_product_service
 from services.dependencies.dependencies_suppliers import (
     get_supplier_product_repo,
@@ -80,35 +84,27 @@ async def review_product(
     supp_product_id: UUID,
     supplier_service: SupplierClient = Depends(get_supplier_service),
     product_service: ProductClient = Depends(get_product_service),
+    redis_client: Redis = Depends(get_redis),
 ) -> HTMLResponse:
     """
     Страница редактирования.
     Загружает SupplierProduct, его логи (не обработанные) и связанный Product.
     """
-    supp_product = await supplier_service.get_supplier_product_review_data(
-        supp_product_id
+    supplier_result = await supplier_service.get_supplier_product_review_data(
+        supp_product_id, redis_client
     )
+    supp_product, transformed_logs, preprocessed_data = supplier_result
     product = None
     if product_id := supp_product.product_id:
-        logger.info(product_id)
-        product = None  # await product_service.get_changes_b24_db()
-    # Собираем данные для отображения
-    # Формируем список словарей для удобства в шаблоне
-    review_data: list[dict[str, Any]] = []
-    # for log in logs:
-    #     current_product_value = None
-    #     if product:
-    #         # Пытаемся получить текущее значение из Product
-    #         current_product_value = safe_getattr(product, log.field_name)
-
-    #     review_data.append({
-    #         "log_id": log.id,
-    #         "field_name": log.field_name,
-    #         "old_value": log.old_value,
-    #         "new_value": log.new_value,
-    #         "current_product_value": current_product_value,
-    #         "value_type": log.value_type
-    #     })
+        product = await product_service.repo.get_by_id(product_id)
+    available_products = []
+    if not product:
+        available_products = await product_service.repo.get_entities(
+            ["id", "name", "article"]
+        )
+    review_data, review_complex_data = await supplier_service.get_review_data(
+        supp_product, transformed_logs, preprocessed_data, product
+    )
 
     return templates.TemplateResponse(
         "edit.html",
@@ -117,6 +113,8 @@ async def review_product(
             "supplier_product": supp_product,
             "product": product,
             "review_data": review_data,
+            "available_products": available_products,
+            "review_complex_data": review_complex_data,
         },
     )
 
@@ -129,97 +127,67 @@ async def process_review(
     supp_product_id: UUID,
     supplier_service: SupplierClient = Depends(get_supplier_service),
     product_service: ProductClient = Depends(get_product_service),
+    redis_client: Redis = Depends(get_redis),
 ) -> RedirectResponse:
     """
     Обработка формы.
     Обновляет Product, отмечает логи как обработанные,
     снимает флаг needs_review.
     """
-    # form_data = await request.form()
-    supp_product = await supplier_service.get_supplier_product_review_data(
-        supp_product_id
+    form_data = await request.form()
+
+    source = await supplier_service.process_review(
+        supp_product_id,
+        product_service,
+        form_data,
+        redis_client,
     )
-    # # 1. Загружаем объекты снова
-    # supp_prod_query = select(SupplierProduct).where(
-    #     SupplierProduct.id == supplier_product_id
-    # )
-    # supp_prod_res = await db.execute(supp_prod_query)
-    # supplier_product = supp_prod_res.scalar_one_or_none()
-
-    # if not supplier_product:
-    #     raise HTTPException(404, "Product not found")
-
-    # product = None
-    # if supplier_product.product_id:
-    #     prod_query = select(Product).where(
-    #         Product.id == supplier_product.product_id
-    #     )
-    #     prod_res = await db.execute(prod_query)
-    #     product = prod_res.scalar_one_or_none()
-
-    # # Если привязки к Product нет, мы не можем сохранить изменения в
-    # # карточку товара.
-    # # Логика может быть разной: либо создавать товар, либо игнорировать.
-    # # Здесь предположим, что товар ДОЛЖЕН существовать,
-    # # иначе просто отмечаем логи.
-
-    # if product:
-    #     # Проходимся по данным формы
-    #     # Ключи в форме будут вида "field_{log_id}"
-    #     for key, value in form_data.items():
-    #         if key.startswith("field_"):
-    #             log_id_str = key.replace("field_", "")
-    #             try:
-    #                 log_id = uuid.UUID(log_id_str)
-
-    #                 # Находим лог, чтобы知道 какое поле обновляем
-    #                 log_query = select(SupplierProductChangeLog).where(
-    #                     SupplierProductChangeLog.id == log_id,
-    #                     SupplierProductChangeLog.supplier_product_id
-    #                      == supplier_product_id
-    #                 )
-    #                 log_res = await db.execute(log_query)
-    #                 log = log_res.scalar_one_or_none()
-
-    #                 if log:
-    # Обновляем поле в Product
-    # Примечание: Здесь нужна осторожность с типами данных.
-    # form_data возвращает строки. Лучше привести к типу поля или
-    # использовать Pydantic для валидации. Для простоты - setattr.
-    # Можно добавить логику преобразования типов на основе log.value_type
-
-    #                     final_value = value
-    #                     if log.value_type == "int":
-    #                         final_value = int(value) if value else None
-    #                     elif log.value_type == "float":
-    #                         final_value = float(value) if value else None
-    #                     elif log.value_type == "bool":
-    #                         final_value = (
-    #                             value.lower() in ['true', '1', 'yes']
-    #                         )
-
-    #                     setattr(product, log.field_name, final_value)
-
-    #                     # Помечаем лог как обработанный
-    #                     log.is_processed = True
-    #                     # (Опционально) можно заполнить кто и когда обработал
-    #                     # log.processed_at = datetime.now()
-
-    #             except ValueError:
-    #                 continue # Неверный формат ID
-    # else:
-    #     # Если продукта нет, просто помечаем логи
-    #     # как просмотренные/обработанные
-    #     # чтобы они исчезли из списка задач
-    #     pass
-
-    # # Снимаем флаг needs_review с SupplierProduct
-    # supplier_product.needs_review = False
-
-    # await db.commit()
 
     # Перенаправляем обратно к списку товаров этого источника
     return RedirectResponse(
-        url=f"/api/v1/suppliers/products/?source={supp_product.source}",
-        status_code=303,
+        url=f"/api/v1/suppliers/products/?source={source}",
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
+@supplier_product_review.post(  # type: ignore[misc]
+    "/link_product/{supp_product_id}"
+)
+async def link_product(
+    supp_product_id: UUID,
+    request: Request,
+    supplier_service: SupplierClient = Depends(get_supplier_service),
+) -> RedirectResponse:
+    """
+    Отдельный эндпоинт для быстрой привязки товара.
+    Обновляет product_id и перезагружает страницу.
+    """
+    form_data = await request.form()
+    product_id_str = str(form_data.get("product_id"))
+
+    if not product_id_str:
+        return RedirectResponse(
+            url=(
+                f"/api/v1/suppliers/review/{supp_product_id}"
+                "?error=no_product_selected"
+            ),
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+
+    try:
+        target_product_id = UUID(product_id_str)
+    except ValueError:
+        raise HTTPException(
+            status_code=400, detail="Неверный формат ID продукта"
+        )
+
+    await supplier_service.supplier_product_repo.update(
+        supp_product_id,
+        SupplierProductUpdate(
+            product_id=target_product_id, should_export_to_crm=True
+        ),
+    )
+
+    return RedirectResponse(
+        url=f"/api/v1/suppliers/review/{supp_product_id}", status_code=303
     )
