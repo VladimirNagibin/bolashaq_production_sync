@@ -7,10 +7,12 @@ from fastapi import HTTPException, UploadFile, status
 from redis.asyncio import Redis
 from starlette.datastructures import FormData
 
+from core.exceptions.supplier_exceptions import NameNotFoundError
 from core.logger import logger
+from core.settings import settings
 from schemas.enums import SourcesProductEnum
 from schemas.fields import FIELDS_SUPPLIER_PRODUCT
-from schemas.product_schemas import ProductCreate, ProductUpdate
+from schemas.product_schemas import FieldValue, ProductCreate, ProductUpdate
 from schemas.supplier_schemas import (
     ImportConfigDetail,
     ImportResult,
@@ -763,7 +765,6 @@ class SupplierClient:
                 is_unlinked = True
                 has_local_changes = True
         else:
-
             needs_bitrix_update = False
             product = None
             if product_id := supp_product.product_id:
@@ -772,8 +773,16 @@ class SupplierClient:
             if product:
                 product_bitrix = ProductUpdate(external_id=product.external_id)
             else:
-                # TODO: check filling name
-                product_bitrix = ProductCreate(name="name")
+                name = form_data.get("field_name", None)
+                if not name:
+                    raise NameNotFoundError("Name of product not found")
+                product_bitrix = ProductUpdate(
+                    name=name,
+                    vat_id=settings.DEFAULT_TAX_RATE_ID,
+                    vat_included=True,
+                    measure=settings.DEFAULT_MEASURE,
+                    active=True,
+                )
 
             simple_fields = FIELDS_SUPPLIER_PRODUCT.get("simple_fields", ())
             complex_fields = FIELDS_SUPPLIER_PRODUCT.get("complex_fields", ())
@@ -807,14 +816,43 @@ class SupplierClient:
                 if form_field_name not in form_data:
                     continue
                 update_in_crm = form_data.get(f"update_{field_name}") == "on"
-                logger.info(
-                    f"{form_data.get(form_field_name, '')}****{field_name}***"
-                    f"{value_type}:{update_in_crm}"
-                )
+                if not update_in_crm:
+                    continue
+                value = form_data.get(form_field_name, None)
+                value_typed = self._cast_value_by_type(value, value_type)
+                if value_typed is not None:
+                    value_bitrix = getattr(product, field_name, None)
+                    if (value_bitrix is None) or (
+                        value_bitrix is not None
+                        and value_bitrix.value
+                        and value_bitrix.value != value_typed
+                    ):
+                        fieid_value = FieldValue(value=value_typed)
+                        setattr(product_bitrix, field_name, fieid_value)
+                        needs_bitrix_update = True
+                        logger.info(
+                            f"{form_data.get(form_field_name, '')}"
+                            f"{field_name}"
+                            f"{value_type}:{update_in_crm}"
+                        )
 
             if needs_bitrix_update:
-                # TODO: update / create in bitrix
-                ...
+                product_bitrix_service = product_service.bitrix_client
+                if product:
+                    external_product_id = product.external_id
+                    await product_bitrix_service.update(product_bitrix)
+                else:
+                    external_product_id = await product_bitrix_service.create(
+                        product_bitrix
+                    )
+                if not external_product_id:
+                    raise
+                result, _ = await product_service.import_from_bitrix(
+                    int(external_product_id)
+                )
+                if result:
+                    supp_product_update.product_id = result.id
+                    has_local_changes = True
 
         supp_product_update.is_validated = True
         supp_product_update.needs_review = False

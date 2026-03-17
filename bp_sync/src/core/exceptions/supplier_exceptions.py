@@ -12,3 +12,9 @@ class DataMappingError(Exception):
 
 class DatabaseError(Exception):
     pass
+
+
+class NameNotFoundError(Exception):
+    """Ошибка при отсутствии доступного менеджера."""
+
+    pass

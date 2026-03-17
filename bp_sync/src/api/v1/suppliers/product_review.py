@@ -11,6 +11,8 @@ from fastapi import (
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
+from core.exceptions.supplier_exceptions import NameNotFoundError
+
 # from core.logger import logger
 from core.settings import settings
 from schemas.enums import SourcesProductEnum
@@ -103,6 +105,13 @@ async def review_product(
         supp_product, transformed_logs, preprocessed_data, product
     )
 
+    error_message = None
+    if request.query_params.get("error") == "name_required":
+        error_message = (
+            "Для заведения нового товара в Битрикс необходимо, "
+            "чтобы было заполнено поле Name."
+        )
+
     return templates.TemplateResponse(
         "edit.html",
         {
@@ -112,6 +121,7 @@ async def review_product(
             "review_data": review_data,
             "available_products": available_products,
             "review_complex_data": review_complex_data,
+            "error_message": error_message,
         },
     )
 
@@ -131,12 +141,20 @@ async def process_review(
     снимает флаг needs_review.
     """
     form_data = await request.form()
-
-    source = await supplier_service.process_review(
-        supp_product_id,
-        product_service,
-        form_data,
-    )
+    try:
+        source = await supplier_service.process_review(
+            supp_product_id,
+            product_service,
+            form_data,
+        )
+    except NameNotFoundError:
+        return RedirectResponse(
+            url=(
+                f"/api/v1/suppliers/review/{supp_product_id}"
+                "?error=name_required"
+            ),
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
 
     # Перенаправляем обратно к списку товаров этого источника
     return RedirectResponse(

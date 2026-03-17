@@ -16,6 +16,13 @@
             <h2>Обработка: {{ supplier_product.name }}</h2>
             <p class="text-muted">Source: {{ supplier_product.source }} | ID: {{ supplier_product.id }}</p>
 
+            {% if error_message %}
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <strong>Ошибка сохранения:</strong> {{ error_message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endif %}
+
             {% if not product %}
                 <div class="alert alert-warning">
                     <div class="d-flex justify-content-between align-items-start">
@@ -137,7 +144,7 @@
                                 <th style="width: 20%;">Новое значение (Log)</th>
                                 <th style="width: 15%;">Текущее значение в Битрикс24</th>
                                 <!-- 2. Задаем минимальную ширину для колонки с вводом -->
-                                <th style="min-width: 350px;">Значение для сохранения</th>
+                                <th style="min-width: 350px;">Значение для сохранения в Битрикс24</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -150,21 +157,25 @@
                                 <span class="badge bg-info text-dark">{{ item.current_product_value or '-' }}</span>
                             </td>
                             <td>
-                                {# <input type="text" #}
-                                       {# class="form-control  w-100" #}
-                                       {# name="field_{{ item.field_name }}" #}
-                                       {# value="{{ item.new_value }}" #}
-                                       {# title="{{ item.new_value }}" #}
+
+                                {% if "name" in item.field_name %}
+                                    <textarea
+                                        class="form-control w-100"
+                                        name="field_{{ item.field_name }}"
+                                        rows="3"
+                                        title="{{ item.new_value }}"
+                                        style="resize: vertical;"
+                                    >{{ item.new_value }}</textarea>
+                                {% else %}
+                                    <input type="text"
+                                       class="form-control  w-100"
+                                       name="field_{{ item.field_name }}"
+                                       value="{{ item.new_value }}"
+                                       title="{{ item.new_value }}"
                                        {# {% if not product %}disabled{% endif %} #}
-                                {# > #}
-                                 <textarea
-                                    class="form-control w-100"
-                                    name="field_{{ item.field_name }}"
-                                    rows="3"
-                                    title="{{ item.new_value }}"
-                                    style="resize: vertical;"
-                                >{{ item.new_value }}</textarea>
-                                <small class="text-muted d-block mt-1">Принять или изменить</small>
+                                >
+                                {% endif %}
+                                {# <small class="text-muted d-block mt-1">Принять или изменить</small> #}
                                 <!-- --- ДОБАВЛЕННЫЙ БЛОК С ГАЛКОЙ --- -->
                                 <!-- Скрывается, если should_export_to_crm == False -->
                                 <div class="form-check mt-2 update-field-row"
@@ -227,6 +238,6 @@
             }
         });
     </script>
-
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

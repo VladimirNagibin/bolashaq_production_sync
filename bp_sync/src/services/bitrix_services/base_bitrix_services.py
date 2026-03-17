@@ -159,6 +159,8 @@ class BaseBitrixEntityClient(Generic[SchemaTypeCreate, SchemaTypeUpdate]):
     ) -> int | None:
         """Создание новой сущности"""
         entity_title = getattr(data, "title", "")
+        if not entity_title:
+            entity_title = getattr(data, "name", "")
         logger.info(
             f"Creating new {self.entity_name}: {entity_title}",
             extra={"entity_type_id": entity_type_id, "crm": crm},
