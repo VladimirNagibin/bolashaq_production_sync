@@ -1,7 +1,7 @@
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import insert, select
+from sqlalchemy import func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.supplier_models import SupplierProductChangeLog as SuppChangeLog
@@ -104,3 +104,42 @@ class ChangeLogRepository(BaseRepository[SuppChangeLog]):
         )
 
         return change_logs  # type: ignore[no-any-return]
+
+    async def mark_change_logs_as_processed(
+        self, supp_product_id: UUID
+    ) -> int:
+        """
+        Помечает все необработанные логи изменений как обработанные
+        для указанного продукта
+
+        Args:
+            supp_product_id: ID продукта поставщика
+
+        Returns:
+            int: Количество обновленных записей
+        """
+        stmt = (
+            update(SuppChangeLog)
+            .where(SuppChangeLog.supplier_product_id == supp_product_id)
+            .where(SuppChangeLog.is_processed.is_(False))
+            .values(is_processed=True, processed_at=func.now())
+            .returning(SuppChangeLog.id)
+        )
+
+        result = await self._execute_query(
+            stmt,
+            operation="mark_change_logs_as_processed",
+            supp_product_id=str(supp_product_id),
+        )
+
+        updated_count = len(result.all()) if result else 0
+
+        self.logger.info(
+            "Marked change logs as processed",
+            extra={
+                "supp_product_id": str(supp_product_id),
+                "updated_count": updated_count,
+            },
+        )
+
+        return updated_count

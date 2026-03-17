@@ -168,7 +168,7 @@
                                 <!-- --- ДОБАВЛЕННЫЙ БЛОК С ГАЛКОЙ --- -->
                                 <!-- Скрывается, если should_export_to_crm == False -->
                                 <div class="form-check mt-2 update-field-row"
-                                     {% if not supplier_product.should_export_to_crm %}style="display: none;"{% endif %}>
+                                    {% if not supplier_product.should_export_to_crm %}style="display: none;"{% endif %}>
                                     <input class="form-check-input" type="checkbox"
                                            name="update_{{ item.field_name }}"
                                            id="update_{{ item.field_name }}"

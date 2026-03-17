@@ -228,7 +228,12 @@ class SupplierProductRepository(BaseRepository[SupplierProduct]):
         return None
 
     async def update(
-        self, product_id: UUID, product_data: SupplierProductUpdate
+        self,
+        product_id: UUID,
+        product_data: SupplierProductUpdate,
+        characteristics: list[SupplierCharacteristicUpdate] | None = None,
+        complects: list[SupplierComplectUpdate] | None = None,
+        is_unlinked: bool = False,
     ) -> SupplierProductDetail:
         """Обновить товар поставщика."""
         self.logger.info(
@@ -239,9 +244,18 @@ class SupplierProductRepository(BaseRepository[SupplierProduct]):
         if not existing:
             raise EntityNotFoundError("SupplierProduct", product_id)
 
+        if characteristics is not None:
+            await self.characteristic_repo.delete_by_product(product_id)
+
+        if complects is not None:
+            await self.complect_repo.delete_by_product(product_id)
+
         update_data = product_data.model_dump(
             exclude_unset=True, exclude_none=True
         )
+        if is_unlinked:
+            update_data["product_id"] = None
+
         if not update_data:
             return await self.get_with_relations(product_id)
 
@@ -257,6 +271,17 @@ class SupplierProductRepository(BaseRepository[SupplierProduct]):
         )
 
         updated = result.scalar_one()
+
+        # Добавляем характеристики
+        if characteristics:
+            await self.characteristic_repo.create_bulk(
+                product_id, characteristics
+            )
+
+        # Добавляем комплектующие
+        if complects:
+            await self.complect_repo.create_bulk(product_id, complects)
+
         await self._commit("update_product")
 
         self.logger.info(

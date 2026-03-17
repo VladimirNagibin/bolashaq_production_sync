@@ -10,11 +10,9 @@ from fastapi import (
 )
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from redis.asyncio import Redis
 
 # from core.logger import logger
 from core.settings import settings
-from db.redis import get_redis
 from schemas.enums import SourcesProductEnum
 from schemas.supplier_schemas import SupplierProductUpdate
 from services.dependencies.dependencies import get_product_service
@@ -84,14 +82,13 @@ async def review_product(
     supp_product_id: UUID,
     supplier_service: SupplierClient = Depends(get_supplier_service),
     product_service: ProductClient = Depends(get_product_service),
-    redis_client: Redis = Depends(get_redis),
 ) -> HTMLResponse:
     """
     Страница редактирования.
     Загружает SupplierProduct, его логи (не обработанные) и связанный Product.
     """
     supplier_result = await supplier_service.get_supplier_product_review_data(
-        supp_product_id, redis_client
+        supp_product_id
     )
     supp_product, transformed_logs, preprocessed_data = supplier_result
     product = None
@@ -127,7 +124,6 @@ async def process_review(
     supp_product_id: UUID,
     supplier_service: SupplierClient = Depends(get_supplier_service),
     product_service: ProductClient = Depends(get_product_service),
-    redis_client: Redis = Depends(get_redis),
 ) -> RedirectResponse:
     """
     Обработка формы.
@@ -140,7 +136,6 @@ async def process_review(
         supp_product_id,
         product_service,
         form_data,
-        redis_client,
     )
 
     # Перенаправляем обратно к списку товаров этого источника

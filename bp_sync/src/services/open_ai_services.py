@@ -85,7 +85,24 @@ class OpenAIService:
             APIError: При других ошибках API
             ValueError: При невалидных входных данных
         """
-
+        return ProductSection(
+            announcement="announcement",
+            description="description",
+            characteristics=[
+                ProductCharacteristic(
+                    name="name1", value="value1", unit="unit1"
+                ),
+                ProductCharacteristic(name="name2", value="value2"),
+            ],
+            kit=[
+                KitItem(
+                    code="code",
+                    name="name",
+                    description="des",
+                    specifications={"key": "value", "key2": 123},
+                )
+            ],
+        )
         # Валидация входных данных
         if not description_text or not description_text.strip():
             raise ValueError("Description text cannot be empty")

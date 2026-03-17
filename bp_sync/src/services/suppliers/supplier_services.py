@@ -1,3 +1,4 @@
+import hashlib
 import json
 from typing import Any
 from uuid import UUID
@@ -9,16 +10,20 @@ from starlette.datastructures import FormData
 from core.logger import logger
 from schemas.enums import SourcesProductEnum
 from schemas.fields import FIELDS_SUPPLIER_PRODUCT
-from schemas.product_schemas import ProductCreate
+from schemas.product_schemas import ProductCreate, ProductUpdate
 from schemas.supplier_schemas import (
     ImportConfigDetail,
     ImportResult,
+    SupplierCharacteristicUpdate,
+    SupplierComplectUpdate,
     SupplierProductDetail,
+    SupplierProductUpdate,
 )
 from services.products.product_services import ProductClient
 
 from ..open_ai_services import OpenAIService
 from .file_import_service import FileImportService
+from .json_encoder import CustomJSONEncoder, PreprocessedDataSerializer
 from .repositories.import_config_repo import ImportConfigRepository
 from .repositories.supplier_product_repo import SupplierProductRepository
 
@@ -38,6 +43,7 @@ class SupplierClient:
         import_config_repo: ImportConfigRepository,
         supplier_product_repo: SupplierProductRepository,
         file_import_service: FileImportService,
+        redis_client: Redis,
     ) -> None:
         """
         Инициализация клиента поставщика.
@@ -50,6 +56,7 @@ class SupplierClient:
         self.import_config_repo = import_config_repo
         self.supplier_product_repo = supplier_product_repo
         self.file_import_service = file_import_service
+        self.redis_client = redis_client
         self._openai_service = OpenAIService()
 
         logger.debug("SupplierClient initialized")
@@ -187,7 +194,6 @@ class SupplierClient:
     async def get_supplier_product_review_data(
         self,
         supp_product_id: UUID,
-        redis_client: Redis,
     ) -> tuple[
         SupplierProductDetail,
         dict[str, dict[str, Any]],
@@ -236,27 +242,10 @@ class SupplierClient:
         # Трансформируем логи
         transformed_logs = self._transform_change_log(change_logs)
 
-        cache_key = f"supplier_review:{supp_product_id}"
-        cached_json = await redis_client.get(cache_key)
-
-        preprocessed_data = {}
-        if cached_json:
-            try:
-                preprocessed_data = json.loads(cached_json)
-            except Exception as e:
-                logger.error(f"Failed to load cached data: {e}")
-        else:
-            logger.warning(f"No cached data found for {supp_product_id}")
         # Предобрабатываем данные через AI и правила
-        if not preprocessed_data:
-            preprocessed_data = await self._preprocess_supplier_data(
-                supp_product, transformed_logs
-            )
-            await redis_client.set(
-                cache_key,
-                json.dumps(preprocessed_data),
-                ex=1800,  # Время жизни 30 минут (1800 сек)
-            )
+        preprocessed_data = await self._preprocess_supplier_data(
+            supp_product, transformed_logs
+        )
         logger.info(
             "Review data prepared",
             extra={
@@ -285,37 +274,55 @@ class SupplierClient:
 
         for log in change_logs:
             field_name = log.field_name
+            typed_old = self._cast_value_by_type(log.old_value, log.value_type)
+            typed_new = self._cast_value_by_type(log.new_value, log.value_type)
 
-            # Преобразуем значения с учетом типа
-            typed_old_value = self._cast_value_by_type(
-                log.old_value, log.value_type
-            )
-            typed_new_value = self._cast_value_by_type(
-                log.new_value, log.value_type
-            )
             if field_name not in transformed_logs:
+                # Первый лог для этого поля
                 transformed_logs[field_name] = {
-                    "old_value": typed_old_value,
-                    "new_value": typed_new_value,
-                    "created_at": log.created_at,
+                    "old_value": typed_old,
+                    "new_value": typed_new,
+                    "min_created_at": log.created_at,  # храним мин время
+                    "max_created_at": log.created_at,  # храним макс время
+                    "old_value_at_min": typed_old,  # old_value при мин врем
+                    "new_value_at_max": typed_new,  # new_value при макс врем
                 }
             else:
-                # Обновляем в зависимости от времени
-                existing = transformed_logs[field_name]
-                if log.created_at > existing["created_at"]:
-                    # Более новый лог - обновляем new_value
-                    existing["new_value"] = typed_new_value
-                elif log.created_at < existing["created_at"]:
-                    # Более старый лог - обновляем old_value
-                    existing["old_value"] = typed_old_value
-                # Если время равно, оставляем как есть
+                entry = transformed_logs[field_name]
+
+                # Обновляем минимальное время и соответствующее old_value
+                if log.created_at < entry["min_created_at"]:
+                    entry["min_created_at"] = log.created_at
+                    entry["old_value_at_min"] = typed_old
+
+                # Обновляем максимальное время и соответствующее new_value
+                if log.created_at > entry["max_created_at"]:
+                    entry["max_created_at"] = log.created_at
+                    entry["new_value_at_max"] = typed_new
+
+        # Приводим к нужному формату
+        result: dict[str, dict[str, Any]] = {}
+        for field_name, entry in transformed_logs.items():
+            result[field_name] = {
+                "old_value": entry["old_value_at_min"],
+                "new_value": entry["new_value_at_max"],
+                "created_at": entry["max_created_at"],
+            }
+
+        # Добавляем заглушку для name
+        if result and "name" not in result:
+            result["name"] = {
+                "old_value": None,
+                "new_value": None,
+                "created_at": None,
+            }
 
         logger.debug(
             "Transformed change logs",
-            extra={"fields_count": len(transformed_logs)},
+            extra={"fields_count": len(result)},
         )
 
-        return transformed_logs
+        return result
 
     def _cast_value_by_type(
         self, value: str | None, value_type: str | None
@@ -372,6 +379,35 @@ class SupplierClient:
         Returns:
             Dict[str, Dict[str, Any]]: Предобработанные данные
         """
+
+        # Сериализуем данные в строку
+        # (сортировка ключей важна для стабильности)
+        data_str = json.dumps(
+            field_data,
+            cls=CustomJSONEncoder,
+            sort_keys=True,
+            ensure_ascii=False,
+        )
+
+        # Создаем хеш (чтобы ключ не был слишком длинным)
+        data_hash = hashlib.md5(data_str.encode()).hexdigest()[:8]
+
+        # Формируем итоговый ключ
+        cache_key = f"preprocess_supplier_data:{supp_product.id}:{data_hash}"
+        cached_json = await self.redis_client.get(cache_key)
+
+        if cached_json:
+            try:
+                # result = json.loads(cached_json)
+                result = PreprocessedDataSerializer.deserialize_from_cache(
+                    cached_json
+                )
+                logger.info(f"Load data from cache with key: {cache_key}")
+                return result
+            except Exception as e:
+                logger.error(f"Failed to load cached data: {e}")
+        else:
+            logger.warning(f"No cached data found for {cache_key}")
         preprocessed_data: dict[str, dict[str, Any]] = {}
 
         # 1. Обработка описания через AI
@@ -404,7 +440,12 @@ class SupplierClient:
                 "preprocessed_fields": list(preprocessed_data.keys()),
             },
         )
-
+        await self.redis_client.set(
+            cache_key,
+            PreprocessedDataSerializer.serialize_for_cache(preprocessed_data),
+            # json.dumps(preprocessed_data),
+            ex=1800,  # Время жизни 30 минут (1800 сек)
+        )
         return preprocessed_data
 
     async def _process_description_with_ai(
@@ -422,10 +463,7 @@ class SupplierClient:
         Returns:
             Dict[str, Dict[str, Any]]: Обработанные AI данные
         """
-        import time
-
-        result: dict[str, dict[str, Any]] = {"time": {"c_time": time.time()}}
-        return result  # =====================================================
+        result: dict[str, dict[str, Any]] = {}
         # Получаем новое значение описания
         new_description = description_data.get("new_value")
         if not new_description or not isinstance(new_description, str):
@@ -693,7 +731,6 @@ class SupplierClient:
         supp_product_id: UUID,
         product_service: ProductClient,
         form_data: FormData,
-        redis_client: Redis,
     ) -> SourcesProductEnum:
         is_validated = form_data.get("is_validated") == "on"
         should_export_to_crm = form_data.get("should_export_to_crm") == "on"
@@ -706,111 +743,170 @@ class SupplierClient:
             f"is_deleted_in_bitrix:{is_deleted_in_bitrix}"
         )
 
-        supp_product = await self.supplier_product_repo.get_with_relations(
+        supp_result = await self.get_supplier_product_review_data(
             supp_product_id
         )
+        supp_product, _, preprocessed_data = supp_result
         if not supp_product:
-            error_msg = ""
+            error_msg = "Not found supplier_product with ID: {supp_product_id}"
             raise HTTPException(status_code=404, detail=error_msg)
-        product = None
-        if product_id := supp_product.product_id:
-            product = await product_service.repo.get_by_id(product_id)
-        simple_fields = FIELDS_SUPPLIER_PRODUCT.get("simple_fields", ())
-        complex_fields = FIELDS_SUPPLIER_PRODUCT.get("complex_fields", ())
-        # individual_fields = FIELDS_SUPPLIER_PRODUCT.get(
-        #     "individual_fields", ()
-        # )
-        for field_name, value_type in simple_fields:
-            form_field_name = f"field_{field_name}"
-            if form_field_name not in form_data:
-                continue
-            logger.info(
-                f"{form_data.get(form_field_name, '')}****{field_name}***"
-                f"{value_type}******************************"
-            )
-        for field_name, value_type in complex_fields:
-            form_field_name = f"field_{field_name}"
-            if form_field_name not in form_data:
-                continue
-            logger.info(
-                f"{form_data.get(form_field_name, '')}****{field_name}***"
-                f"{value_type}******************************"
-            )
 
-        logger.info(product)
+        supp_product_update = SupplierProductUpdate()
+        has_local_changes = False
+        is_unlinked = False
+        if supp_product.should_export_to_crm != should_export_to_crm:
+            supp_product_update.should_export_to_crm = should_export_to_crm
+            has_local_changes = True
 
-        cache_key = f"supplier_review:{supp_product_id}"
-        cached_json = await redis_client.get(cache_key)
-
-        preprocessed_data: dict[str, Any] = {}
-        if cached_json:
-            try:
-                preprocessed_data = json.loads(cached_json)
-                await redis_client.delete(cache_key)
-            except Exception as e:
-                logger.error(f"Failed to load cached data: {e}")
+        if not should_export_to_crm:
+            if product_id := supp_product.product_id:
+                is_unlinked = True
+                has_local_changes = True
         else:
-            logger.warning(f"No cached data found for {supp_product_id}")
-        logger.info(preprocessed_data)
-        # # Если привязки к Product нет, мы не можем сохранить изменения в
-        # # карточку товара.
-        # # Логика может быть разной: либо создавать товар, либо игнорировать.
-        # # Здесь предположим, что товар ДОЛЖЕН существовать,
-        # # иначе просто отмечаем логи.
 
-        # if product:
-        #     # Проходимся по данным формы
-        #     # Ключи в форме будут вида "field_{log_id}"
-        #     for key, value in form_data.items():
-        #         if key.startswith("field_"):
-        #             log_id_str = key.replace("field_", "")
-        #             try:
-        #                 log_id = uuid.UUID(log_id_str)
+            needs_bitrix_update = False
+            product = None
+            if product_id := supp_product.product_id:
+                product = await product_service.repo.get_by_id(product_id)
 
-        #                 # Находим лог, чтобы知道 какое поле обновляем
-        #                 log_query = select(SupplierProductChangeLog).where(
-        #                     SupplierProductChangeLog.id == log_id,
-        #                     SupplierProductChangeLog.supplier_product_id
-        #                      == supplier_product_id
-        #                 )
-        #                 log_res = await db.execute(log_query)
-        #                 log = log_res.scalar_one_or_none()
+            if product:
+                product_bitrix = ProductUpdate(external_id=product.external_id)
+            else:
+                # TODO: check filling name
+                product_bitrix = ProductCreate(name="name")
 
-        #                 if log:
-        # Обновляем поле в Product
-        # Примечание: Здесь нужна осторожность с типами данных.
-        # form_data возвращает строки. Лучше привести к типу поля или
-        # использовать Pydantic для валидации. Для простоты - setattr.
-        # Можно добавить логику преобразования типов на основе log.value_type
+            simple_fields = FIELDS_SUPPLIER_PRODUCT.get("simple_fields", ())
+            complex_fields = FIELDS_SUPPLIER_PRODUCT.get("complex_fields", ())
+            # individual_fields = FIELDS_SUPPLIER_PRODUCT.get(
+            #     "individual_fields", ()
+            # )
+            for field_name, value_type in simple_fields:
+                form_field_name = f"field_{field_name}"
+                if form_field_name not in form_data:
+                    continue
+                update_in_crm = form_data.get(f"update_{field_name}") == "on"
+                if not update_in_crm:
+                    continue
+                value = form_data.get(form_field_name, None)
+                value_typed = self._cast_value_by_type(value, value_type)
+                if value_typed is not None:
+                    value_bitrix = getattr(product, field_name, None)
+                    if (value_bitrix is None) or (
+                        value_bitrix is not None
+                        and value_bitrix != value_typed
+                    ):
+                        setattr(product_bitrix, field_name, value_typed)
+                        needs_bitrix_update = True
+                        logger.info(
+                            f"{form_data.get(form_field_name, '')}"
+                            f"{field_name}"
+                            f"{value_type}:{update_in_crm}"
+                        )
+            for field_name, value_type in complex_fields:
+                form_field_name = f"field_{field_name}"
+                if form_field_name not in form_data:
+                    continue
+                update_in_crm = form_data.get(f"update_{field_name}") == "on"
+                logger.info(
+                    f"{form_data.get(form_field_name, '')}****{field_name}***"
+                    f"{value_type}:{update_in_crm}"
+                )
 
-        #                     final_value = value
-        #                     if log.value_type == "int":
-        #                         final_value = int(value) if value else None
-        #                     elif log.value_type == "float":
-        #                         final_value = float(value) if value else None
-        #                     elif log.value_type == "bool":
-        #                         final_value = (
-        #                             value.lower() in ['true', '1', 'yes']
-        #                         )
+            if needs_bitrix_update:
+                # TODO: update / create in bitrix
+                ...
 
-        #                     setattr(product, log.field_name, final_value)
-
-        #                     # Помечаем лог как обработанный
-        #                     log.is_processed = True
-        #                     # (Опционально) можно заполнить кто и когда
-        #                     # обработал
-        #                     # log.processed_at = datetime.now()
-
-        #             except ValueError:
-        #                 continue # Неверный формат ID
-        # else:
-        #     # Если продукта нет, просто помечаем логи
-        #     # как просмотренные/обработанные
-        #     # чтобы они исчезли из списка задач
-        #     pass
-
-        # # Снимаем флаг needs_review с SupplierProduct
-        # supplier_product.needs_review = False
-
-        # await db.commit()
+        supp_product_update.is_validated = True
+        supp_product_update.needs_review = False
+        change_log_repo = self.supplier_product_repo.change_log_repo
+        await change_log_repo.mark_change_logs_as_processed(supp_product_id)
+        result_update = await self._update_preprocessed_data(
+            supp_product, supp_product_update, preprocessed_data
+        )
+        need_update, characteristics, complects = result_update
+        has_local_changes = has_local_changes or need_update
+        if has_local_changes:
+            await self.supplier_product_repo.update(
+                product_id=supp_product_id,
+                product_data=supp_product_update,
+                characteristics=characteristics,
+                complects=complects,
+                is_unlinked=is_unlinked,
+            )
         return supp_product.source
+
+    async def _update_preprocessed_data(
+        self,
+        supp_product: SupplierProductDetail,
+        supp_product_update: SupplierProductUpdate,
+        preprocessed_data: dict[str, dict[str, Any]],
+    ) -> tuple[
+        bool,
+        list[SupplierCharacteristicUpdate] | None,
+        list[SupplierComplectUpdate] | None,
+    ]:
+        need_update = False
+
+        preview_for_offer = self.get_value_preprocessed_data(
+            "preview_for_offer", preprocessed_data
+        )
+        if preview_for_offer:
+            supp_product_update.preview_for_offer = preview_for_offer
+            need_update = True
+        description_for_offer = self.get_value_preprocessed_data(
+            "description_for_offer", preprocessed_data
+        )
+        if description_for_offer:
+            supp_product_update.description_for_offer = description_for_offer
+            need_update = True
+
+        characteristics: list[SupplierCharacteristicUpdate] | None = None
+        complects: list[SupplierComplectUpdate] | None = None
+
+        characters = self.get_value_preprocessed_data(
+            "characteristics", preprocessed_data
+        )
+        if characters:
+            characteristics = []
+            for character in characters:
+                characteristics.append(
+                    SupplierCharacteristicUpdate(
+                        name=character.name,
+                        value=character.value,
+                        unit=character.unit,
+                    )
+                )
+        kits = self.get_value_preprocessed_data("complects", preprocessed_data)
+        if kits:
+            complects = []
+            for kit in kits:
+                specifications = None
+                try:
+                    if specifications := kit.specifications:
+                        specifications = json.dumps(
+                            specifications,
+                            cls=CustomJSONEncoder,
+                            sort_keys=True,
+                            ensure_ascii=False,
+                        )
+                except Exception:
+                    pass
+                complects.append(
+                    SupplierComplectUpdate(
+                        name=kit.name,
+                        code=kit.code,
+                        description=kit.description,
+                        specifications=specifications,
+                    )
+                )
+        need_update = bool(need_update or characteristics or complects)
+        return need_update, characteristics, complects
+
+    def get_value_preprocessed_data(
+        self, field_name: str, preprocessed_data: dict[str, dict[str, Any]]
+    ) -> Any | None:
+        if field_name in preprocessed_data:
+            value_data = preprocessed_data.get(field_name)
+            if value_data:
+                return value_data.get("new_value", None)
+        return None
