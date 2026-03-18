@@ -163,15 +163,81 @@
                                         class="form-control w-100"
                                         name="field_{{ item.field_name }}"
                                         rows="3"
-                                        title="{{ item.new_value }}"
+                                        title="{{ item.new_value or '-' }}"
                                         style="resize: vertical;"
-                                    >{{ item.new_value }}</textarea>
+                                    >{{ item.new_value or '' }}</textarea>
                                 {% else %}
                                     <input type="text"
                                        class="form-control  w-100"
                                        name="field_{{ item.field_name }}"
-                                       value="{{ item.new_value }}"
-                                       title="{{ item.new_value }}"
+                                       value="{{ item.new_value or '' }}"
+                                       title="{{ item.new_value or '-' }}"
+                                       {# {% if not product %}disabled{% endif %} #}
+                                >
+                                {% endif %}
+                                {# <small class="text-muted d-block mt-1">Принять или изменить</small> #}
+                                <!-- --- ДОБАВЛЕННЫЙ БЛОК С ГАЛКОЙ --- -->
+                                <!-- Скрывается, если should_export_to_crm == False -->
+                                <div class="form-check mt-2 update-field-row"
+                                    {% if not supplier_product.should_export_to_crm %}style="display: none;"{% endif %}>
+                                    <input class="form-check-input" type="checkbox"
+                                           name="update_{{ item.field_name }}"
+                                           id="update_{{ item.field_name }}"
+                                           {% if supplier_product.should_export_to_crm %}checked{% endif %}>
+                                    <label class="form-check-label small text-primary fw-bold" for="update_{{ item.field_name }}">
+                                        Обновить это поле в CRM
+                                    </label>
+                                </div>
+                                <!-- --- КОНЕЦ БЛОКА --- -->
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        {% for item in review_complex_data %}
+                        <tr>
+                            <td><strong>{{ item.field_name }}</strong></td>
+                            <td class="text-muted">{{ item.old_value or '-' }}</td>
+                            <td>{{ item.new_value or '-' }}</td>
+                            <td>
+                                <span class="badge bg-info text-dark">{{ item.current_product_value or '-' }}</span>
+                            </td>
+                            <td>
+
+                                {% if "name" in item.field_name %}
+                                    <textarea
+                                        class="form-control w-100"
+                                        name="field_{{ item.field_name }}"
+                                        rows="3"
+                                        title="{{ item.new_value or '-' }}"
+                                        style="resize: vertical;"
+                                    >{{ item.new_value or '' }}</textarea>
+                                {% elif item.field_name == "brend" %}
+                                    <!-- Специальное поле для Бренда (выпадающий список) -->
+                                    <select
+                                        class="form-select w-100"
+                                        name="field_{{ item.field_name }}"
+                                        title="{{ item.new_value or item.old_value }}"
+                                    >
+                                        <option value=""
+                                            -- Не выбрано --
+                                            {# Логика: выбираем эту опцию, если значение пустое или None #}
+                                            {% if item.current_product_value is none or item.current_product_value == '' %}selected{% endif %}
+                                        >
+                                        </option>
+                                        {% for brand in brand_options %}
+                                            <option value="{{ brand.id }}"
+                                                {% if item.current_product_value is not none and item.current_product_value|string == brand.display_name|string %}selected{% endif %}
+                                                {% if item.new_value is not none and item.new_value|string == brand.display_name|string %}selected{% endif %}
+                                            >
+                                                {{ brand.display_name }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                {% else %}
+                                    <input type="text"
+                                       class="form-control  w-100"
+                                       name="field_{{ item.field_name }}"
+                                       value="{{ item.new_value or '' }}"
+                                       title="{{ item.new_value or '-' }}"
                                        {# {% if not product %}disabled{% endif %} #}
                                 >
                                 {% endif %}

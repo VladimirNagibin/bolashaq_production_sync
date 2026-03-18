@@ -1,4 +1,5 @@
 from enum import IntEnum, StrEnum, auto
+from typing import Any
 
 CURRENCY = "KZT"
 SYSTEM_USER_ID = 37
@@ -247,3 +248,86 @@ class TransformationRule(StrEnum):
     TO_BOOL = "bool"
     REGEX = "re:"
     CUSTOM = "def:"
+
+
+class BrandEnum(IntEnum):
+    """Бренды"""
+
+    MATEST = 93
+    STROYPRIBOR = 95
+    ZORN = 97
+    INMARKON = 99
+    TVT = 101
+
+    @classmethod
+    def display_names(cls) -> dict[int, str]:
+        # Маппинг ID на оригинальные русские названия для отображения
+        return {
+            93: "Matest",
+            95: "Стройприбор",
+            97: "Zorn",
+            99: "Инмаркон",
+            101: "ТВТ",
+        }
+
+    @classmethod
+    def get_display_name(cls, value: int) -> str:
+        """Получить отображаемое имя бренда по числовому ID"""
+        return cls.display_names().get(value, "Неизвестно")
+
+    @classmethod
+    def get_original_name(cls, value: int) -> str:
+        """Получить оригинальное русское название бренда"""
+        return cls.display_names().get(value, "Unknown")
+
+    @classmethod
+    def get_by_name(cls, name: str) -> "BrandEnum | None":
+        """
+        Получить бренд по имени (case-insensitive, поддерживает
+        русские и английские названия)
+        """
+        name_lower = name.lower()
+        for brand in cls:
+            # Проверка по английскому имени
+            if brand.name.lower() == name_lower:
+                return brand
+            # Проверка по оригинальному русскому названию
+            if cls.display_names().get(brand.value, "").lower() == name_lower:
+                return brand
+        return None
+
+    @classmethod
+    def get_by_id(cls, value: int) -> "BrandEnum | None":
+        """Получить бренд по числовому ID"""
+        try:
+            return cls(value)
+        except ValueError:
+            return None
+
+    @classmethod
+    def to_dict(cls) -> list[dict[str, Any]]:
+        """Преобразовать все бренды в список словарей"""
+        return [
+            {
+                "id": brand.value,
+                "name": brand.name,  # Английское имя (ключ)
+                "display_name": cls.get_display_name(
+                    brand.value
+                ),  # Оригинальное имя
+            }
+            for brand in cls
+        ]
+
+    @classmethod
+    def get_all_ids(cls) -> list[int]:
+        """Получить все ID брендов"""
+        return [brand.value for brand in cls]
+
+    @classmethod
+    def exists(cls, value: int) -> bool:
+        """Проверить, существует ли бренд с таким ID"""
+        try:
+            cls(value)
+            return True
+        except ValueError:
+            return False

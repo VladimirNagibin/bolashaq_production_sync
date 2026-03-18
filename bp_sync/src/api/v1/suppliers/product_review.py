@@ -14,7 +14,7 @@ from fastapi.templating import Jinja2Templates
 from core.exceptions.supplier_exceptions import NameNotFoundError
 from core.logger import logger
 from core.settings import settings
-from schemas.enums import SourcesProductEnum
+from schemas.enums import BrandEnum, SourcesProductEnum
 from schemas.supplier_schemas import SupplierProductUpdate
 from services.dependencies.dependencies import get_product_service
 from services.dependencies.dependencies_suppliers import (
@@ -151,6 +151,7 @@ async def review_product(
                 "review_data": review_data,
                 "available_products": available_products,
                 "review_complex_data": review_complex_data,
+                "brand_options": BrandEnum.to_dict(),
                 "error_message": error_message,
             },
         )

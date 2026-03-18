@@ -7,6 +7,7 @@ from starlette.datastructures import FormData
 from core.exceptions.supplier_exceptions import NameNotFoundError
 from core.logger import logger
 from core.settings import settings
+from schemas.enums import BrandEnum
 from schemas.fields import FIELDS_SUPPLIER_PRODUCT
 from schemas.product_schemas import FieldValue, ProductCreate, ProductUpdate
 from schemas.supplier_schemas import SupplierProductDetail
@@ -50,7 +51,7 @@ class ReviewHandler:
                 self._prepare_complex_fields(transformed_logs, product)
             )
             review_special_data = self._prepare_special_fields(
-                preprocessed_data, product
+                transformed_logs, preprocessed_data, product
             )
             return review_data, review_special_data
 
@@ -116,15 +117,69 @@ class ReviewHandler:
         return review_data
 
     def _prepare_special_fields(
-        self, preprocessed_data: dict[str, dict[str, Any]], product: Any | None
+        self,
+        transformed_logs: dict[str, dict[str, Any]],
+        preprocessed_data: dict[str, dict[str, Any]],
+        product: Any | None,
     ) -> list[dict[str, Any]]:
-        """Подготавливает простые поля для отображения."""
+        """Подготавливает специальные поля для отображения."""
         review_special_data: list[dict[str, Any]] = []
         special_fields = FIELDS_SUPPLIER_PRODUCT.get("individual_fields", ())
-        logger.info(special_fields)
-        # TODO: add data to review_special_data
+        for field_name, value_type in special_fields:
+            field_data = self._get_value_special_fields(
+                field_name, transformed_logs, preprocessed_data, product
+            )
+            if field_data:
+                review_special_data.append(
+                    {
+                        "field_name": field_name,
+                        "old_value": field_data.get("old_value"),
+                        "new_value": field_data.get("new_value"),
+                        "current_product_value": (
+                            field_data.get("current_product_value")
+                        ),
+                        "value_type": value_type,
+                    }
+                )
 
         return review_special_data
+
+    def _get_value_special_fields(
+        self,
+        field_name: str,
+        transformed_logs: dict[str, dict[str, Any]],
+        preprocessed_data: dict[str, dict[str, Any]],
+        product: Any | None,
+    ) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        # TODO: add transformation special data
+        if field_name == "brend":
+            current_val = None
+            field_data = transformed_logs.get(field_name, {})
+            old_value = field_data.get("old_value")
+            new_value = field_data.get("new_value")
+
+            current = getattr(product, field_name, None)
+            if current and hasattr(current, "value"):
+                try:
+                    current_val_key = int(current.value)
+                    current_val = BrandEnum.get_display_name(current_val_key)
+                except (ValueError, TypeError) as e:
+                    logger.warning(
+                        "Product missing extract brand",
+                        extra={
+                            "product_id": getattr(product, "id", None),
+                            "error": str(e),
+                        },
+                    )
+            result.update(
+                {
+                    "old_value": old_value,
+                    "new_value": new_value,
+                    "current_product_value": current_val,
+                }
+            )
+        return result
 
     async def handle_submission(
         self,
@@ -176,13 +231,6 @@ class ReviewHandler:
             supplier_product.product_id
         )
 
-    def _validate_required_fields(self, form_data: FormData) -> None:
-        """Проверяет наличие обязательных полей."""
-        name = form_data.get(f"{self.FIELD_PREFIX}name")
-        if not name:
-            logger.warning("Name field is required but missing")
-            raise NameNotFoundError("Name of product not found")
-
     async def _prepare_product_update(
         self, product: Any | None, form_data: FormData
     ) -> ProductUpdate | None:
@@ -208,6 +256,13 @@ class ReviewHandler:
         )
 
         return product_update if has_changes else None
+
+    def _validate_required_fields(self, form_data: FormData) -> None:
+        """Проверяет наличие обязательных полей."""
+        name = form_data.get(f"{self.FIELD_PREFIX}name")
+        if not name:
+            logger.warning("Name field is required but missing")
+            raise NameNotFoundError("Name of product not found")
 
     def _create_new_product_data(self, form_data: FormData) -> ProductUpdate:
         """Создает данные для нового продукта."""
@@ -296,7 +351,7 @@ class ReviewHandler:
         form_value = form_data.get(f"{self.FIELD_PREFIX}{field_name}")
         typed_value = self.transformer.cast_value(form_value, value_type)
 
-        if typed_value is None:
+        if typed_value is None or not typed_value:
             return False
 
         current_value = getattr(existing_product, field_name, None)
@@ -318,7 +373,7 @@ class ReviewHandler:
         form_value = form_data.get(f"{self.FIELD_PREFIX}{field_name}")
         typed_value = self.transformer.cast_value(form_value, value_type)
 
-        if typed_value is None:
+        if typed_value is None or not typed_value:
             return False
 
         current = getattr(existing_product, field_name, None)
@@ -341,18 +396,65 @@ class ReviewHandler:
     ) -> bool:
         """Обновляет специальное поле."""
         # TODO: реализовать логику для специальных полей
-        # form_value = form_data.get(f"{self.FIELD_PREFIX}{field_name}")
-        # typed_value = self.transformer.cast_value(form_value, value_type)
-
-        # if typed_value is None:
-        #     return False
-
-        # current_value = getattr(existing_product, field_name, None)
-        # if current_value != typed_value:
-        #     setattr(product_update, field_name, typed_value)
-        #     return True
-
+        if field_name == "brend":
+            form_value = form_data.get(f"{self.FIELD_PREFIX}{field_name}")
+            # Если значение не передано в форме - ничего не делаем
+            if form_value is None:
+                logger.debug("No value for brand field in form")
+                return False
+            current_value = None
+            try:
+                current = getattr(existing_product, field_name, None)
+                current_value = current.value if current else None
+            except Exception:
+                logger.warning("Exception getting current value")
+            typed_value = self._determine_brand_value(
+                form_value, current_value
+            )
+            if typed_value is not None:
+                field_data = {"value": typed_value}
+                setattr(product_update, field_name, FieldValue(**field_data))
+                return True
         return False
+
+    def _determine_brand_value(
+        self, form_value: Any, current_value: Any
+    ) -> str | None:
+        """
+        Определяет значение бренда для установки.
+
+        Returns:
+            - Пустую строку если нужно удалить бренд
+            - Строковое представление ID если бренд изменился
+            - None если изменений нет
+        """
+        if (
+            not form_value or form_value.strip() == ""
+        ) and current_value is not None:
+            return ""
+        if not form_value:
+            return None
+        # Пытаемся преобразовать в int для сравнения
+        try:
+            form_int_value = int(form_value)
+
+            # Если текущее значение существует и совпадает с новым -
+            # без изменений
+            if current_value is not None:
+                try:
+                    current_int = int(current_value)
+                    if current_int == form_int_value:
+                        return None
+                except (ValueError, TypeError):
+                    pass  # Текущее значение не является числом
+
+            # Значение изменилось или текущего нет
+            return str(form_int_value)
+
+        except ValueError:
+            # Форма передала нечисловое значение
+            logger.warning(f"Brand form value is not a number: {form_value}")
+            return None
 
     async def _save_to_crm(
         self, existing_product: Any | None, product_update: ProductUpdate
