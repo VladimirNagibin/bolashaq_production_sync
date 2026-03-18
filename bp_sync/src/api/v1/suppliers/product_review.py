@@ -12,8 +12,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from core.exceptions.supplier_exceptions import NameNotFoundError
-
-# from core.logger import logger
+from core.logger import logger
 from core.settings import settings
 from schemas.enums import SourcesProductEnum
 from schemas.supplier_schemas import SupplierProductUpdate
@@ -28,8 +27,6 @@ from services.suppliers.repositories.supplier_product_repo import (
 )
 from services.suppliers.supplier_services import SupplierClient
 
-# from ..schemas.response_schemas import SuccessResponse
-
 supplier_product_review = APIRouter()
 templates = Jinja2Templates(directory=f"{settings.BASE_DIR}/templates")
 
@@ -39,11 +36,20 @@ templates = Jinja2Templates(directory=f"{settings.BASE_DIR}/templates")
 )
 async def read_root(request: Request) -> HTMLResponse:
     """Выбор источника данных"""
-    # Получаем список возможных источников из Enum
-    sources = [e.value for e in SourcesProductEnum]
-    return templates.TemplateResponse(
-        "index.html", {"request": request, "sources": sources}
-    )
+    try:
+        # Получаем список возможных источников из Enum
+        sources = [e.value for e in SourcesProductEnum]
+        logger.debug(f"Available sources: {sources}")
+
+        return templates.TemplateResponse(
+            "index.html", {"request": request, "sources": sources}
+        )
+    except Exception as e:
+        logger.error(f"Failed to load index page: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to load page",
+        )
 
 
 @supplier_product_review.get(  # type: ignore[misc]
@@ -57,17 +63,23 @@ async def get_products_list(
     ),
 ) -> HTMLResponse:
     """Список SupplierProduct для выбранного source, где needs_review=True"""
+    logger.info(f"Fetching products for source: {source}")
     try:
         source_products = SourcesProductEnum(source)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid source")
+        logger.error(f"Invalid source: {source}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid source",
+        )
     try:
         products = await supplier_product_repo.get_supplier_products_by_source(
             source_products
         )
+        logger.debug(f"Found {len(products)} products for source {source}")
     except Exception:
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="Exception during fetching products",
         )
     return templates.TemplateResponse(
@@ -89,41 +101,71 @@ async def review_product(
     Страница редактирования.
     Загружает SupplierProduct, его логи (не обработанные) и связанный Product.
     """
-    supplier_result = await supplier_service.get_supplier_product_review_data(
-        supp_product_id
-    )
-    supp_product, transformed_logs, preprocessed_data = supplier_result
-    product = None
-    if product_id := supp_product.product_id:
-        product = await product_service.repo.get_by_id(product_id)
-    available_products = []
-    if not product:
-        available_products = await product_service.repo.get_entities(
-            ["id", "name", "article"]
-        )
-    review_data, review_complex_data = await supplier_service.get_review_data(
-        supp_product, transformed_logs, preprocessed_data, product
-    )
-
-    error_message = None
-    if request.query_params.get("error") == "name_required":
-        error_message = (
-            "Для заведения нового товара в Битрикс необходимо, "
-            "чтобы было заполнено поле Name."
+    logger.info(f"Loading review page for product: {supp_product_id}")
+    try:
+        # Получаем данные для ревью
+        supplier_product, transformed_logs, preprocessed_data = (
+            await supplier_service.get_supplier_product_review_data(
+                supp_product_id
+            )
         )
 
-    return templates.TemplateResponse(
-        "edit.html",
-        {
-            "request": request,
-            "supplier_product": supp_product,
-            "product": product,
-            "review_data": review_data,
-            "available_products": available_products,
-            "review_complex_data": review_complex_data,
-            "error_message": error_message,
-        },
-    )
+        # Получаем связанный продукт
+        product = None
+        if product_id := supplier_product.product_id:
+            product = await product_service.repo.get_by_id(product_id)
+            logger.debug(f"Found linked product: {product_id}")
+
+        # Получаем доступные продукты для привязки
+        available_products = []
+        if not product:
+            available_products = await product_service.repo.get_entities(
+                ["id", "name", "article"]
+            )
+            logger.debug(f"Found {len(available_products)} available products")
+
+        # Подготавливаем данные для отображения
+        review_data, review_complex_data = (
+            await supplier_service.get_review_data(
+                supplier_product,
+                transformed_logs,
+                preprocessed_data,
+                product,
+            )
+        )
+
+        # Обработка ошибок
+        error_message = None
+        if request.query_params.get("error") == "name_required":
+            error_message = (
+                "Для заведения нового товара в Битрикс необходимо, "
+                "чтобы было заполнено поле Name."
+            )
+
+        return templates.TemplateResponse(
+            "edit.html",
+            {
+                "request": request,
+                "supplier_product": supplier_product,
+                "product": product,
+                "review_data": review_data,
+                "available_products": available_products,
+                "review_complex_data": review_complex_data,
+                "error_message": error_message,
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            f"Failed to load review page: {e}",
+            extra={"product_id": str(supp_product_id)},
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500, detail="Failed to load review page"
+        )
 
 
 @supplier_product_review.post(  # type: ignore[misc]
@@ -133,21 +175,32 @@ async def process_review(
     request: Request,
     supp_product_id: UUID,
     supplier_service: SupplierClient = Depends(get_supplier_service),
-    product_service: ProductClient = Depends(get_product_service),
 ) -> RedirectResponse:
     """
     Обработка формы.
     Обновляет Product, отмечает логи как обработанные,
     снимает флаг needs_review.
     """
-    form_data = await request.form()
+    logger.info(f"Processing review for product: {supp_product_id}")
+
     try:
+        form_data = await request.form()
         source = await supplier_service.process_review(
             supp_product_id,
-            product_service,
             form_data,
         )
+        logger.info(
+            "Review processed successfully for product: " f"{supp_product_id}"
+        )
+
+        # Перенаправляем обратно к списку товаров этого источника
+        return RedirectResponse(
+            url=f"/api/v1/suppliers/products/?source={source}",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+
     except NameNotFoundError:
+        logger.warning(f"Name required for product: {supp_product_id}")
         return RedirectResponse(
             url=(
                 f"/api/v1/suppliers/review/{supp_product_id}"
@@ -155,12 +208,16 @@ async def process_review(
             ),
             status_code=status.HTTP_303_SEE_OTHER,
         )
-
-    # Перенаправляем обратно к списку товаров этого источника
-    return RedirectResponse(
-        url=f"/api/v1/suppliers/products/?source={source}",
-        status_code=status.HTTP_303_SEE_OTHER,
-    )
+    except Exception as e:
+        logger.error(
+            f"Failed to process review: {e}",
+            extra={"product_id": str(supp_product_id)},
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to process review",
+        )
 
 
 @supplier_product_review.post(  # type: ignore[misc]
@@ -175,32 +232,55 @@ async def link_product(
     Отдельный эндпоинт для быстрой привязки товара.
     Обновляет product_id и перезагружает страницу.
     """
-    form_data = await request.form()
-    product_id_str = str(form_data.get("product_id"))
+    logger.info(f"Linking product to: {supp_product_id}")
 
-    if not product_id_str:
-        return RedirectResponse(
-            url=(
-                f"/api/v1/suppliers/review/{supp_product_id}"
-                "?error=no_product_selected"
+    try:
+        form_data = await request.form()
+        product_id_str = str(form_data.get("product_id"))
+
+        if not product_id_str:
+            logger.warning(
+                f"No product selected for linking to {supp_product_id}"
+            )
+            return RedirectResponse(
+                url=(
+                    f"/api/v1/suppliers/review/{supp_product_id}"
+                    "?error=no_product_selected"
+                ),
+                status_code=status.HTTP_303_SEE_OTHER,
+            )
+
+        try:
+            target_product_id = UUID(product_id_str)
+        except ValueError:
+            logger.error(f"Invalid product ID format: {product_id_str}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Неверный формат ID продукта",
+            )
+
+        await supplier_service.supplier_product_repo.update(
+            supp_product_id,
+            SupplierProductUpdate(
+                product_id=target_product_id, should_export_to_crm=True
             ),
+        )
+        logger.info(f"Product {supp_product_id} linked to {target_product_id}")
+
+        return RedirectResponse(
+            url=f"/api/v1/suppliers/review/{supp_product_id}",
             status_code=status.HTTP_303_SEE_OTHER,
         )
 
-    try:
-        target_product_id = UUID(product_id_str)
-    except ValueError:
-        raise HTTPException(
-            status_code=400, detail="Неверный формат ID продукта"
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            f"Failed to link product: {e}",
+            extra={"product_id": str(supp_product_id)},
+            exc_info=True,
         )
-
-    await supplier_service.supplier_product_repo.update(
-        supp_product_id,
-        SupplierProductUpdate(
-            product_id=target_product_id, should_export_to_crm=True
-        ),
-    )
-
-    return RedirectResponse(
-        url=f"/api/v1/suppliers/review/{supp_product_id}", status_code=303
-    )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to link product",
+        )

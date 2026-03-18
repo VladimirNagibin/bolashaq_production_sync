@@ -15,6 +15,4 @@ class DatabaseError(Exception):
 
 
 class NameNotFoundError(Exception):
-    """Ошибка при отсутствии доступного менеджера."""
-
     pass

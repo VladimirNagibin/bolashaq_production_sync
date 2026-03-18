@@ -90,16 +90,16 @@ class OpenAIService:
             description="description",
             characteristics=[
                 ProductCharacteristic(
-                    name="name1", value="value1", unit="unit1"
+                    name="name3", value="value3", unit="unit3"
                 ),
-                ProductCharacteristic(name="name2", value="value2"),
+                ProductCharacteristic(name="name4", value="value4"),
             ],
             kit=[
                 KitItem(
-                    code="code",
-                    name="name",
-                    description="des",
-                    specifications={"key": "value", "key2": 123},
+                    code="code2",
+                    name="name2",
+                    description="des2",
+                    specifications={"key2": "value2", "key222": 222},
                 )
             ],
         )
