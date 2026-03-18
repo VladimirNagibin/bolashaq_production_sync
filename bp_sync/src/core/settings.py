@@ -81,6 +81,10 @@ class Settings(BaseSettings):  # type: ignore
     OPEN_AI_API_KEY: str = "sk-12345"
     OPEN_AI_BASE_URL: str = "https://api.com"
 
+    DEFAULT_TAX_RATE: int = 16
+    DEFAULT_TAX_RATE_ID: int = 3
+    DEFAULT_MEASURE: int = 9
+
     @property
     def dsn(self) -> str:
         return (

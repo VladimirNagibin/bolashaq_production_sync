@@ -207,10 +207,14 @@ class FieldText(BaseModel):  # type: ignore[misc]
         # Если AliasChoices не используется, пробуем получить обычный алиас
         return field_info.alias or field_info.name  # type: ignore
 
+    model_config = ConfigDict(populate_by_name=True)
+
 
 class FieldValue(BaseModel):  # type: ignore[misc]
     value_id: int | None = Field(None, alias="valueId")  # id value
     value: str | FieldText = Field(..., alias="value")  # value
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class BaseProduct(CommonFieldMixin):

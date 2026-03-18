@@ -37,6 +37,8 @@ class ProductRepository(
     """Contact repository with lazy UserClient loading"""
 
     model = ProductDB
+    schema_update_class = ProductUpdate
+
     entity_type = EntityType.PRODUCT
 
     def __init__(
@@ -174,6 +176,8 @@ class ProductRepository(
     #             include_properties=True, session=self.session
     #         )
     #     return None
+
+    # product_entity
 
     async def get_entity_products(
         self,

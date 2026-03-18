@@ -16,15 +16,117 @@
             <h2>Обработка: {{ supplier_product.name }}</h2>
             <p class="text-muted">Source: {{ supplier_product.source }} | ID: {{ supplier_product.id }}</p>
 
-            {% if not product %}
-            <div class="alert alert-warning">
-                <strong>Внимание:</strong> Данный товар поставщика не привязан к товару в Битрикс.
+            {% if error_message %}
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <strong>Ошибка сохранения:</strong> {{ error_message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
+            {% endif %}
+
+            {% if not product %}
+                <div class="alert alert-warning">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <strong>Внимание:</strong> Товар не привязан к Битрикс.
+                            Выберите товар и нажмите "Привязать", чтобы загрузить текущие значения.
+                        </div>
+                    </div>
+
+                    <!-- МИНИ-ФОРМА ДЛЯ ПРИВЯЗКИ -->
+                    <!-- Она отправляется на отдельный эндпоинт /link_product/... -->
+                    <form
+                        action="/api/v1/suppliers/link_product/{{ supplier_product.id }}"
+                        method="post"
+                        class="mt-3"
+                    >
+                        <div class="input-group">
+                            <span class="input-group-text">Товар для связи:</span>
+
+                            <select
+                                class="form-select"
+                                name="product_id"
+                                required
+                            >
+                                <option value="" selected disabled>-- Выберите товар --</option>
+                                {% if available_products %}
+                                    {% for p in available_products %}
+                                        <option value="{{ p.id }}">
+                                            {{ p.name }} {% if p.article %}({{ p.article }}){% endif %}
+                                        </option>
+                                    {% endfor %}
+                                {% else %}
+                                    <option value="" disabled>Нет доступных товаров</option>
+                                {% endif %}
+                            </select>
+
+                            <button class="btn btn-success" type="submit">
+                                Привязать и обновить
+                            </button>
+                        </div>
+                        <small class="text-muted d-block mt-1">
+                            После нажатия страница перезагрузится, и данные товара подтянутся в форму.
+                        </small>
+                    </form>
+                </div>
             {% endif %}
         </div>
     </div>
 
     <form method="post" action="/api/v1/suppliers/review/{{ supplier_product.id }}">
+
+        <!-- --- НОВАЯ КАРТОЧКА: УПРАВЛЕНИЕ СТАТУСАМИ --- -->
+        <div class="card mb-4 border-primary">
+            <div class="card-header bg-light">
+                <strong>Управление статусами товара</strong>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <!-- Левая колонка -->
+                    <div class="col-md-6 mb-2">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox"
+                                   name="is_validated" id="is_validated"
+                                   {% if supplier_product.is_validated %}checked{% endif %}>
+                            <label class="form-check-label" for="is_validated">
+                                Валидирован <span class="text-muted small">(прошел проверку)</span>
+                            </label>
+                        </div>
+
+                        <div class="form-check form-switch mt-3">
+                            <input class="form-check-input" type="checkbox"
+                                   name="should_export_to_crm" id="should_export_to_crm"
+                                   {% if supplier_product.should_export_to_crm %}checked{% endif %}>
+                            <label class="form-check-label" for="should_export_to_crm">
+                                Выгружать в CRM
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Правая колонка -->
+                    <div class="col-md-6 mb-2">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox"
+                                   name="needs_review" id="needs_review"
+                                   {% if supplier_product.needs_review %}checked{% endif %}>
+                            <label class="form-check-label" for="needs_review">
+                                Требует проверки <span class="text-danger">*</span>
+                            </label>
+                        </div>
+
+                        <div class="form-check form-switch mt-3">
+                            <input class="form-check-input" type="checkbox"
+                                   name="is_deleted_in_bitrix" id="is_deleted_in_bitrix"
+                                   {% if supplier_product.is_deleted_in_bitrix %}checked{% endif %}>
+                            <label class="form-check-label text-danger" for="is_deleted_in_bitrix">
+                                Удален у поставщика
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- --- КОНЕЦ БЛОКА СТАТУСОВ --- -->
+
         <div class="card">
             <div class="card-header bg-primary text-white">
                 Изменения полей
@@ -33,14 +135,16 @@
                 {% if not review_data %}
                 <p>Нет необработанных изменений логов.</p>
                 {% else %}
+                <div class="table-responsive">
                 <table class="table table-bordered">
                     <thead class="table-light">
                         <tr>
-                            <th>Поле</th>
-                            <th>Старое значение (Log)</th>
-                            <th>Новое значение (Log)</th>
-                            <th>Текущее значение в Product</th>
-                            <th>Значение для сохранения</th>
+                            <th style="width: 15%;">Поле</th>
+                                <th style="width: 20%;">Старое значение (Log)</th>
+                                <th style="width: 20%;">Новое значение (Log)</th>
+                                <th style="width: 15%;">Текущее значение в Битрикс24</th>
+                                <!-- 2. Задаем минимальную ширину для колонки с вводом -->
+                                <th style="min-width: 350px;">Значение для сохранения в Битрикс24</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -53,18 +157,110 @@
                                 <span class="badge bg-info text-dark">{{ item.current_product_value or '-' }}</span>
                             </td>
                             <td>
-                                <input type="text"
-                                       class="form-control"
-                                       name="field_{{ item.log_id }}"
-                                       value="{{ item.new_value }}"
-                                       {% if not product %}disabled{% endif %}
+
+                                {% if "name" in item.field_name %}
+                                    <textarea
+                                        class="form-control w-100"
+                                        name="field_{{ item.field_name }}"
+                                        rows="3"
+                                        title="{{ item.new_value or '-' }}"
+                                        style="resize: vertical;"
+                                    >{{ item.new_value or '' }}</textarea>
+                                {% else %}
+                                    <input type="text"
+                                       class="form-control  w-100"
+                                       name="field_{{ item.field_name }}"
+                                       value="{{ item.new_value or '' }}"
+                                       title="{{ item.new_value or '-' }}"
+                                       {# {% if not product %}disabled{% endif %} #}
                                 >
-                                <small class="text-muted d-block mt-1">Принять или изменить</small>
+                                {% endif %}
+                                {# <small class="text-muted d-block mt-1">Принять или изменить</small> #}
+                                <!-- --- ДОБАВЛЕННЫЙ БЛОК С ГАЛКОЙ --- -->
+                                <!-- Скрывается, если should_export_to_crm == False -->
+                                <div class="form-check mt-2 update-field-row"
+                                    {% if not supplier_product.should_export_to_crm %}style="display: none;"{% endif %}>
+                                    <input class="form-check-input" type="checkbox"
+                                           name="update_{{ item.field_name }}"
+                                           id="update_{{ item.field_name }}"
+                                           {% if supplier_product.should_export_to_crm %}checked{% endif %}>
+                                    <label class="form-check-label small text-primary fw-bold" for="update_{{ item.field_name }}">
+                                        Обновить это поле в CRM
+                                    </label>
+                                </div>
+                                <!-- --- КОНЕЦ БЛОКА --- -->
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        {% for item in review_complex_data %}
+                        <tr>
+                            <td><strong>{{ item.field_name }}</strong></td>
+                            <td class="text-muted">{{ item.old_value or '-' }}</td>
+                            <td>{{ item.new_value or '-' }}</td>
+                            <td>
+                                <span class="badge bg-info text-dark">{{ item.current_product_value or '-' }}</span>
+                            </td>
+                            <td>
+
+                                {% if "name" in item.field_name %}
+                                    <textarea
+                                        class="form-control w-100"
+                                        name="field_{{ item.field_name }}"
+                                        rows="3"
+                                        title="{{ item.new_value or '-' }}"
+                                        style="resize: vertical;"
+                                    >{{ item.new_value or '' }}</textarea>
+                                {% elif item.field_name == "brend" %}
+                                    <!-- Специальное поле для Бренда (выпадающий список) -->
+                                    <select
+                                        class="form-select w-100"
+                                        name="field_{{ item.field_name }}"
+                                        title="{{ item.new_value or item.old_value }}"
+                                    >
+                                        <option value=""
+                                            -- Не выбрано --
+                                            {# Логика: выбираем эту опцию, если значение пустое или None #}
+                                            {% if item.current_product_value is none or item.current_product_value == '' %}selected{% endif %}
+                                        >
+                                        </option>
+                                        {% for brand in brand_options %}
+                                            <option value="{{ brand.id }}"
+                                                {% if item.current_product_value is not none and item.current_product_value|string == brand.display_name|string %}selected{% endif %}
+                                                {% if item.new_value is not none and item.new_value|string == brand.display_name|string %}selected{% endif %}
+                                            >
+                                                {{ brand.display_name }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                {% else %}
+                                    <input type="text"
+                                       class="form-control  w-100"
+                                       name="field_{{ item.field_name }}"
+                                       value="{{ item.new_value or '' }}"
+                                       title="{{ item.new_value or '-' }}"
+                                       {# {% if not product %}disabled{% endif %} #}
+                                >
+                                {% endif %}
+                                {# <small class="text-muted d-block mt-1">Принять или изменить</small> #}
+                                <!-- --- ДОБАВЛЕННЫЙ БЛОК С ГАЛКОЙ --- -->
+                                <!-- Скрывается, если should_export_to_crm == False -->
+                                <div class="form-check mt-2 update-field-row"
+                                    {% if not supplier_product.should_export_to_crm %}style="display: none;"{% endif %}>
+                                    <input class="form-check-input" type="checkbox"
+                                           name="update_{{ item.field_name }}"
+                                           id="update_{{ item.field_name }}"
+                                           {% if supplier_product.should_export_to_crm %}checked{% endif %}>
+                                    <label class="form-check-label small text-primary fw-bold" for="update_{{ item.field_name }}">
+                                        Обновить это поле в CRM
+                                    </label>
+                                </div>
+                                <!-- --- КОНЕЦ БЛОКА --- -->
                             </td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
+                </div>
                 {% endif %}
             </div>
             <div class="card-footer text-end">
@@ -73,5 +269,41 @@
         </div>
     </form>
 
+    <!-- --- СКРИПТ ДЛЯ ИНТЕРАКТИВНОСТИ --- -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            // Находим главный переключатель
+            const masterToggle = document.getElementById('should_export_to_crm');
+            // Находим все строки с галочками обновления
+            const updateCheckboxesRows = document.querySelectorAll('.update-field-row');
+
+            if (masterToggle) {
+                // Функция обновления видимости и состояния галочек
+                const toggleUpdateRows = function() {
+                    const isChecked = masterToggle.checked;
+
+                    updateCheckboxesRows.forEach(row => {
+                        // Показываем или скрываем строку
+                        row.style.display = isChecked ? 'block' : 'none';
+
+                        // Ставим или убираем галочку в зависимости от состояния
+                        const checkbox = row.querySelector('input[type="checkbox"]');
+                        if (checkbox) {
+                            checkbox.checked = isChecked;
+                        }
+                    });
+                };
+
+                // Вешаем обработчик событий на изменение
+                masterToggle.addEventListener('change', toggleUpdateRows);
+
+                // Вызываем один раз при загрузке, чтобы состояние было корректным
+                // (на случай если JS сработает позже отрисовки HTML)
+                // Но так как мы используем Jinja условия (style="display:none"),
+                // начальное состояние уже верное. Этот вызов нужен для синхронизации галочек.
+            }
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

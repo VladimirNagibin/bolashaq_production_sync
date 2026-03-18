@@ -1,6 +1,8 @@
 from fastapi import Depends
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.redis import get_redis
 from services.products.product_services import ProductClient
 from services.suppliers.file_import_service import FileImportService
 from services.suppliers.repositories.import_config_repo import (
@@ -44,9 +46,13 @@ async def get_supplier_service(
         get_supplier_product_repo
     ),
     file_import_service: FileImportService = Depends(get_file_import_service),
+    redis_client: Redis = Depends(get_redis),
+    product_client: ProductClient = Depends(get_product_service),
 ) -> SupplierClient:
     return SupplierClient(
         import_config_repo=import_config_repo,
         supplier_product_repo=supplier_product_repo,
         file_import_service=file_import_service,
+        redis_client=redis_client,
+        product_client=product_client,
     )

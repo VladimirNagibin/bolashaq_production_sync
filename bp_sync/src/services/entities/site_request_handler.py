@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from .entities_bitrix_services import EntitiesBitrixClient
 
 DEFAULT_DEAL_TITLE = "Запрос цены с сайта"
-DEFAULT_TAX_RATE = 16
+# DEFAULT_TAX_RATE = 16
 SITE_SOURCE = "WEB"
 EVENT_SOURCE_MAPPING = {
     "order": "matest",
@@ -739,7 +739,7 @@ class SiteRequestHandler:
                 quantity=product.quantity,
                 price=product.price,
                 tax_included=True,
-                tax_rate=DEFAULT_TAX_RATE,
+                tax_rate=settings.DEFAULT_TAX_RATE,
             )
             entities.append(entity)
 
@@ -784,7 +784,7 @@ class SiteRequestHandler:
                 quantity=quantity,
                 price=price or product.get("PRICE", 0),
                 tax_included=True,
-                tax_rate=DEFAULT_TAX_RATE,
+                tax_rate=settings.DEFAULT_TAX_RATE,
             )
 
             success = await self._save_product_rows(

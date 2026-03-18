@@ -605,3 +605,28 @@ FIELDS_USER_ALT: dict[str, Any] = {
 }
 
 FIELDS_TIMELINE_COMMENT: dict[str, Any] = {}
+
+FIELDS_SUPPLIER_PRODUCT: dict[str, tuple[tuple[str, str], ...]] = {
+    "simple_fields": (
+        ("name", "str"),
+        ("active", "str"),
+        ("sort", "int"),
+        ("price", "float"),
+        ("currency_id", "str"),
+    ),
+    "complex_fields": (
+        ("link", "str"),
+        ("original_name", "str"),
+        ("standarts", "str"),
+        ("article", "str"),
+    ),
+    "individual_fields": (
+        ("internal_section_id", "str"),
+        ("brend", "str"),
+        ("description", "str"),
+        ("characteristics", "str"),
+        ("complect", "str"),
+        ("detail_picture", "str"),
+        ("more_photos", "str"),
+    ),
+}
