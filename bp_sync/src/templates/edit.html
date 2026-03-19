@@ -150,7 +150,7 @@
                     <tbody>
                         {% for item in review_data %}
                         <tr>
-                            <td><strong>{{ item.field_name }}</strong></td>
+                            <td><strong>{{ field_labels.get(item.field_name, item.field_name) }}</strong></td>
                             <td class="text-muted">{{ item.old_value or '-' }}</td>
                             <td>{{ item.new_value or '-' }}</td>
                             <td>
@@ -194,7 +194,7 @@
                         {% endfor %}
                         {% for item in review_complex_data %}
                         <tr>
-                            <td><strong>{{ item.field_name }}</strong></td>
+                            <td><strong>{{ field_labels.get(item.field_name, item.field_name) }}</strong></td>
                             <td class="text-muted">{{ item.old_value or '-' }}</td>
                             <td>{{ item.new_value or '-' }}</td>
                             <td>
@@ -232,6 +232,64 @@
                                             </option>
                                         {% endfor %}
                                     </select>
+                                {% elif item.field_name == 'supplier_category' %}
+                                    <!-- КОРНЕВАЯ КАТЕГОРИЯ -->
+                                    <select
+                                        class="form-select w-100"
+                                        id="root_cat_select"
+                                        name="field_{{ item.field_name }}"
+                                        onchange="onRootCategoryChange()"
+                                    >
+                                        <option value="" disabled>-- Выберите категорию --</option>
+                                        {% for root in category_roots %}
+                                            <option value="{{ root.id }}"
+                                                {% if root.id == selected_root_id %}selected{% endif %}>
+                                                {{ root.name }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+
+                                    <!-- ДОБАВЛЕННОЕ ПОЛЕ И КНОПКА -->
+                                    <div class="input-group input-group-sm">
+                                        <input type="text"
+                                               class="form-control"
+                                               id="new_root_cat_name"
+                                               placeholder="Имя новой категории...">
+                                        <button class="btn btn-outline-primary"
+                                                type="button"
+                                                onclick="createNewRootCategory()">
+                                            + Создать раздел
+                                        </button>
+                                    </div>
+                                    <small class="text-muted d-block mt-1">Выберите раздел или создайте новый</small>
+
+                                {% elif item.field_name == 'supplier_subcategory' %}
+                                    <!-- ДОЧЕРНЯЯ КАТЕГОРИЯ -->
+                                    <select
+                                        class="form-select w-100"
+                                        id="sub_cat_select"
+                                        name="field_{{ item.field_name }}"
+                                        onchange="onSubCategoryChange()"
+                                    >
+                                        <option value="" disabled>-- Сначала выберите категорию --</option>
+                                        <!-- Опции будут заполнены через JS -->
+                                    </select>
+                                    <small class="text-muted d-block mt-1">Выберите подраздел или заполните поле ниже для заведения нового</small>
+
+                                {% elif item.field_name == 'internal_section_id' %}
+                                    <!-- ID РАЗДЕЛА (автозаполнение) -->
+                                    <div class="input-group">
+                                        <span class="input-group-text">Название раздела товара в Битрикс24</span>
+                                        <input type="text"
+                                               class="form-control w-100"
+                                               id="internal_section_id_input"
+                                               name="field_{{ item.field_name }}"
+                                               value="{{ selected_child_name or '' }}"
+                                               placeholder="Выберите подраздел..."
+                                        >
+                                    </div>
+                                    <small class="text-muted d-block mt-1">Выберите или отредактируйте</small>
+
                                 {% else %}
                                     <input type="text"
                                        class="form-control  w-100"
@@ -242,19 +300,21 @@
                                 >
                                 {% endif %}
                                 {# <small class="text-muted d-block mt-1">Принять или изменить</small> #}
-                                <!-- --- ДОБАВЛЕННЫЙ БЛОК С ГАЛКОЙ --- -->
-                                <!-- Скрывается, если should_export_to_crm == False -->
-                                <div class="form-check mt-2 update-field-row"
-                                    {% if not supplier_product.should_export_to_crm %}style="display: none;"{% endif %}>
-                                    <input class="form-check-input" type="checkbox"
-                                           name="update_{{ item.field_name }}"
-                                           id="update_{{ item.field_name }}"
-                                           {% if supplier_product.should_export_to_crm %}checked{% endif %}>
-                                    <label class="form-check-label small text-primary fw-bold" for="update_{{ item.field_name }}">
-                                        Обновить это поле в CRM
-                                    </label>
-                                </div>
-                                <!-- --- КОНЕЦ БЛОКА --- -->
+                                {% if item.field_name not in ['supplier_category', 'supplier_subcategory'] %}
+                                    <!-- --- ДОБАВЛЕННЫЙ БЛОК С ГАЛКОЙ --- -->
+                                    <!-- Скрывается, если should_export_to_crm == False -->
+                                    <div class="form-check mt-2 update-field-row"
+                                        {% if not supplier_product.should_export_to_crm %}style="display: none;"{% endif %}>
+                                        <input class="form-check-input" type="checkbox"
+                                            name="update_{{ item.field_name }}"
+                                            id="update_{{ item.field_name }}"
+                                            {% if supplier_product.should_export_to_crm %}checked{% endif %}>
+                                        <label class="form-check-label small text-primary fw-bold" for="update_{{ item.field_name }}">
+                                            Обновить это поле в CRM
+                                        </label>
+                                    </div>
+                                    <!-- --- КОНЕЦ БЛОКА --- -->
+                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}
@@ -303,6 +363,146 @@
                 // начальное состояние уже верное. Этот вызов нужен для синхронизации галочек.
             }
         });
+    </script>
+    <script>
+        // Данные детей: { root_id: [ {id, name}, ... ] }
+        const categoryChildrenMap = {{ category_children_map | safe }};
+
+        document.addEventListener("DOMContentLoaded", function() {
+            // Инициализация при загрузке
+            initCategorySelectors();
+        });
+
+        function initCategorySelectors() {
+            const rootSelect = document.getElementById('root_cat_select');
+            const subSelect = document.getElementById('sub_cat_select');
+            const selectedRootId = "{{ selected_root_id }}"; // Из Jinja
+
+            // Если корневая категория уже выбрана (на бэке), обновляем список детей
+            if (rootSelect && rootSelect.value) {
+                updateSubCategories(rootSelect.value);
+            }
+
+            // Если есть ID выбранной дочерней категории, проставляем её
+            const selectedChildId = "{{ selected_child_id }}";
+            if (selectedChildId && subSelect) {
+                subSelect.value = selectedChildId;
+            }
+        }
+
+        function onRootCategoryChange() {
+            const rootSelect = document.getElementById('root_cat_select');
+            const subSelect = document.getElementById('sub_cat_select');
+            const inputId = document.getElementById('internal_section_id_input');
+
+            // Очищаем выбор детей и ID
+            subSelect.innerHTML = '<option value="" disabled>-- Выберите подраздел --</option>';
+            if (inputId) inputId.value = '';
+
+            if (rootSelect && rootSelect.value) {
+                // Заполняем детей
+                updateSubCategories(rootSelect.value);
+            }
+        }
+
+        function updateSubCategories(rootId) {
+            const subSelect = document.getElementById('sub_cat_select');
+            // rootId из select приходит как строка, в ключах JSON могут быть числа или строки.
+            // Приводим к строке для надежности поиска
+            const children = categoryChildrenMap[rootId] || categoryChildrenMap[parseInt(rootId)];
+
+            if (children && children.length > 0) {
+                // Сохраняем текущее значение, если оно было (чтобы не сбросить при фильтрации, если родитель не менялся)
+                const currentVal = subSelect.value;
+
+                subSelect.innerHTML = '<option value="" disabled>-- Выберите подраздел --</option>';
+
+                children.forEach(child => {
+                    const option = document.createElement('option');
+                    option.value = child.id;
+                    option.textContent = child.name;
+                    if (child.id == currentVal) {
+                        option.selected = true;
+                    }
+                    subSelect.appendChild(option);
+                });
+            } else {
+                subSelect.innerHTML = '<option value="" disabled>Нет подразделов</option>';
+            }
+        }
+
+        function onSubCategoryChange() {
+            const subSelect = document.getElementById('sub_cat_select');
+            const inputId = document.getElementById('internal_section_id_input');
+
+            if (subSelect && inputId && subSelect.value) {
+                // inputId.value = subSelect.value;
+                const selectedIndex = subSelect.selectedIndex;
+                if (selectedIndex > -1) {
+                    inputId.value = subSelect.options[selectedIndex].text;
+                } else {
+                    inputId.value = '';
+                }
+            } else if (inputId) {
+                inputId.value = '';
+            }
+        }
+
+        async function createNewRootCategory() {
+            const inputName = document.getElementById('new_root_cat_name');
+            const select = document.getElementById('root_cat_select');
+            const categoryName = inputName.value.trim();
+
+            if (!categoryName) {
+                alert("Введите название категории");
+                return;
+            }
+
+            // Блокируем кнопку на время запроса (опционально)
+            const btn = document.querySelector('button[onclick="createNewRootCategory()"]');
+            const originalText = btn.textContent;
+            btn.textContent = "Создание...";
+            btn.disabled = true;
+
+            try {
+                // Отправка POST запроса
+                const response = await fetch('/api/v1/suppliers/create_root_section', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `name=${encodeURIComponent(categoryName)}`
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+
+                    // 1. Создаем новую опцию
+                    const option = document.createElement('option');
+                    option.value = data.id;
+                    option.textContent = data.name;
+
+                    // 2. Добавляем в селект и выбираем её
+                    select.appendChild(option);
+                    select.value = data.id;
+
+                    // 3. Обновляем логику дочерних категорий
+                    onRootCategoryChange();
+
+                    // 4. Очищаем поле ввода
+                    inputName.value = '';
+                } else {
+                    alert("Ошибка при создании категории");
+                }
+            } catch (error) {
+                console.error("Error:", error);
+                alert("Произошла ошибка сети");
+            } finally {
+                // Возвращаем кнопку в исходное состояние
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
+        }
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>

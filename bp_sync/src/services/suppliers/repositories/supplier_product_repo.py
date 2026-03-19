@@ -1073,3 +1073,46 @@ class SupplierProductRepository(BaseRepository[SupplierProduct]):
         )
 
         return products  # type: ignore[no-any-return]
+
+    async def get_category_mapping(
+        self, source: SourcesProductEnum | None = None
+    ) -> dict[tuple[str, str | None], int]:
+        """
+        Асинхронная версия получения словаря соответствия категорий.
+        """
+        # Строим запрос
+        stmt = (
+            select(
+                SupplierProduct.supplier_category,
+                SupplierProduct.supplier_subcategory,
+                SupplierProduct.internal_section_id,
+            )
+            .where(
+                and_(
+                    SupplierProduct.supplier_category.is_not(None),
+                    SupplierProduct.supplier_category != "",
+                    SupplierProduct.internal_section_id.is_not(None),
+                )
+            )
+            .distinct()
+        )
+
+        if source:
+            stmt = stmt.where(SupplierProduct.source == source)
+
+        result = await self._execute_query(
+            stmt,
+            operation="get_category_mapping",
+            source=source.value if source else None,
+        )
+        rows = result.all()
+
+        # Формируем словарь
+        mapping: dict[tuple[str, str | None], int] = {}
+        for category, subcategory, section_id in rows:
+            # Обрабатываем подкатегорию
+            if subcategory in (None, ""):
+                subcategory = None
+            mapping[(category, subcategory)] = section_id
+
+        return mapping

@@ -8,6 +8,7 @@ from starlette.datastructures import FormData
 from core.exceptions.supplier_exceptions import NameNotFoundError
 from core.logger import logger
 from schemas.enums import SourcesProductEnum
+from schemas.product_schemas import ProductCreate
 from schemas.supplier_schemas import (
     ImportConfigDetail,
     ImportResult,
@@ -15,9 +16,13 @@ from schemas.supplier_schemas import (
     SupplierProductUpdate,
 )
 from services.products.product_services import ProductClient
+from services.productsections.productsection_services import (
+    ProductsectionClient,
+)
 
 from ..open_ai_services import OpenAIService
 from .file_import_service import FileImportService
+from .helpers.category_cache import CategoryCacheService
 from .helpers.data_transformer import DataTransformer
 from .helpers.preprocessor import SupplierDataPreprocessor
 from .helpers.review_handler import ReviewHandler
@@ -38,17 +43,27 @@ class SupplierClient:
         file_import_service: FileImportService,
         redis_client: Redis,
         product_client: ProductClient,
+        product_section_client: ProductsectionClient,
     ) -> None:
         self.import_config_repo = import_config_repo
         self.supplier_product_repo = supplier_product_repo
         self.file_import_service = file_import_service
+        self.product_section_client = product_section_client
 
         # Инициализация помощников
+        self._category_cache = CategoryCacheService(
+            redis_client=redis_client,
+            supplier_product_repo=supplier_product_repo,
+        )
         self._transformer = DataTransformer()
         self._preprocessor = SupplierDataPreprocessor(
-            openai_service=OpenAIService(), redis_client=redis_client
+            openai_service=OpenAIService(),
+            redis_client=redis_client,
+            category_cache=self._category_cache,
         )
-        self._review_handler = ReviewHandler(product_client)
+        self._review_handler = ReviewHandler(
+            product_client, product_section_client
+        )
 
         logger.debug("SupplierClient initialized")
 
@@ -226,7 +241,9 @@ class SupplierClient:
         )
 
         # 3. Трансформация логов (через Transformer)
-        transformed_logs = self._transformer.transform_change_logs(logs)
+        transformed_logs = self._transformer.transform_change_logs(
+            logs, supplier_product.name
+        )
 
         # 4. Предобработка/AI (через Preprocessor с кэшированием)
         preprocessed_data = await self._preprocessor.process(
@@ -247,7 +264,7 @@ class SupplierClient:
         supplier_product: SupplierProductDetail,
         transformed_logs: dict[str, dict[str, Any]],
         preprocessed_data: dict[str, dict[str, Any]],
-        product: Any,
+        product: ProductCreate | None,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         """Делегирует подготовку контекста шаблона ReviewHandler."""
         return self._review_handler.prepare_review_context(
@@ -261,10 +278,9 @@ class SupplierClient:
     ) -> SourcesProductEnum:
         """Обрабатывает сабмит формы."""
         # Получаем данные (включая кэшированные AI данные)
-        supp_result = await self.get_supplier_product_review_data(
-            supplier_product_id
+        supplier_product, _, preprocessed_data = (
+            await self.get_supplier_product_review_data(supplier_product_id)
         )
-        supplier_product, _, preprocessed_data = supp_result
         # Парсим флаги из формы
         flags = {
             "is_validated": form_data.get("is_validated") == "on",

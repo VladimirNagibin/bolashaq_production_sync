@@ -630,3 +630,39 @@ FIELDS_SUPPLIER_PRODUCT: dict[str, tuple[tuple[str, str], ...]] = {
         ("more_photos", "str"),
     ),
 }
+
+FIELD_LABELS_RU = {
+    "name": "Название товара",
+    "code": "Символьный код",
+    "brend": "Бренд",
+    "article": "Артикул",
+    "price": "Цена",
+    "currency_id": "Валюта",
+    "active": "Активность",
+    "sort": "Сортировка",
+    "xml_id": "Внешний код",
+    "link": "Ссылки",
+    "original_name": "Оригинальное название",
+    "standarts": "Стандарты",
+    # Специальные поля поставщика
+    "supplier_category": "Категория поставщика",
+    "supplier_subcategory": "Подкатегория поставщика",
+    "internal_section_id": "Раздел в Битрикс24",
+    # Поля предложений/описания
+    "preview_for_offer": "Анонс для предложения",
+    "description_for_offer": "Описание для предложения",
+    "detail_picture": "Детальная картинка",
+    "preview_picture": "Картинка анонса",
+    "more_photos": "Галерея картинок",
+    "more_photo": "Дополнительные картинки",
+    # Сложные поля
+    "characteristics": "Характеристики",
+    "complect": "Комплектация",
+    # Добавьте остальные поля по необходимости
+    "description": "Описание",
+    "quantity": "Количество",
+    "measure": "Единица измерения",
+    "vat_id": "Ставка НДС",
+    "weight": "Вес",
+    # ...
+}

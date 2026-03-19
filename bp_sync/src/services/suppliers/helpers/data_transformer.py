@@ -49,6 +49,7 @@ class DataTransformer:
     @staticmethod
     def transform_change_logs(
         change_logs: list[Any],
+        supplier_product_name: str,
     ) -> dict[str, dict[str, Any]]:
         """
         Агрегирует логи изменений, находя самое старое и самое новое значение.
@@ -70,7 +71,9 @@ class DataTransformer:
             result = DataTransformer._process_field_groups(logs_by_field)
 
             # Добавляем обязательное поле name
-            result = DataTransformer._ensure_required_fields(result)
+            result = DataTransformer._ensure_required_fields(
+                result, supplier_product_name
+            )
 
             logger.debug(f"Transformed {len(result)} fields from logs")
             return result
@@ -122,11 +125,12 @@ class DataTransformer:
     @staticmethod
     def _ensure_required_fields(
         data: dict[str, dict[str, Any]],
+        old_value: str,
     ) -> dict[str, dict[str, Any]]:
         """Добавляет обязательные поля, если они отсутствуют."""
         if data and "name" not in data:
             data["name"] = {
-                "old_value": None,
+                "old_value": old_value,
                 "new_value": None,
                 "created_at": None,
             }
