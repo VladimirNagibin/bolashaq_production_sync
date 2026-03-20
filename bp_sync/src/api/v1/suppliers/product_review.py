@@ -121,7 +121,6 @@ async def review_product(
                 supp_product_id
             )
         )
-
         # Получаем связанный продукт
         product = None
         if product_id := supplier_product.product_id:
@@ -145,7 +144,6 @@ async def review_product(
                 product,
             )
         )
-
         sections_review_data = (
             await product_section_service.get_sections_review_data(
                 review_complex_data

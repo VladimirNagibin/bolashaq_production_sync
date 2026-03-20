@@ -90,9 +90,9 @@ class OpenAIService:
             description="description",
             characteristics=[
                 ProductCharacteristic(
-                    name="name3", value="value3", unit="unit3"
+                    name="name5", value="value5", unit="unit5"
                 ),
-                ProductCharacteristic(name="name4", value="value4"),
+                ProductCharacteristic(name="name6", value="value6"),
             ],
             kit=[
                 KitItem(
@@ -100,7 +100,13 @@ class OpenAIService:
                     name="name2",
                     description="des2",
                     specifications={"key2": "value2", "key222": 222},
-                )
+                ),
+                KitItem(
+                    code="code3",
+                    name="name3",
+                    description="des3",
+                    specifications={"key3": "value3", "key333": 333},
+                ),
             ],
         )
         # Валидация входных данных

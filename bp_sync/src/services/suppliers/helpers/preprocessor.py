@@ -60,7 +60,6 @@ class SupplierDataPreprocessor:
             Dict[str, Dict[str, Any]]: Предобработанные данные
         """
         try:
-            # Пытаемся получить из кэша
             cached_result = await self._get_from_cache(
                 supplier_product.id, field_data
             )

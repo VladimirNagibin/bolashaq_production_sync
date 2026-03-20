@@ -202,14 +202,13 @@ class DataTransformer:
         complects: list[SupplierComplectUpdate] = []
         for kit in kit_data:
             try:
-                specs_json = self._serialize_specifications(kit.specifications)
-
+                specifics = self.transform_specifications(kit.specifications)
                 complects.append(
                     SupplierComplectUpdate(
                         name=kit.name,
                         code=kit.code,
                         description=kit.description,
-                        specifications=specs_json,
+                        specifications=specifics,
                     )
                 )
             except Exception as e:
@@ -218,6 +217,22 @@ class DataTransformer:
                 )
 
         return complects
+
+    def transform_specifications(self, specifications: Any) -> str | None:
+        # Преобразование словаря из KitItem.specifications в строку
+        # для SupplierComplectCreate.specifications
+        if not specifications:
+            return None
+        specifics: list[str] = []
+        try:
+            for key, value in specifications.items():
+                try:
+                    specifics.append(f"{key}: {str(value)}")
+                except Exception:
+                    pass
+            return ", ".join(specifics)
+        except Exception:
+            return None
 
     def _serialize_specifications(self, specifications: Any) -> str | None:
         """Сериализует спецификации в JSON строку."""

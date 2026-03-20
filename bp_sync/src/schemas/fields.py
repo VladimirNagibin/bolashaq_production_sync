@@ -518,7 +518,7 @@ FIELDS_PRODUCT_ALT: dict[str, Any] = {
         "characteristics",
         "characteristics_for_print",
         "complect_for_print",
-        "complect",
+        "complects",
         "description_for_print",
         "standards_for_print",
     ],
@@ -625,7 +625,7 @@ FIELDS_SUPPLIER_PRODUCT: dict[str, tuple[tuple[str, str], ...]] = {
         ("brend", "str"),
         ("description", "str"),
         ("characteristics", "str"),
-        ("complect", "str"),
+        ("complects", "str"),
         ("detail_picture", "str"),
         ("more_photos", "str"),
     ),
@@ -657,7 +657,7 @@ FIELD_LABELS_RU = {
     "more_photo": "Дополнительные картинки",
     # Сложные поля
     "characteristics": "Характеристики",
-    "complect": "Комплектация",
+    "complects": "Комплектация",
     # Добавьте остальные поля по необходимости
     "description": "Описание",
     "quantity": "Количество",

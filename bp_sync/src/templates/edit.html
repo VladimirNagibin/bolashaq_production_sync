@@ -195,14 +195,46 @@
                         {% for item in review_complex_data %}
                         <tr>
                             <td><strong>{{ field_labels.get(item.field_name, item.field_name) }}</strong></td>
-                            <td class="text-muted">{{ item.old_value or '-' }}</td>
-                            <td>{{ item.new_value or '-' }}</td>
+                                {% if item.field_name in ['characteristics', 'complects'] %}
+                                    <td>
+                                        <textarea
+                                            class="form-control w-100 bg-light"
+                                            name="field_old_{{ item.field_name }}"
+                                            rows="3"
+                                            title="{{ item.old_value or '-' }}"
+                                            style="resize: vertical;"
+                                            readonly
+                                        >{{ item.old_value or '' }}</textarea>
+                                    </td>
+                                    <td>
+                                        <textarea
+                                            class="form-control w-100 bg-light"
+                                            name="field_new_{{ item.field_name }}"
+                                            rows="3"
+                                            title="{{ item.new_value or '-' }}"
+                                            style="resize: vertical;"
+                                            readonly
+                                        >{{ item.new_value or '' }}</textarea>
+                                    </td>
+                                    <td>
+                                        <textarea
+                                            class="form-control w-100 bg-light"
+                                            name="field_current_{{ item.field_name }}"
+                                            rows="3"
+                                            title="{{ item.current_product_value or '-' }}"
+                                            style="resize: vertical;"
+                                            readonly
+                                        >{{ item.current_product_value or '' }}</textarea>
+                                    </td>
+                                {% else %}
+                                    <td class="text-muted">{{ item.old_value or '-' }}</td>
+                                    <td>{{ item.new_value or '-' }}</td>
+                                    <td>
+                                        <span class="badge bg-info text-dark">{{ item.current_product_value or '-' }}</span>
+                                    </td>
+                                {% endif %}
                             <td>
-                                <span class="badge bg-info text-dark">{{ item.current_product_value or '-' }}</span>
-                            </td>
-                            <td>
-
-                                {% if "name" in item.field_name %}
+                                {% if item.field_name in ['characteristics', 'complects'] %}
                                     <textarea
                                         class="form-control w-100"
                                         name="field_{{ item.field_name }}"

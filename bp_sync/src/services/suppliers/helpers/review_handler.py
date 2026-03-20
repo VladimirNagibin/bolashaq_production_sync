@@ -9,7 +9,12 @@ from core.logger import logger
 from core.settings import settings
 from schemas.enums import BrandEnum
 from schemas.fields import FIELDS_SUPPLIER_PRODUCT
-from schemas.product_schemas import FieldValue, ProductCreate, ProductUpdate
+from schemas.product_schemas import (
+    FieldText,
+    FieldValue,
+    ProductCreate,
+    ProductUpdate,
+)
 from schemas.supplier_schemas import SupplierProductDetail
 from services.products.product_services import ProductClient
 from services.productsections.productsection_services import (
@@ -49,7 +54,7 @@ class ReviewHandler:
         Готовит данные для отображения в шаблоне.
 
         Returns:
-            Кортеж (простые поля, сложные поля)
+            Кортеж (простые поля, комплексные поля)
         """
         try:
             review_data = self._prepare_simple_fields(
@@ -157,13 +162,61 @@ class ReviewHandler:
         product: ProductCreate | None,
         supplier_product: SupplierProductDetail,
     ) -> list[dict[str, Any]]:
-        result: list[dict[str, Any]] = []
-        # TODO: add transformation special data
         if field_name == "brend":
+            return self._get_brand(
+                field_name, transformed_logs, product, supplier_product
+            )
+        elif field_name == "internal_section_id":
+            return self._get_section(
+                field_name,
+                transformed_logs,
+                preprocessed_data,
+                product,
+                supplier_product,
+            )
+        elif field_name in ["characteristics", "complects"]:
+            return self._get_list_items(field_name, preprocessed_data, product)
+
+        elif field_name == "description":
+            return self._get_description(
+                field_name,
+                transformed_logs,
+                preprocessed_data,
+                product,
+                supplier_product,
+            )
+        elif field_name == "detail_picture":
+            return self._get_detail_picture(
+                field_name,
+                transformed_logs,
+                preprocessed_data,
+                product,
+                supplier_product,
+            )
+        elif field_name == "more_photos":
+            return self._get_more_photos(
+                field_name,
+                transformed_logs,
+                preprocessed_data,
+                product,
+                supplier_product,
+            )
+        return []
+
+    def _get_brand(
+        self,
+        field_name: str,
+        transformed_logs: dict[str, dict[str, Any]],
+        product: ProductCreate | None,
+        supplier_product: SupplierProductDetail,
+    ) -> list[dict[str, Any]]:
+        try:
             current_val = None
             field_data = transformed_logs.get(field_name, {})
-            old_value = field_data.get("old_value")
-            new_value = field_data.get("new_value")
+            if not field_data:
+                old_value = supplier_product.brend
+            else:
+                old_value = field_data.get("old_value")
 
             current = getattr(product, field_name, None)
             if current and hasattr(current, "value"):
@@ -178,16 +231,28 @@ class ReviewHandler:
                             "error": str(e),
                         },
                     )
-            result.append(
+            return [
                 {
                     "field_name": field_name,
                     "old_value": old_value,
-                    "new_value": new_value,
+                    "new_value": field_data.get("new_value"),
                     "current_product_value": current_val,
                     "value_type": "str",
                 }
-            )
-        elif field_name == "internal_section_id":
+            ]
+        except Exception:
+            return []
+
+    def _get_section(
+        self,
+        field_name: str,
+        transformed_logs: dict[str, dict[str, Any]],
+        preprocessed_data: dict[str, dict[str, Any]],
+        product: ProductCreate | None,
+        supplier_product: SupplierProductDetail,
+    ) -> list[dict[str, Any]]:
+        result: list[dict[str, Any]] = []
+        try:
             for name in ["supplier_category", "supplier_subcategory"]:
                 result.append(
                     self._get_category_data(
@@ -210,8 +275,9 @@ class ReviewHandler:
                     "value_type": "int",
                 }
             )
-
-        return result
+            return result
+        except Exception:
+            return []
 
     def _get_category_data(
         self,
@@ -233,6 +299,127 @@ class ReviewHandler:
             "current_product_value": None,
             "value_type": "str",
         }
+
+    def _get_list_items(
+        self,
+        field_name: str,
+        preprocessed_data: dict[str, dict[str, Any]],
+        product: ProductCreate | None,
+    ) -> list[dict[str, Any]]:
+        result: list[dict[str, Any]] = []
+        try:
+            field_data = preprocessed_data.get(field_name)
+            if field_data is None:
+                return result
+
+            old_value = self._transform_items(
+                field_data.get("old_value"), field_name, "old"
+            )
+            new_value = self._transform_items(
+                field_data.get("new_value"), field_name, "new"
+            )
+            current_val = self._get_complex_product_value(product, field_name)
+
+            return [
+                {
+                    "field_name": field_name,
+                    "old_value": old_value,
+                    "new_value": new_value,
+                    "current_product_value": current_val,
+                    "value_type": "str",
+                }
+            ]
+        except Exception:
+            return result
+
+    def _transform_items(
+        self, items: list[Any] | None, field_name: str, field_type: str
+    ) -> str | None:
+        if items is None or not items:
+            return None
+        items_list: list[str] = []
+        for item in items:
+            result = None
+            if field_name == "characteristics":
+                # Преобразование SupplierCharacteristicCreate и
+                # ProductCharacteristic в строку для Битрикса
+                result = (
+                    f"{item.name}: {item.value} "
+                    f"{item.unit if item.unit else ''}"
+                )
+            if field_name == "complects":
+                # Преобразование SupplierComplectCreate и KitItem
+                # в строку для Битрикса
+                result = None
+                specifications = None
+                if field_type == "old":  # SupplierComplectCreate
+                    specifications = item.specifications
+                elif field_type == "new":  # KitItem
+                    specifications = self.transformer.transform_specifications(
+                        item.specifications
+                    )
+                complects: list[str] = []
+                if item.code:
+                    complects.append(f"{item.code}: ")
+                complects.append(f"{item.name}.")
+                if item.description:
+                    complects.append(f" {item.description}.")
+                if specifications:
+                    complects.append(f" {specifications}.")
+                if complects:
+                    result = "".join(complects)
+            if result:
+                items_list.append(result.strip())
+        return "\n".join(items_list)
+
+    def _get_complex_product_value(
+        self, product: ProductCreate | None, field_name: str
+    ) -> str | None:
+        try:
+            current_data = getattr(product, field_name, None)
+            if current_data:
+                current_field = current_data.value
+                if current_field:
+                    return str(current_field.text_field)
+            return None
+        except Exception:
+            return None
+
+    def _get_description(
+        self,
+        field_name: str,
+        transformed_logs: dict[str, dict[str, Any]],
+        preprocessed_data: dict[str, dict[str, Any]],
+        product: ProductCreate | None,
+        supplier_product: SupplierProductDetail,
+    ) -> list[dict[str, Any]]:
+        result: list[dict[str, Any]] = []
+        # TODO: upd
+        return result
+
+    def _get_detail_picture(
+        self,
+        field_name: str,
+        transformed_logs: dict[str, dict[str, Any]],
+        preprocessed_data: dict[str, dict[str, Any]],
+        product: ProductCreate | None,
+        supplier_product: SupplierProductDetail,
+    ) -> list[dict[str, Any]]:
+        result: list[dict[str, Any]] = []
+        # TODO: upd
+        return result
+
+    def _get_more_photos(
+        self,
+        field_name: str,
+        transformed_logs: dict[str, dict[str, Any]],
+        preprocessed_data: dict[str, dict[str, Any]],
+        product: ProductCreate | None,
+        supplier_product: SupplierProductDetail,
+    ) -> list[dict[str, Any]]:
+        result: list[dict[str, Any]] = []
+        # TODO: upd
+        return result
 
     async def handle_submission(
         self,
@@ -461,7 +648,10 @@ class ReviewHandler:
             return await self._handle_field_section(
                 product_update, existing_product, field_name, form_data
             )
-
+        elif field_name in ["characteristics", "complects"]:
+            return await self._handle_field_items(
+                product_update, existing_product, field_name, form_data
+            )
         return False
 
     def _handle_field_brand(
@@ -571,6 +761,43 @@ class ReviewHandler:
         try:
             return int(value)
         except (ValueError, TypeError):
+            return None
+
+    async def _handle_field_items(
+        self,
+        product_update: ProductUpdate,
+        existing_product: ProductCreate | None,
+        field_name: str,
+        form_data: FormData,
+    ) -> bool:
+        form_value = form_data.get(f"{self.FIELD_PREFIX}{field_name}")
+        # Если значение не передано в форме - ничего не делаем
+        if form_value is None:
+            logger.debug("No value for section field in form")
+            return False
+        current_value = self._get_complex_product_value(
+            existing_product, field_name
+        )
+        form_value = str(form_value).strip()
+        if not form_value:
+            if current_value:
+                # TODO: Если значение заполнено - обнулить ?
+                return True
+            return False
+        new_value = None
+        if current_value != form_value:
+            new_value = self._create_complex_product_value(form_value)
+
+        if new_value:
+            setattr(product_update, field_name, new_value)
+            return True
+        return False
+
+    def _create_complex_product_value(self, value: str) -> FieldValue | None:
+        try:
+            complex_value = FieldText(text_field=value, type_field="HTML")
+            return FieldValue(value=complex_value)
+        except Exception:
             return None
 
     async def _save_to_crm(
