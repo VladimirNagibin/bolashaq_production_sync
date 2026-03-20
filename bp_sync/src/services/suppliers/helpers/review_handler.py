@@ -239,7 +239,7 @@ class ReviewHandler:
         supplier_product: SupplierProductDetail,
         form_data: FormData,
         preprocessed_data: dict[str, dict[str, Any]],
-    ) -> UUID | None:
+    ) -> tuple[UUID | None, int | None]:
         """
         Обрабатывает отправленную форму.
         Возвращает: external_id_or_None
@@ -247,17 +247,21 @@ class ReviewHandler:
         try:
             # Получаем существующий продукт или создаем новый
             product = await self._get_product_or_none(supplier_product)
-
+            section_id = getattr(product, "section_id", None)
             # Подготавливаем данные для обновления
             product_update = await self._prepare_product_update(
                 product, form_data
             )
 
             if not product_update:
-                return None
+                return None, section_id
 
+            new_section_id = getattr(product_update, "section_id", None)
             # Сохраняем в CRM
-            return await self._save_to_crm(product, product_update)
+            return (
+                await self._save_to_crm(product, product_update),
+                new_section_id or section_id,
+            )
 
         except NameNotFoundError:
             raise

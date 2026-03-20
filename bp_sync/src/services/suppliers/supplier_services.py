@@ -62,7 +62,8 @@ class SupplierClient:
             category_cache=self._category_cache,
         )
         self._review_handler = ReviewHandler(
-            product_client, product_section_client
+            product_client,
+            product_section_client,
         )
 
         logger.debug("SupplierClient initialized")
@@ -310,13 +311,24 @@ class SupplierClient:
         # Обработка данных товара (если выгрузка разрешена)
         if flags["should_export_to_crm"]:
             try:
-                product_id = await self._review_handler.handle_submission(
-                    supplier_product, form_data, preprocessed_data
+                product_id, section_id = (
+                    await self._review_handler.handle_submission(
+                        supplier_product, form_data, preprocessed_data
+                    )
                 )
 
                 if product_id:
                     supp_update.product_id = product_id
                     has_local_changes = True
+                if (
+                    section_id
+                    and section_id != supplier_product.internal_section_id
+                ):
+                    supp_update.internal_section_id = section_id
+                    has_local_changes = True
+                    await self._update_categiry_cache(
+                        supplier_product, section_id
+                    )
 
             except NameNotFoundError as e:
                 logger.warning(f"Review failed: {e}")
@@ -363,3 +375,20 @@ class SupplierClient:
             )
 
         return supplier_product.source
+
+    async def _update_categiry_cache(
+        self, supplier_product: SupplierProductDetail, section_id: int
+    ) -> None:
+        if not supplier_product.supplier_category:
+            return None
+        category_cache = await self._category_cache.get(
+            supplier_product.source
+        )
+        key = (
+            supplier_product.supplier_category,
+            supplier_product.supplier_subcategory,
+        )
+        if category_cache.get(key) == section_id:
+            return None
+        category_cache[key] = section_id
+        await self._category_cache.set(supplier_product.source, category_cache)
