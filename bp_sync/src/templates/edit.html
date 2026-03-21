@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>Обработка товара</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
 </head>
 <body class="container mt-5">
 
@@ -226,7 +227,7 @@
                                             readonly
                                         >{{ item.current_product_value or '' }}</textarea>
                                     </td>
-                                {% else %}
+                                {% elif item.field_name in ['brend', 'supplier_category', 'supplier_subcategory', 'internal_section_id'] %}
                                     <td class="text-muted">{{ item.old_value or '-' }}</td>
                                     <td>{{ item.new_value or '-' }}</td>
                                     <td>
@@ -321,14 +322,14 @@
                                     </div>
                                     <small class="text-muted d-block mt-1">Выберите или отредактируйте</small>
 
-                                {% else %}
-                                    <input type="text"
-                                       class="form-control  w-100"
-                                       name="field_{{ item.field_name }}"
-                                       value="{{ item.new_value or '' }}"
-                                       title="{{ item.new_value or '-' }}"
-                                       {# {% if not product %}disabled{% endif %} #}
-                                >
+                                {# % else % #}
+                                {#    <input type="text"#}
+                                {#       class="form-control  w-100"#}
+                                {#       name="field_{{ item.field_name }}"#}
+                                {#       value="{{ item.new_value or '' }}"#}
+                                {#       title="{{ item.new_value or '-' }}"#}
+                                         {# {% if not product %}disabled{% endif %} #}
+                                {#>#}
                                 {% endif %}
                                 {# <small class="text-muted d-block mt-1">Принять или изменить</small> #}
                                 {% if item.field_name not in ['supplier_category', 'supplier_subcategory'] %}
@@ -354,9 +355,168 @@
                 </div>
                 {% endif %}
             </div>
-            <div class="card-footer text-end">
-                <button type="submit" class="btn btn-success btn-lg">Подтвердить изменения</button>
+
+        </div>
+        <!-- --- НОВЫЙ БЛОК: СРАВНЕНИЕ ОПИСАНИЙ --- -->
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <strong>Сравнение и редактирование описаний</strong>
             </div>
+            <div class="card-body">
+
+                <!-- 1. ОПИСАНИЕ (Description) -->
+                {% for item in review_complex_data %}
+                {% if item.field_name == 'description' %}
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Описание (Старое значение)</label>
+                    <div class="border bg-light p-2 rounded" style="min-height: 100px; max-height: 200px; overflow-y: auto;">
+                        {{ item.old_value | safe }}
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label class="form-label fw-bold">Описание (Новое значение)</label>
+                    <div class="border bg-light p-2 rounded" style="min-height: 100px; max-height: 200px; overflow-y: auto;">
+                        {{ item.new_value | safe }}
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label class="form-label fw-bold">Описание (Текущее значение)</label>
+                    <div class="border bg-light p-2 rounded" style="min-height: 100px; max-height: 200px; overflow-y: auto;">
+                        {{ item.current_product_value | safe }}
+                    </div>
+                </div>
+                {% endif %}
+                {% endfor %}
+
+                <hr>
+
+                <!-- 2. PREVIEW FOR OFFER (3 колонки) -->
+                {% for item in review_complex_data %}
+                {% if item.field_name == 'preview_for_offer' %}
+                <!-- Скрытое поле для сохранения значения для JS -->
+                {# <input type="hidden" id="hidden_preview_new" value="{{ item.new_value or '' }}"> #}
+                <div id="hidden_preview_new" style="display:none;">{{ item.new_value | safe }}</div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-center">Анонс для предложения (Preview)</label>
+                    <div class="row">
+                        <div class="col-md-4 mb-2">
+                            <label class="small text-muted">Старое значение</label>
+                            <div class="border bg-light p-2 rounded" style="min-height: 80px; max-height: 150px; overflow-y: auto;">
+                                {{ item.old_value | safe }}
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <label class="small text-muted">Новое значение</label>
+                            <div class="border bg-light p-2 rounded" style="min-height: 80px; max-height: 150px; overflow-y: auto;">
+                                {{ item.new_value | safe }}
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <label class="small text-muted">Текущее значение</label>
+                            <div class="border bg-light p-2 rounded" style="min-height: 80px; max-height: 150px; overflow-y: auto;">
+                                {{ item.current_product_value | safe }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                {% endfor %}
+
+                <!-- 3. DESCRIPTION FOR OFFER (3 колонки) -->
+                {% for item in review_complex_data %}
+                {% if item.field_name == 'description_for_offer' %}
+                <!-- Скрытое поле для сохранения значения для JS -->
+                {# <input type="hidden" id="hidden_desc_offer_new" value="{{ item.new_value or '' }}"> #}
+                <div id="hidden_desc_offer_new" style="display:none;">{{ item.new_value | safe }}</div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-center">Описание для предложения</label>
+                    <div class="row">
+                        <div class="col-md-4 mb-2">
+                            <label class="small text-muted">Старое значение</label>
+                            <div class="border bg-light p-2 rounded" style="min-height: 80px; max-height: 150px; overflow-y: auto;">
+                                {{ item.old_value | safe }}
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <label class="small text-muted">Новое значение</label>
+                            <div class="border bg-light p-2 rounded" style="min-height: 80px; max-height: 150px; overflow-y: auto;">
+                                {{ item.new_value | safe }}
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-2">
+                            <label class="small text-muted">Текущее значение</label>
+                            <div class="border bg-light p-2 rounded" style="min-height: 80px; max-height: 150px; overflow-y: auto;">
+                                {{ item.current_product_value | safe }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                {% endfor %}
+
+                <hr>
+
+                <!-- 4. ИТОГОВОЕ РЕДАКТИРУЕМОЕ ПОЛЕ -->
+                <div class="mb-2">
+                    <label class="form-label fw-bold">
+                        Итоговое описание для предложений (Редактируемое)
+                        <span class="text-muted small">(Автозаполнено: Новый Анонс + Новое Описание)</span>
+                    </label>
+
+                    <!-- Скрытый input для отправки данных на бэкенд -->
+                    <input type="hidden" name="field_combined_description" id="hidden_combined_description">
+
+                    <!-- Контейнер для Quill Editor -->
+                    <div id="quill-editor" style="height: 400px;"></div>
+
+                    <!-- Кнопки для работы с HTML -->
+                    <div class="mt-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="showHtmlSource()">
+                            Показать/Редактировать HTML
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearFormatting()">
+                            Очистить форматирование
+                        </button>
+                    </div>
+
+                    <!-- Модальное окно для редактирования HTML -->
+                    <div class="modal fade" id="htmlModal" tabindex="-1">
+                        <div class="modal-dialog modal-lg">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Редактирование HTML</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <textarea id="htmlSource" class="form-control" rows="15" style="font-family: monospace;"></textarea>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                                    <button type="button" class="btn btn-primary" onclick="applyHtmlChanges()">Применить</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Галка Обновить -->
+                <div class="form-check mt-2 update-field-row"
+                     {% if not supplier_product.should_export_to_crm %}style="display: none;"{% endif %}>
+                    <input class="form-check-input" type="checkbox"
+                           name="update_combined_description"
+                           id="update_combined_description"
+                           {% if supplier_product.should_export_to_crm %}checked{% endif %}>
+                    <label class="form-check-label small text-primary fw-bold" for="update_combined_description">
+                        Обновить это поле в CRM (Описание предложения)
+                    </label>
+                </div>
+
+            </div>
+        </div>
+        <!-- --- КОНЕЦ НОВОГО БЛОКА --- -->
+        <div class="card-footer text-end">
+            <button type="submit" class="btn btn-success btn-lg">Подтвердить изменения</button>
         </div>
     </form>
 
@@ -535,6 +695,185 @@
             }
         }
     </script>
+<script>
+    let quill;
+
+    document.addEventListener("DOMContentLoaded", function() {
+        // Находим главный переключатель
+        const masterToggle = document.getElementById('should_export_to_crm');
+        const updateCheckboxesRows = document.querySelectorAll('.update-field-row');
+
+        if (masterToggle) {
+            const toggleUpdateRows = function() {
+                const isChecked = masterToggle.checked;
+                updateCheckboxesRows.forEach(row => {
+                    row.style.display = isChecked ? 'block' : 'none';
+                    const checkbox = row.querySelector('input[type="checkbox"]');
+                    if (checkbox) {
+                        checkbox.checked = isChecked;
+                    }
+                });
+            };
+            masterToggle.addEventListener('change', toggleUpdateRows);
+        }
+
+        // Получаем значения из скрытых полей
+        // const previewVal = document.getElementById('hidden_preview_new')?.value || '';
+        // const descOfferVal = document.getElementById('hidden_desc_offer_new')?.value || '';
+
+        const previewDiv = document.getElementById('hidden_preview_new');
+        const previewVal = previewDiv ? previewDiv.innerHTML : '';
+
+        const descDiv = document.getElementById('hidden_desc_offer_new');
+        const descOfferVal = descDiv ? descDiv.innerHTML : '';
+
+        // Объединяем HTML-контент
+        let combinedHtml = '';
+
+        // Функция для очистки HTML от лишних тегов
+        function cleanHtml(html) {
+            if (!html) return '';
+            // Удаляем пустые параграфы
+            html = html.replace(/<p><br><\/p>/g, '');
+            html = html.replace(/<p>\s*<\/p>/g, '');
+            return html;
+        }
+
+        // Формируем итоговый HTML
+        if (previewVal && descOfferVal) {
+            combinedHtml = `<div class="preview-section"><h3>Анонс</h3>${cleanHtml(previewVal)}</div>
+                           <div class="description-section"><h3>Описание</h3>${cleanHtml(descOfferVal)}</div>`;
+        } else if (previewVal) {
+            combinedHtml = cleanHtml(previewVal);
+        } else if (descOfferVal) {
+            combinedHtml = cleanHtml(descOfferVal);
+        }
+
+        // Инициализируем Quill редактор с поддержкой HTML
+        if (document.getElementById('quill-editor')) {
+            quill = new Quill('#quill-editor', {
+                theme: 'snow',
+                placeholder: 'Введите описание для предложения...',
+                modules: {
+                    toolbar: [
+                        ['bold', 'italic', 'underline', 'strike'],
+                        ['blockquote', 'code-block'],
+                        [{ 'header': 1 }, { 'header': 2 }],
+                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                        [{ 'script': 'sub'}, { 'script': 'super' }],
+                        [{ 'indent': '-1'}, { 'indent': '+1' }],
+                        [{ 'direction': 'rtl' }],
+                        [{ 'size': ['small', false, 'large', 'huge'] }],
+                        [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+                        [{ 'color': [] }, { 'background': [] }],
+                        [{ 'font': [] }],
+                        [{ 'align': [] }],
+                        ['clean'],
+                        ['link', 'image', 'video'],
+                        ['code-block'] // Добавляем кнопку для вставки кода/HTML
+                    ]
+                },
+                // Настройки для сохранения HTML структуры
+                formats: [
+                    'bold', 'italic', 'underline', 'strike',
+                    'blockquote', 'code-block', 'header', 'list', 'bullet',
+                    'script', 'indent', 'direction', 'size', 'color',
+                    'background', 'font', 'align', 'link', 'image', 'video'
+                ]
+            });
+
+            // Устанавливаем содержимое с HTML разметкой
+            if (combinedHtml) {
+                quill.root.innerHTML = combinedHtml;
+            }
+
+            // Обновляем скрытое поле при изменении содержимого
+            quill.on('text-change', function() {
+                updateHiddenField();
+            });
+
+            // Инициализируем скрытое поле начальным значением
+            updateHiddenField();
+        }
+    });
+
+    // Функция обновления скрытого поля
+    function updateHiddenField() {
+        const hiddenInput = document.getElementById('hidden_combined_description');
+        if (hiddenInput && quill) {
+            // Получаем HTML содержимое
+            let htmlContent = quill.root.innerHTML;
+
+            // Очищаем лишние теги
+            htmlContent = cleanOutputHtml(htmlContent);
+
+            hiddenInput.value = htmlContent;
+        }
+    }
+
+    // Очистка выходного HTML
+    function cleanOutputHtml(html) {
+        if (!html) return '';
+
+        // Удаляем пустые параграфы
+        html = html.replace(/<p><br><\/p>/g, '');
+        html = html.replace(/<p>\s*<\/p>/g, '');
+
+        // Удаляем классы и атрибуты, которые могут мешать
+        html = html.replace(/\s+class="[^"]*"/g, '');
+        html = html.replace(/\s+style="[^"]*"/g, '');
+
+        // Исправляем заголовки
+        html = html.replace(/<h1>/g, '<h3>');
+        html = html.replace(/<\/h1>/g, '</h3>');
+        html = html.replace(/<h2>/g, '<h3>');
+        html = html.replace(/<\/h2>/g, '</h3>');
+
+        return html;
+    }
+
+    // Показать HTML исходник
+    function showHtmlSource() {
+        if (!quill) return;
+
+        const modal = new bootstrap.Modal(document.getElementById('htmlModal'));
+        const htmlSource = document.getElementById('htmlSource');
+
+        // Получаем текущий HTML
+        htmlSource.value = quill.root.innerHTML;
+
+        modal.show();
+    }
+
+    // Применить изменения из HTML редактора
+    function applyHtmlChanges() {
+        if (!quill) return;
+
+        const htmlSource = document.getElementById('htmlSource');
+        const newHtml = htmlSource.value;
+
+        // Устанавливаем новое содержимое
+        quill.root.innerHTML = newHtml;
+
+        // Обновляем скрытое поле
+        updateHiddenField();
+
+        // Закрываем модальное окно
+        bootstrap.Modal.getInstance(document.getElementById('htmlModal')).hide();
+    }
+
+    // Очистить форматирование
+    function clearFormatting() {
+        if (!quill) return;
+
+        if (confirm('Очистить всё форматирование? Текст останется, но все теги будут удалены.')) {
+            const plainText = quill.getText();
+            quill.root.innerHTML = `<p>${plainText.replace(/\n/g, '<br>')}</p>`;
+            updateHiddenField();
+        }
+    }
+</script>
+    <script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

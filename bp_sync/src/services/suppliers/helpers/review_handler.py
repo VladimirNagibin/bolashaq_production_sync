@@ -183,7 +183,6 @@ class ReviewHandler:
                 transformed_logs,
                 preprocessed_data,
                 product,
-                supplier_product,
             )
         elif field_name == "detail_picture":
             return self._get_detail_picture(
@@ -391,11 +390,47 @@ class ReviewHandler:
         transformed_logs: dict[str, dict[str, Any]],
         preprocessed_data: dict[str, dict[str, Any]],
         product: ProductCreate | None,
-        supplier_product: SupplierProductDetail,
     ) -> list[dict[str, Any]]:
         result: list[dict[str, Any]] = []
-        # TODO: upd
-        return result
+        try:
+            if field_name not in transformed_logs:
+                return result
+
+            field_data = transformed_logs[field_name]
+            result.append(
+                {
+                    "field_name": field_name,
+                    "old_value": field_data.get("old_value"),
+                    "new_value": field_data.get("new_value"),
+                    "current_product_value": getattr(
+                        product, field_name, None
+                    ),
+                    "value_type": "str",
+                }
+            )
+
+            mapping = {
+                "preview_for_offer": "additional_description",
+                "description_for_offer": "description_for_print",
+            }
+            for name in ["preview_for_offer", "description_for_offer"]:
+                field_data = preprocessed_data.get(name, {})
+                result.append(
+                    {
+                        "field_name": name,
+                        "old_value": field_data.get("old_value"),
+                        "new_value": field_data.get("new_value"),
+                        "current_product_value": (
+                            self._get_complex_product_value(
+                                product, mapping[name]
+                            )
+                        ),
+                        "value_type": "str",
+                    }
+                )
+            return result
+        except Exception:
+            return []
 
     def _get_detail_picture(
         self,
