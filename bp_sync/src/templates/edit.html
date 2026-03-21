@@ -4,7 +4,42 @@
     <meta charset="UTF-8">
     <title>Обработка товара</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tiptap/core/dist/core.css">
+    <style>
+        /* Стили для редактора */
+        .ProseMirror {
+            outline: none;
+            min-height: 350px;
+            padding: 10px;
+        }
+        .ProseMirror p {
+            margin: 0 0 0.5em 0;
+        }
+        .ProseMirror h1, .ProseMirror h2, .ProseMirror h3 {            margin: 0.5em 0;
+        }
+        .ProseMirror ul, .ProseMirror ol {
+            padding-left: 1.5em;
+        }
+        .ProseMirror table {
+            border-collapse: collapse;
+            margin: 0.5em 0;
+            width: 100%;
+        }
+        .ProseMirror th, .ProseMirror td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        .ProseMirror th {
+            background-color: #f2f2f2;
+        }
+        .preview-section h3, .description-section h3 {
+            color: #0d6efd;
+            border-bottom: 2px solid #0d6efd;
+            padding-bottom: 5px;
+            margin-bottom: 15px;
+        }
+    </style>
 </head>
 <body class="container mt-5">
 
@@ -464,37 +499,55 @@
                         <span class="text-muted small">(Автозаполнено: Новый Анонс + Новое Описание)</span>
                     </label>
 
-                    <!-- Скрытый input для отправки данных на бэкенд -->
-                    <input type="hidden" name="field_combined_description" id="hidden_combined_description">
-
-                    <!-- Контейнер для Quill Editor -->
-                    <div id="quill-editor" style="height: 400px;"></div>
-
-                    <!-- Кнопки для работы с HTML -->
-                    <div class="mt-2">
-                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="showHtmlSource()">
-                            Показать/Редактировать HTML
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearFormatting()">
-                            Очистить форматирование
-                        </button>
+                    <!-- КАСТОМНАЯ ПАНЕЛЬ ИНСТРУМЕНТОВ ДЛЯ TIPTAP -->
+                    <div class="btn-toolbar mb-2 bg-light p-2 rounded border" role="toolbar" aria-label="Toolbar">
+                        <div class="btn-group me-2" role="group">
+                            <button type="button" id="btn-bold" class="btn btn-sm btn-outline-secondary" title="Жирный"><b>B</b></button>
+                            <button type="button" id="btn-italic" class="btn btn-sm btn-outline-secondary" title="Курсив"><i>I</i></button>
+                            <button type="button" id="btn-strike" class="btn btn-sm btn-outline-secondary" title="Зачеркнутый"><s>S</s></button>
+                        </div>
+                        <div class="btn-group me-2" role="group">
+                            <button type="button" id="btn-h1" class="btn btn-sm btn-outline-secondary">H1</button>
+                            <button type="button" id="btn-h2" class="btn btn-sm btn-outline-secondary">H2</button>
+                            <button type="button" id="btn-p" class="btn btn-sm btn-outline-secondary">P</button>
+                        </div>
+                        <div class="btn-group me-2" role="group">
+                            <button type="button" id="btn-ul" class="btn btn-sm btn-outline-secondary">UL</button>
+                            <button type="button" id="btn-ol" class="btn btn-sm btn-outline-secondary">OL</button>
+                        </div>
+                        <div class="btn-group me-2" role="group">
+                            <button type="button" id="btn-undo" class="btn btn-sm btn-outline-secondary">↩</button>
+                            <button type="button" id="btn-redo" class="btn btn-sm btn-outline-secondary">↪</button>
+                        </div>
+                        <div class="btn-group me-2" role="group">
+                            <button type="button" id="btn-table" class="btn btn-sm btn-outline-secondary" title="Вставить таблицу">Таблица</button>
+                        </div>
+                        <div class="btn-group" role="group">
+                            <button type="button" onclick="showHtmlSource()" class="btn btn-sm btn-outline-primary" title="Исходный код">&lt;/&gt;</button>
+                        </div>
                     </div>
 
-                    <!-- Модальное окно для редактирования HTML -->
-                    <div class="modal fade" id="htmlModal" tabindex="-1">
-                        <div class="modal-dialog modal-lg">
-                            <div class="modal-content">
-                                <div class="modal-header">
-                                    <h5 class="modal-title">Редактирование HTML</h5>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                </div>
-                                <div class="modal-body">
-                                    <textarea id="htmlSource" class="form-control" rows="15" style="font-family: monospace;"></textarea>
-                                </div>
-                                <div class="modal-footer">
-                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                                    <button type="button" class="btn btn-primary" onclick="applyHtmlChanges()">Применить</button>
-                                </div>
+                    <!-- Контейнер для Tiptap -->
+                    <div id="final_description_editor" class="border rounded p-3 bg-white" style="min-height: 400px; max-height: 600px; overflow-y: auto;"></div>
+
+                    <!-- Скрытое поле для отправки на бэкенд (будет заполняться JS перед сабмитом) -->
+                    <input type="hidden" name="field_combined_description" id="hidden_combined_description">
+                </div>
+
+                <!-- Модальное окно для редактирования HTML -->
+                <div class="modal fade" id="htmlModal" tabindex="-1">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Редактирование HTML (Source)</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <textarea id="htmlSource" class="form-control font-monospace" rows="15"></textarea>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                                <button type="button" class="btn btn-primary" onclick="applyHtmlChanges()">Применить</button>
                             </div>
                         </div>
                     </div>
@@ -521,6 +574,183 @@
     </form>
 
     <!-- --- СКРИПТ ДЛЯ ИНТЕРАКТИВНОСТИ --- -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Используем более стабильные версии Tiptap -->
+    <script type="importmap">
+        {
+            "imports": {
+                "@tiptap/core": "https://esm.sh/@tiptap/core@2.2.0",
+                "@tiptap/starter-kit": "https://esm.sh/@tiptap/starter-kit@2.2.0",
+                "@tiptap/extension-table": "https://esm.sh/@tiptap/extension-table@2.2.0",
+                "@tiptap/extension-table-row": "https://esm.sh/@tiptap/extension-table-row@2.2.0",
+                "@tiptap/extension-table-header": "https://esm.sh/@tiptap/extension-table-header@2.2.0",
+                "@tiptap/extension-table-cell": "https://esm.sh/@tiptap/extension-table-cell@2.2.0",
+                "@tiptap/extension-text-style": "https://esm.sh/@tiptap/extension-text-style@2.2.0"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import { Editor } from '@tiptap/core';
+        import StarterKit from '@tiptap/starter-kit';
+        import Table from '@tiptap/extension-table';
+        import TableRow from '@tiptap/extension-table-row';
+        import TableHeader from '@tiptap/extension-table-header';
+        import TableCell from '@tiptap/extension-table-cell';
+        import TextStyle from '@tiptap/extension-text-style';
+
+        let editor = null;
+        let bootstrapModal = null;
+
+        // Получение объединенного контента
+        function getCombinedContent() {
+            const previewDiv = document.getElementById('hidden_preview_new');
+            const descDiv = document.getElementById('hidden_desc_offer_new');
+
+            const previewVal = previewDiv ? previewDiv.innerHTML : '';
+            const descOfferVal = descDiv ? descDiv.innerHTML : '';
+
+            console.log('Preview value length:', previewVal.length);
+            console.log('Description value length:', descOfferVal.length);
+
+            let combinedHtml = '';
+            if (previewVal && descOfferVal) {
+                combinedHtml = `<div class="preview-section"><h3>Анонс</h3>${previewVal}</div>
+                                <div class="description-section"><h3>Описание</h3>${descOfferVal}</div>`;
+            } else if (previewVal) {
+                combinedHtml = previewVal;
+            } else if (descOfferVal) {
+                combinedHtml = descOfferVal;
+            }
+
+            return combinedHtml;
+        }
+
+        // Обновление скрытого поля
+        function updateHiddenField() {
+            const hiddenInput = document.getElementById('hidden_combined_description');
+            if (hiddenInput && editor) {
+                const html = editor.getHTML();
+                hiddenInput.value = html;
+                console.log('Updated hidden field, length:', html.length);
+            }
+        }
+
+        // Показать HTML исходник
+        window.showHtmlSource = function() {
+            if (!editor) return;
+            const htmlSource = document.getElementById('htmlSource');
+            if (htmlSource) {
+                htmlSource.value = editor.getHTML();
+                const modalElement = document.getElementById('htmlModal');
+                const modal = new bootstrap.Modal(modalElement);
+                modal.show();
+            }
+        };
+
+        // Применить HTML изменения
+        window.applyHtmlChanges = function() {
+            if (!editor) return;
+            const htmlSource = document.getElementById('htmlSource');
+            if (htmlSource) {
+                editor.commands.setContent(htmlSource.value);
+                updateHiddenField();
+                const modalElement = document.getElementById('htmlModal');
+                const modal = bootstrap.Modal.getInstance(modalElement);
+                if (modal) modal.hide();
+            }
+        };
+
+        // Инициализация
+        document.addEventListener('DOMContentLoaded', () => {
+            const element = document.getElementById('final_description_editor');
+            if (!element) {
+                console.error('Editor element not found');
+                return;
+            }
+
+            const initialContent = getCombinedContent();
+            console.log('Initial content:', initialContent.substring(0, 200));
+
+            try {
+                editor = new Editor({
+                    element: element,
+                    extensions: [
+                        StarterKit.configure({
+                            heading: {
+                                levels: [1, 2, 3]
+                            }
+                        }),
+                        Table.configure({
+                            resizable: true,
+                        }),
+                        TableRow,
+                        TableHeader,
+                        TableCell,
+                        TextStyle,
+                    ],
+                    content: initialContent,
+                    editorProps: {
+                        attributes: {
+                            class: 'prose focus:outline-none',
+                        },
+                    },
+                    onUpdate: ({ editor }) => {
+                        updateHiddenField();
+                    },
+                    onTransaction: ({ editor }) => {
+                        // Дополнительная синхронизация
+                    }
+                });
+
+                console.log('Editor created successfully');
+
+                // Привязываем кнопки
+                const buttons = {
+                    'btn-bold': () => editor.chain().focus().toggleBold().run(),
+                    'btn-italic': () => editor.chain().focus().toggleItalic().run(),
+                    'btn-strike': () => editor.chain().focus().toggleStrike().run(),
+                    'btn-h1': () => editor.chain().focus().toggleHeading({ level: 1 }).run(),
+                    'btn-h2': () => editor.chain().focus().toggleHeading({ level: 2 }).run(),
+                    'btn-p': () => editor.chain().focus().setParagraph().run(),
+                    'btn-ul': () => editor.chain().focus().toggleBulletList().run(),
+                    'btn-ol': () => editor.chain().focus().toggleOrderedList().run(),
+                    'btn-undo': () => editor.chain().focus().undo().run(),
+                    'btn-redo': () => editor.chain().focus().redo().run(),
+                    'btn-table': () => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
+                };
+
+                for (const [id, handler] of Object.entries(buttons)) {
+                    const btn = document.getElementById(id);
+                    if (btn) {
+                        btn.addEventListener('click', handler);
+                    } else {
+                        console.warn(`Button ${id} not found`);
+                    }
+                }
+
+                // Кнопка HTML
+                const htmlBtn = document.getElementById('btn-html');
+                if (htmlBtn) {
+                    htmlBtn.addEventListener('click', () => window.showHtmlSource());
+                }
+
+                // Кнопка применения HTML
+                const applyBtn = document.getElementById('applyHtmlBtn');
+                if (applyBtn) {
+                    applyBtn.addEventListener('click', () => window.applyHtmlChanges());
+                }
+
+                // Инициализируем скрытое поле
+                updateHiddenField();
+
+            } catch (error) {
+                console.error('Error creating editor:', error);
+                element.innerHTML = '<div class="alert alert-danger">Ошибка загрузки редактора. Пожалуйста, обновите страницу.</div>';
+            }
+        });
+    </script>
+
     <script>
         document.addEventListener("DOMContentLoaded", function() {
             // Находим главный переключатель
@@ -695,185 +925,6 @@
             }
         }
     </script>
-<script>
-    let quill;
 
-    document.addEventListener("DOMContentLoaded", function() {
-        // Находим главный переключатель
-        const masterToggle = document.getElementById('should_export_to_crm');
-        const updateCheckboxesRows = document.querySelectorAll('.update-field-row');
-
-        if (masterToggle) {
-            const toggleUpdateRows = function() {
-                const isChecked = masterToggle.checked;
-                updateCheckboxesRows.forEach(row => {
-                    row.style.display = isChecked ? 'block' : 'none';
-                    const checkbox = row.querySelector('input[type="checkbox"]');
-                    if (checkbox) {
-                        checkbox.checked = isChecked;
-                    }
-                });
-            };
-            masterToggle.addEventListener('change', toggleUpdateRows);
-        }
-
-        // Получаем значения из скрытых полей
-        // const previewVal = document.getElementById('hidden_preview_new')?.value || '';
-        // const descOfferVal = document.getElementById('hidden_desc_offer_new')?.value || '';
-
-        const previewDiv = document.getElementById('hidden_preview_new');
-        const previewVal = previewDiv ? previewDiv.innerHTML : '';
-
-        const descDiv = document.getElementById('hidden_desc_offer_new');
-        const descOfferVal = descDiv ? descDiv.innerHTML : '';
-
-        // Объединяем HTML-контент
-        let combinedHtml = '';
-
-        // Функция для очистки HTML от лишних тегов
-        function cleanHtml(html) {
-            if (!html) return '';
-            // Удаляем пустые параграфы
-            html = html.replace(/<p><br><\/p>/g, '');
-            html = html.replace(/<p>\s*<\/p>/g, '');
-            return html;
-        }
-
-        // Формируем итоговый HTML
-        if (previewVal && descOfferVal) {
-            combinedHtml = `<div class="preview-section"><h3>Анонс</h3>${cleanHtml(previewVal)}</div>
-                           <div class="description-section"><h3>Описание</h3>${cleanHtml(descOfferVal)}</div>`;
-        } else if (previewVal) {
-            combinedHtml = cleanHtml(previewVal);
-        } else if (descOfferVal) {
-            combinedHtml = cleanHtml(descOfferVal);
-        }
-
-        // Инициализируем Quill редактор с поддержкой HTML
-        if (document.getElementById('quill-editor')) {
-            quill = new Quill('#quill-editor', {
-                theme: 'snow',
-                placeholder: 'Введите описание для предложения...',
-                modules: {
-                    toolbar: [
-                        ['bold', 'italic', 'underline', 'strike'],
-                        ['blockquote', 'code-block'],
-                        [{ 'header': 1 }, { 'header': 2 }],
-                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                        [{ 'script': 'sub'}, { 'script': 'super' }],
-                        [{ 'indent': '-1'}, { 'indent': '+1' }],
-                        [{ 'direction': 'rtl' }],
-                        [{ 'size': ['small', false, 'large', 'huge'] }],
-                        [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
-                        [{ 'color': [] }, { 'background': [] }],
-                        [{ 'font': [] }],
-                        [{ 'align': [] }],
-                        ['clean'],
-                        ['link', 'image', 'video'],
-                        ['code-block'] // Добавляем кнопку для вставки кода/HTML
-                    ]
-                },
-                // Настройки для сохранения HTML структуры
-                formats: [
-                    'bold', 'italic', 'underline', 'strike',
-                    'blockquote', 'code-block', 'header', 'list', 'bullet',
-                    'script', 'indent', 'direction', 'size', 'color',
-                    'background', 'font', 'align', 'link', 'image', 'video'
-                ]
-            });
-
-            // Устанавливаем содержимое с HTML разметкой
-            if (combinedHtml) {
-                quill.root.innerHTML = combinedHtml;
-            }
-
-            // Обновляем скрытое поле при изменении содержимого
-            quill.on('text-change', function() {
-                updateHiddenField();
-            });
-
-            // Инициализируем скрытое поле начальным значением
-            updateHiddenField();
-        }
-    });
-
-    // Функция обновления скрытого поля
-    function updateHiddenField() {
-        const hiddenInput = document.getElementById('hidden_combined_description');
-        if (hiddenInput && quill) {
-            // Получаем HTML содержимое
-            let htmlContent = quill.root.innerHTML;
-
-            // Очищаем лишние теги
-            htmlContent = cleanOutputHtml(htmlContent);
-
-            hiddenInput.value = htmlContent;
-        }
-    }
-
-    // Очистка выходного HTML
-    function cleanOutputHtml(html) {
-        if (!html) return '';
-
-        // Удаляем пустые параграфы
-        html = html.replace(/<p><br><\/p>/g, '');
-        html = html.replace(/<p>\s*<\/p>/g, '');
-
-        // Удаляем классы и атрибуты, которые могут мешать
-        html = html.replace(/\s+class="[^"]*"/g, '');
-        html = html.replace(/\s+style="[^"]*"/g, '');
-
-        // Исправляем заголовки
-        html = html.replace(/<h1>/g, '<h3>');
-        html = html.replace(/<\/h1>/g, '</h3>');
-        html = html.replace(/<h2>/g, '<h3>');
-        html = html.replace(/<\/h2>/g, '</h3>');
-
-        return html;
-    }
-
-    // Показать HTML исходник
-    function showHtmlSource() {
-        if (!quill) return;
-
-        const modal = new bootstrap.Modal(document.getElementById('htmlModal'));
-        const htmlSource = document.getElementById('htmlSource');
-
-        // Получаем текущий HTML
-        htmlSource.value = quill.root.innerHTML;
-
-        modal.show();
-    }
-
-    // Применить изменения из HTML редактора
-    function applyHtmlChanges() {
-        if (!quill) return;
-
-        const htmlSource = document.getElementById('htmlSource');
-        const newHtml = htmlSource.value;
-
-        // Устанавливаем новое содержимое
-        quill.root.innerHTML = newHtml;
-
-        // Обновляем скрытое поле
-        updateHiddenField();
-
-        // Закрываем модальное окно
-        bootstrap.Modal.getInstance(document.getElementById('htmlModal')).hide();
-    }
-
-    // Очистить форматирование
-    function clearFormatting() {
-        if (!quill) return;
-
-        if (confirm('Очистить всё форматирование? Текст останется, но все теги будут удалены.')) {
-            const plainText = quill.getText();
-            quill.root.innerHTML = `<p>${plainText.replace(/\n/g, '<br>')}</p>`;
-            updateHiddenField();
-        }
-    }
-</script>
-    <script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
