@@ -15,7 +15,8 @@
         .ProseMirror p {
             margin: 0 0 0.5em 0;
         }
-        .ProseMirror h1, .ProseMirror h2, .ProseMirror h3 {            margin: 0.5em 0;
+        .ProseMirror h1, .ProseMirror h2, .ProseMirror h3 {
+            margin: 0.5em 0;
         }
         .ProseMirror ul, .ProseMirror ol {
             padding-left: 1.5em;
@@ -38,6 +39,31 @@
             border-bottom: 2px solid #0d6efd;
             padding-bottom: 5px;
             margin-bottom: 15px;
+        }
+        #html_editor, #text_editor {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        /* Анимация переключения */
+        #visual-editor-container,
+        #html-editor-container,
+        #text-editor-container {
+            transition: all 0.3s ease;
+        }
+
+        /* Подсветка активного режима */
+        .btn-group .btn-primary {
+            background-color: #0d6efd;
+            border-color: #0d6efd;
+        }
+
+        .btn-group .btn-outline-secondary.active {
+            background-color: #6c757d;
+            color: white;
         }
     </style>
 </head>
@@ -499,68 +525,76 @@
                         <span class="text-muted small">(Автозаполнено: Новый Анонс + Новое Описание)</span>
                     </label>
 
-                    <!-- КАСТОМНАЯ ПАНЕЛЬ ИНСТРУМЕНТОВ ДЛЯ TIPTAP -->
-                    <div class="btn-toolbar mb-2 bg-light p-2 rounded border" role="toolbar" aria-label="Toolbar">
-                        <div class="btn-group me-2" role="group">
-                            <button type="button" id="btn-bold" class="btn btn-sm btn-outline-secondary" title="Жирный"><b>B</b></button>
-                            <button type="button" id="btn-italic" class="btn btn-sm btn-outline-secondary" title="Курсив"><i>I</i></button>
-                            <button type="button" id="btn-strike" class="btn btn-sm btn-outline-secondary" title="Зачеркнутый"><s>S</s></button>
-                        </div>
-                        <div class="btn-group me-2" role="group">
-                            <button type="button" id="btn-h1" class="btn btn-sm btn-outline-secondary">H1</button>
-                            <button type="button" id="btn-h2" class="btn btn-sm btn-outline-secondary">H2</button>
-                            <button type="button" id="btn-p" class="btn btn-sm btn-outline-secondary">P</button>
-                        </div>
-                        <div class="btn-group me-2" role="group">
-                            <button type="button" id="btn-ul" class="btn btn-sm btn-outline-secondary">UL</button>
-                            <button type="button" id="btn-ol" class="btn btn-sm btn-outline-secondary">OL</button>
-                        </div>
-                        <div class="btn-group me-2" role="group">
-                            <button type="button" id="btn-undo" class="btn btn-sm btn-outline-secondary">↩</button>
-                            <button type="button" id="btn-redo" class="btn btn-sm btn-outline-secondary">↪</button>
-                        </div>
-                        <div class="btn-group me-2" role="group">
-                            <button type="button" id="btn-table" class="btn btn-sm btn-outline-secondary" title="Вставить таблицу">Таблица</button>
-                        </div>
-                        <div class="btn-group" role="group">
-                            <button type="button" onclick="showHtmlSource()" class="btn btn-sm btn-outline-primary" title="Исходный код">&lt;/&gt;</button>
-                        </div>
+                    <!-- Переключатель режимов -->
+                    <div class="btn-group mb-2" role="group" aria-label="Режимы редактирования">
+                        <button type="button" id="mode-visual" class="btn btn-sm btn-primary active">Визуальный</button>
+                        <button type="button" id="mode-html" class="btn btn-sm btn-outline-secondary">&lt;/&gt; HTML</button>
+                        <button type="button" id="mode-text" class="btn btn-sm btn-outline-secondary">Текст</button>
                     </div>
 
-                    <!-- Контейнер для Tiptap -->
-                    <div id="final_description_editor" class="border rounded p-3 bg-white" style="min-height: 400px; max-height: 600px; overflow-y: auto;"></div>
-
-                    <!-- Скрытое поле для отправки на бэкенд (будет заполняться JS перед сабмитом) -->
-                    <input type="hidden" name="field_combined_description" id="hidden_combined_description">
-                </div>
-
-                <!-- Модальное окно для редактирования HTML -->
-                <div class="modal fade" id="htmlModal" tabindex="-1">
-                    <div class="modal-dialog modal-lg">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title">Редактирование HTML (Source)</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <!-- Визуальный редактор (Tiptap) -->
+                    <div id="visual-editor-container" class="mb-3">
+                        <div class="btn-toolbar mb-2 p-2 rounded border bg-light" role="toolbar">
+                            <div class="btn-group me-2">
+                                <button type="button" id="btn-bold" class="btn btn-sm btn-outline-secondary"><b>B</b></button>
+                                <button type="button" id="btn-italic" class="btn btn-sm btn-outline-secondary"><i>I</i></button>
+                                <button type="button" id="btn-strike" class="btn btn-sm btn-outline-secondary"><s>S</s></button>
                             </div>
-                            <div class="modal-body">
-                                <textarea id="htmlSource" class="form-control font-monospace" rows="15"></textarea>
+                            <div class="btn-group me-2">
+                                <button type="button" id="btn-h1" class="btn btn-sm btn-outline-secondary">H1</button>
+                                <button type="button" id="btn-h2" class="btn btn-sm btn-outline-secondary">H2</button>
+                                <button type="button" id="btn-p" class="btn btn-sm btn-outline-secondary">P</button>
                             </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                                <button type="button" class="btn btn-primary" onclick="applyHtmlChanges()">Применить</button>
+                            <div class="btn-group me-2">
+                                <button type="button" id="btn-ul" class="btn btn-sm btn-outline-secondary">UL</button>
+                                <button type="button" id="btn-ol" class="btn btn-sm btn-outline-secondary">OL</button>
+                            </div>
+                            <div class="btn-group me-2">
+                                <button type="button" id="btn-table" class="btn btn-sm btn-outline-secondary">Таблица</button>
                             </div>
                         </div>
+                        <div id="final_description_editor" class="border rounded p-3 bg-white" style="min-height: 400px;"></div>
                     </div>
+
+                    <!-- HTML редактор (textarea с подсветкой) -->
+                    <div id="html-editor-container" style="display: none;">
+                        <textarea
+                            id="html_editor"
+                            class="form-control font-monospace"
+                            rows="20"
+                            style="font-family: 'Courier New', monospace; font-size: 13px; white-space: pre-wrap;"
+                        ></textarea>
+                        <small class="text-muted d-block mt-1">
+                            Редактируйте HTML напрямую. Поддерживаются все теги.
+                        </small>
+                    </div>
+
+                    <!-- Текстовый редактор (plain text) -->
+                    <div id="text-editor-container" style="display: none;">
+                        <textarea
+                            id="text_editor"
+                            class="form-control"
+                            rows="20"
+                            style="font-family: 'Courier New', monospace; font-size: 13px; white-space: pre-wrap;"
+                        ></textarea>
+                        <small class="text-muted d-block mt-1">
+                            Редактируйте обычный текст. HTML теги будут преобразованы в текст.
+                        </small>
+                    </div>
+
+                    <!-- Скрытое поле для отправки на бэкенд -->
+                    <input type="hidden" name="editor_mode" id="editor_mode" value="visual">
+                    <input type="hidden" name="field_description" id="hidden_combined_description">
                 </div>
 
                 <!-- Галка Обновить -->
                 <div class="form-check mt-2 update-field-row"
                      {% if not supplier_product.should_export_to_crm %}style="display: none;"{% endif %}>
                     <input class="form-check-input" type="checkbox"
-                           name="update_combined_description"
-                           id="update_combined_description"
+                           name="update_description"
+                           id="update_description}"
                            {% if supplier_product.should_export_to_crm %}checked{% endif %}>
-                    <label class="form-check-label small text-primary fw-bold" for="update_combined_description">
+                    <label class="form-check-label small text-primary fw-bold" for="update_description">
                         Обновить это поле в CRM (Описание предложения)
                     </label>
                 </div>
@@ -568,6 +602,7 @@
             </div>
         </div>
         <!-- --- КОНЕЦ НОВОГО БЛОКА --- -->
+
         <div class="card-footer text-end">
             <button type="submit" class="btn btn-success btn-lg">Подтвердить изменения</button>
         </div>
@@ -600,9 +635,9 @@
         import TextStyle from '@tiptap/extension-text-style';
 
         let editor = null;
-        let bootstrapModal = null;
+        let currentMode = 'visual'; // visual, html, text
 
-        // Получение объединенного контента
+        // Функция для получения объединенного контента
         function getCombinedContent() {
             const previewDiv = document.getElementById('hidden_preview_new');
             const descDiv = document.getElementById('hidden_desc_offer_new');
@@ -610,13 +645,10 @@
             const previewVal = previewDiv ? previewDiv.innerHTML : '';
             const descOfferVal = descDiv ? descDiv.innerHTML : '';
 
-            console.log('Preview value length:', previewVal.length);
-            console.log('Description value length:', descOfferVal.length);
-
             let combinedHtml = '';
             if (previewVal && descOfferVal) {
-                combinedHtml = `<div class="preview-section"><h3>Анонс</h3>${previewVal}</div>
-                                <div class="description-section"><h3>Описание</h3>${descOfferVal}</div>`;
+                combinedHtml = `<div class="preview-section">${previewVal}</div>
+                                <div class="description-section">${descOfferVal}</div>`;
             } else if (previewVal) {
                 combinedHtml = previewVal;
             } else if (descOfferVal) {
@@ -626,40 +658,188 @@
             return combinedHtml;
         }
 
+        // Конвертация HTML в plain text
+        function htmlToText(html) {
+            const temp = document.createElement('div');
+            temp.innerHTML = html;
+
+            // Заменяем <br> на переносы строк
+            temp.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+
+            // Заменяем <p> на переносы строк
+            temp.querySelectorAll('p').forEach(p => {
+                p.insertAdjacentText('afterend', '\n');
+                p.replaceWith(p.innerText);
+            });
+
+            // Заменяем <div> на переносы строк
+            temp.querySelectorAll('div').forEach(div => {
+                div.insertAdjacentText('afterend', '\n');
+                div.replaceWith(div.innerText);
+            });
+
+            // Заменяем таблицы на текст
+            temp.querySelectorAll('table').forEach(table => {
+                const rows = table.querySelectorAll('tr');
+                let tableText = '\n';
+                rows.forEach(row => {
+                    const cells = row.querySelectorAll('th, td');
+                    const rowText = Array.from(cells).map(cell => cell.innerText.trim()).join(' | ');
+                    tableText += rowText + '\n';
+                });
+                table.replaceWith(tableText);
+            });
+
+            // Получаем текст
+            let text = temp.innerText;
+
+            // Нормализуем переносы строк
+            text = text.replace(/\n\s*\n\s*\n/g, '\n\n');
+
+            return text.trim();
+        }
+
+        // Конвертация plain text в HTML
+        function textToHtml(text) {
+            if (!text) return '';
+
+            // Экранируем HTML спецсимволы
+            let html = text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+
+            // Преобразуем переносы строк в <br> или <p>
+            const paragraphs = html.split(/\n\s*\n/);
+            html = paragraphs.map(p => {
+                const lines = p.split('\n');
+                if (lines.length === 1) {
+                    return `<p>${lines[0]}</p>`;
+                } else {
+                    return `<p>${lines.join('<br>')}</p>`;
+                }
+            }).join('');
+
+            return html;
+        }
+
         // Обновление скрытого поля
         function updateHiddenField() {
             const hiddenInput = document.getElementById('hidden_combined_description');
-            if (hiddenInput && editor) {
-                const html = editor.getHTML();
-                hiddenInput.value = html;
-                console.log('Updated hidden field, length:', html.length);
+            if (hiddenInput) {
+                let value = '';
+
+                if (currentMode === 'visual' && editor) {
+                    value = editor.getHTML();
+                } else if (currentMode === 'html') {
+                    value = document.getElementById('html_editor').value;
+                } else if (currentMode === 'text') {
+                    const text = document.getElementById('text_editor').value;
+                    value = textToHtml(text);
+                }
+
+                hiddenInput.value = value;
             }
         }
 
-        // Показать HTML исходник
-        window.showHtmlSource = function() {
-            if (!editor) return;
-            const htmlSource = document.getElementById('htmlSource');
-            if (htmlSource) {
-                htmlSource.value = editor.getHTML();
-                const modalElement = document.getElementById('htmlModal');
-                const modal = new bootstrap.Modal(modalElement);
-                modal.show();
+        // Обновление скрытого поля с режимом
+        function updateEditorMode() {
+            const modeInput = document.getElementById('editor_mode');
+            if (modeInput) {
+                modeInput.value = currentMode;
             }
-        };
+        }
 
-        // Применить HTML изменения
-        window.applyHtmlChanges = function() {
-            if (!editor) return;
-            const htmlSource = document.getElementById('htmlSource');
-            if (htmlSource) {
-                editor.commands.setContent(htmlSource.value);
-                updateHiddenField();
-                const modalElement = document.getElementById('htmlModal');
-                const modal = bootstrap.Modal.getInstance(modalElement);
-                if (modal) modal.hide();
+        // Переключение режимов
+        function switchMode(mode) {
+            const visualContainer = document.getElementById('visual-editor-container');
+            const htmlContainer = document.getElementById('html-editor-container');
+            const textContainer = document.getElementById('text-editor-container');
+            const modeVisualBtn = document.getElementById('mode-visual');
+            const modeHtmlBtn = document.getElementById('mode-html');
+            const modeTextBtn = document.getElementById('mode-text');
+
+            // Сохраняем текущий контент перед переключением
+            let currentContent = '';
+
+            if (currentMode === 'visual' && editor) {
+                currentContent = editor.getHTML();
+            } else if (currentMode === 'html') {
+                currentContent = document.getElementById('html_editor').value;
+            } else if (currentMode === 'text') {
+                currentContent = document.getElementById('text_editor').value;
             }
-        };
+
+            // Обновляем контент для нового режима
+            if (mode === 'visual') {
+                if (currentContent) {
+                    if (editor) {
+                        if (currentMode === 'text') {
+                            // Из текста в HTML
+                            const html = textToHtml(currentContent);
+                            editor.commands.setContent(html);
+                        } else if (currentMode === 'html') {
+                            // Из HTML в визуальный
+                            editor.commands.setContent(currentContent);
+                        }
+                    }
+                }
+                visualContainer.style.display = 'block';
+                htmlContainer.style.display = 'none';
+                textContainer.style.display = 'none';
+                modeVisualBtn.classList.add('btn-primary');
+                modeVisualBtn.classList.remove('btn-outline-secondary');
+                modeHtmlBtn.classList.remove('btn-primary');
+                modeHtmlBtn.classList.add('btn-outline-secondary');
+                modeTextBtn.classList.remove('btn-primary');
+                modeTextBtn.classList.add('btn-outline-secondary');
+            } else if (mode === 'html') {
+                let htmlContent = currentContent;
+
+                if (currentMode === 'visual' && editor) {
+                    htmlContent = editor.getHTML();
+                } else if (currentMode === 'text') {
+                    htmlContent = textToHtml(currentContent);
+                }
+
+                document.getElementById('html_editor').value = htmlContent;
+
+                visualContainer.style.display = 'none';
+                htmlContainer.style.display = 'block';
+                textContainer.style.display = 'none';
+                modeHtmlBtn.classList.add('btn-primary');
+                modeHtmlBtn.classList.remove('btn-outline-secondary');
+                modeVisualBtn.classList.remove('btn-primary');
+                modeVisualBtn.classList.add('btn-outline-secondary');
+                modeTextBtn.classList.remove('btn-primary');
+                modeTextBtn.classList.add('btn-outline-secondary');
+            } else if (mode === 'text') {
+                let textContent = currentContent;
+
+                if (currentMode === 'visual' && editor) {
+                    textContent = htmlToText(editor.getHTML());
+                } else if (currentMode === 'html') {
+                    textContent = htmlToText(currentContent);
+                }
+
+                document.getElementById('text_editor').value = textContent;
+
+                visualContainer.style.display = 'none';
+                htmlContainer.style.display = 'none';
+                textContainer.style.display = 'block';
+                modeTextBtn.classList.add('btn-primary');
+                modeTextBtn.classList.remove('btn-outline-secondary');
+                modeVisualBtn.classList.remove('btn-primary');
+                modeVisualBtn.classList.add('btn-outline-secondary');
+                modeHtmlBtn.classList.remove('btn-primary');
+                modeHtmlBtn.classList.add('btn-outline-secondary');
+            }
+
+            currentMode = mode;
+            updateEditorMode();
+            updateHiddenField();
+        }
 
         // Инициализация
         document.addEventListener('DOMContentLoaded', () => {
@@ -670,7 +850,6 @@
             }
 
             const initialContent = getCombinedContent();
-            console.log('Initial content:', initialContent.substring(0, 200));
 
             try {
                 editor = new Editor({
@@ -698,14 +877,11 @@
                     onUpdate: ({ editor }) => {
                         updateHiddenField();
                     },
-                    onTransaction: ({ editor }) => {
-                        // Дополнительная синхронизация
-                    }
                 });
 
                 console.log('Editor created successfully');
 
-                // Привязываем кнопки
+                // Привязываем кнопки визуального редактора
                 const buttons = {
                     'btn-bold': () => editor.chain().focus().toggleBold().run(),
                     'btn-italic': () => editor.chain().focus().toggleItalic().run(),
@@ -715,31 +891,22 @@
                     'btn-p': () => editor.chain().focus().setParagraph().run(),
                     'btn-ul': () => editor.chain().focus().toggleBulletList().run(),
                     'btn-ol': () => editor.chain().focus().toggleOrderedList().run(),
-                    'btn-undo': () => editor.chain().focus().undo().run(),
-                    'btn-redo': () => editor.chain().focus().redo().run(),
                     'btn-table': () => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
                 };
 
                 for (const [id, handler] of Object.entries(buttons)) {
                     const btn = document.getElementById(id);
-                    if (btn) {
-                        btn.addEventListener('click', handler);
-                    } else {
-                        console.warn(`Button ${id} not found`);
-                    }
+                    if (btn) btn.addEventListener('click', handler);
                 }
 
-                // Кнопка HTML
-                const htmlBtn = document.getElementById('btn-html');
-                if (htmlBtn) {
-                    htmlBtn.addEventListener('click', () => window.showHtmlSource());
-                }
+                // Привязываем кнопки переключения режимов
+                document.getElementById('mode-visual').addEventListener('click', () => switchMode('visual'));
+                document.getElementById('mode-html').addEventListener('click', () => switchMode('html'));
+                document.getElementById('mode-text').addEventListener('click', () => switchMode('text'));
 
-                // Кнопка применения HTML
-                const applyBtn = document.getElementById('applyHtmlBtn');
-                if (applyBtn) {
-                    applyBtn.addEventListener('click', () => window.applyHtmlChanges());
-                }
+                // Обновляем при изменении в HTML и TEXT режимах
+                document.getElementById('html_editor').addEventListener('input', () => updateHiddenField());
+                document.getElementById('text_editor').addEventListener('input', () => updateHiddenField());
 
                 // Инициализируем скрытое поле
                 updateHiddenField();

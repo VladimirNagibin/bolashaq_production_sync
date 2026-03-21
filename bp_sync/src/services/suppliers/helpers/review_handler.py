@@ -687,6 +687,10 @@ class ReviewHandler:
             return await self._handle_field_items(
                 product_update, existing_product, field_name, form_data
             )
+        elif field_name == "description":
+            return self._handle_field_description(
+                product_update, existing_product, field_name, form_data
+            )
         return False
 
     def _handle_field_brand(
@@ -828,12 +832,51 @@ class ReviewHandler:
             return True
         return False
 
-    def _create_complex_product_value(self, value: str) -> FieldValue | None:
+    def _create_complex_product_value(
+        self, value: str, type_field: str = "HTML"
+    ) -> FieldValue | None:
         try:
-            complex_value = FieldText(text_field=value, type_field="HTML")
+            complex_value = FieldText(text_field=value, type_field=type_field)
             return FieldValue(value=complex_value)
         except Exception:
             return None
+
+    def _handle_field_description(
+        self,
+        product_update: ProductUpdate,
+        existing_product: ProductCreate | None,
+        field_name: str,
+        form_data: FormData,
+    ) -> bool:
+        form_value = form_data.get(f"{self.FIELD_PREFIX}{field_name}")
+        # Если значение не передано в форме - ничего не делаем
+        if form_value is None:
+            logger.debug("No value for brand field in form")
+            return False
+        current_field_name = "description_for_print"
+        current_value = self._get_complex_product_value(
+            existing_product, current_field_name
+        )
+        form_value = str(form_value).strip()
+        if not form_value:
+            if current_value:
+                # TODO: Если значение заполнено - обнулить ?
+                return True
+            return False
+        new_value = None
+        if current_value != form_value:
+            type_form_field = form_data.get("editor_mode")
+            if type_form_field and type_form_field == "text":
+                type_field = "TEXT"
+            else:
+                type_field = "HTML"
+            new_value = self._create_complex_product_value(
+                form_value, type_field
+            )
+        if new_value:
+            setattr(product_update, current_field_name, new_value)
+            return True
+        return False
 
     async def _save_to_crm(
         self,
