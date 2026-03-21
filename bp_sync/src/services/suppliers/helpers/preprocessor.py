@@ -11,6 +11,7 @@ from schemas.supplier_schemas import SupplierProductDetail
 
 from ...open_ai_services import OpenAIService
 from ..json_encoder import CustomJSONEncoder, PreprocessedDataSerializer
+from .category_cache import CategoryCacheService
 
 
 class SupplierDataPreprocessor:
@@ -32,9 +33,15 @@ class SupplierDataPreprocessor:
     # Время жизни кэша в секундах
     CACHE_TTL = 1800  # 30 минут
 
-    def __init__(self, openai_service: OpenAIService, redis_client: Redis):
+    def __init__(
+        self,
+        openai_service: OpenAIService,
+        redis_client: Redis,
+        category_cache: CategoryCacheService,
+    ):
         self._openai_service = openai_service
         self._redis = redis_client
+        self._category_cache = category_cache
 
     async def process(
         self,
@@ -53,7 +60,6 @@ class SupplierDataPreprocessor:
             Dict[str, Dict[str, Any]]: Предобработанные данные
         """
         try:
-            # Пытаемся получить из кэша
             cached_result = await self._get_from_cache(
                 supplier_product.id, field_data
             )
@@ -233,7 +239,12 @@ class SupplierDataPreprocessor:
         Returns:
             Dict[str, Dict[str, Any]]: Данные категории
         """
-        result: dict[str, dict[str, Any]] = {}
+        result: dict[str, dict[str, Any]] = {
+            "internal_section_id": {
+                "old_value": supplier_product.internal_section_id,
+                "new_value": None,
+            }
+        }
         try:
             category_cache = await self._get_category_cache(
                 supplier_product.source
@@ -244,6 +255,8 @@ class SupplierDataPreprocessor:
                     if subcategory_data
                     else None
                 )
+                if not sub_name:
+                    sub_name = None
                 category_id = category_cache.get((cat_name, sub_name))
                 if category_id:
                     result["internal_section_id"] = {
@@ -331,11 +344,9 @@ class SupplierDataPreprocessor:
             Dict[Tuple[str, Optional[str]], int]:
             Словарь (категория, подкатегория) -> ID в CRM
         """
-        # TODO: Реализовать получение кэша из БД или Redis
-        # Пока возвращаем пустой словарь
         logger.debug(
             "Getting category cache",
             extra={"source": source.value, "cache_size": 0},
         )
 
-        return {}
+        return await self._category_cache.get(source)

@@ -1,9 +1,10 @@
-# from typing import Any
+from typing import Any
 from uuid import UUID
 
 from fastapi import (
     APIRouter,
     Depends,
+    Form,
     HTTPException,
     Request,
     status,
@@ -15,13 +16,21 @@ from core.exceptions.supplier_exceptions import NameNotFoundError
 from core.logger import logger
 from core.settings import settings
 from schemas.enums import BrandEnum, SourcesProductEnum
+from schemas.fields import FIELD_LABELS_RU
+from schemas.productsection_schemas import Productsection
 from schemas.supplier_schemas import SupplierProductUpdate
-from services.dependencies.dependencies import get_product_service
+from services.dependencies.dependencies import (
+    get_product_service,
+    get_productsection_service,
+)
 from services.dependencies.dependencies_suppliers import (
     get_supplier_product_repo,
     get_supplier_service,
 )
 from services.products.product_services import ProductClient
+from services.productsections.productsection_services import (
+    ProductsectionClient,
+)
 from services.suppliers.repositories.supplier_product_repo import (
     SupplierProductRepository,
 )
@@ -96,6 +105,9 @@ async def review_product(
     supp_product_id: UUID,
     supplier_service: SupplierClient = Depends(get_supplier_service),
     product_service: ProductClient = Depends(get_product_service),
+    product_section_service: ProductsectionClient = Depends(
+        get_productsection_service
+    ),
 ) -> HTMLResponse:
     """
     Страница редактирования.
@@ -109,7 +121,6 @@ async def review_product(
                 supp_product_id
             )
         )
-
         # Получаем связанный продукт
         product = None
         if product_id := supplier_product.product_id:
@@ -133,6 +144,11 @@ async def review_product(
                 product,
             )
         )
+        sections_review_data = (
+            await product_section_service.get_sections_review_data(
+                review_complex_data
+            )
+        )
 
         # Обработка ошибок
         error_message = None
@@ -153,6 +169,22 @@ async def review_product(
                 "review_complex_data": review_complex_data,
                 "brand_options": BrandEnum.to_dict(),
                 "error_message": error_message,
+                "category_roots": (
+                    sections_review_data.get("category_roots", [])
+                ),
+                "category_children_map": (
+                    sections_review_data.get("category_children_map", [])
+                ),
+                "selected_root_id": (
+                    sections_review_data.get("selected_root_id")
+                ),
+                "selected_child_id": (
+                    sections_review_data.get("selected_child_id")
+                ),
+                "selected_child_name": (
+                    sections_review_data.get("selected_child_name")
+                ),
+                "field_labels": FIELD_LABELS_RU,
             },
         )
 
@@ -284,4 +316,45 @@ async def link_product(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to link product",
+        )
+
+
+@supplier_product_review.post("/create_root_section")  # type: ignore[misc]
+async def create_root_section(
+    name: str = Form(...),
+    product_section_service: ProductsectionClient = Depends(
+        get_productsection_service
+    ),
+) -> dict[str, Any]:
+    """
+    Создает новый корневой раздел.
+    """
+    try:
+        section_data: dict[str, Any] = {"name": name}
+        new_section = Productsection(**section_data)
+
+        new_product_section = (
+            await product_section_service.create_in_bitrix_and_db(new_section)
+        )
+        if new_product_section:
+            return {
+                "id": new_product_section.external_id,
+                "name": new_product_section.name,
+            }
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create section",
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            f"Failed to create section: {e}",
+            extra={"section_name": name},
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create section: {e}",
         )

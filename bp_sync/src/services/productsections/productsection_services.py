@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.logger import logger
 from core.settings import settings
 from models.productsection_models import Productsection as ProductsectionDB
-from schemas.productsection_schemas import Productsection
+from schemas.productsection_schemas import Productsection, ProductsectionUpdate
 
 from ..base_repositories.base_repository import BaseRepository
 from ..bitrix_services.bitrix_api_client import BitrixAPIClient
@@ -21,6 +21,7 @@ class ProductsectionClient(
 ):
 
     model = ProductsectionDB
+    schema_update_class = ProductsectionUpdate
 
     def __init__(
         self,
@@ -204,3 +205,152 @@ class ProductsectionClient(
                 "timestamp": time.time(),
             },
         )
+
+    async def get_sections_review_data(
+        self, section_data: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        try:
+            # 1. Получаем все разделы (активные)
+            all_sections = await self.get_entities(
+                ["external_id", "name", "section_id"]
+            )
+
+            # 2. Формируем карту для быстрого поиска
+            sections_map = {s.external_id: s for s in all_sections}
+
+            # 3. Формируем список корневых и словарь детей
+            # {parent_id: [children]}
+            roots: list[dict[str, Any]] = []
+            # parent_external_id -> list of sections
+            children_map: dict[int, list[dict[str, Any]]] = {}
+
+            for s in all_sections:
+                if s.section_id is None:
+                    roots.append({"id": s.external_id, "name": s.name})
+                else:
+                    if s.section_id not in children_map:
+                        children_map[s.section_id] = []
+                    children_map[s.section_id].append(
+                        {"id": s.external_id, "name": s.name}
+                    )
+
+            # 4. Вычисляем начальные значения (Defaults)
+            # Ищем элемент internal_section_id в review_data
+            selected_root_id = None
+            selected_child_id = None
+            selected_child_name = None
+
+            # Пытаемся найти ID текущего раздела
+            current_section_id = None
+            for item in section_data:
+                if item.get("field_name") == "internal_section_id":
+                    # Приоритет новому значению, иначе текущему
+                    val = (
+                        item.get("new_value")
+                        if item.get("new_value") is not None
+                        else item.get("current_product_value")
+                    )
+                    if val:
+                        try:
+                            current_section_id = int(val)
+                        except (ValueError, TypeError):
+                            pass
+                    self._update_id_to_name("new_value", item, sections_map)
+                    self._update_id_to_name("old_value", item, sections_map)
+                    self._update_id_to_name(
+                        "current_product_value", item, sections_map
+                    )
+
+                    break
+
+            # Если ID найден, находим родителя и ребенка
+            if current_section_id and current_section_id in sections_map:
+                current_section = sections_map[current_section_id]
+                selected_child_id = current_section.external_id
+
+                # Ищем родителя
+                if (
+                    current_section.section_id
+                    and current_section.section_id in sections_map
+                ):
+                    parent = sections_map[current_section.section_id]
+                    selected_root_id = parent.external_id
+                    selected_child_name = current_section.name
+                else:
+                    selected_root_id = selected_child_id
+                    selected_child_id = None
+
+            # Формируем данные для фронтенда (дерево)
+            # Структура: { root_id: [child1, child2] }
+            category_tree = {}
+            for root in roots:
+                category_tree[root["id"]] = children_map.get(root["id"], [])
+
+            return {
+                "category_roots": roots,
+                "category_children_map": category_tree,  # Словарь детей
+                "selected_root_id": selected_root_id,
+                "selected_child_id": selected_child_id,
+                "selected_child_name": selected_child_name,
+            }
+        except Exception:
+            return {}
+
+    def _update_id_to_name(
+        self,
+        field_name: str,
+        data: dict[str, Any],
+        sections_map: dict[int, Any],
+    ) -> None:
+        value = data.get(field_name)
+        if not value:
+            return
+        try:
+            value_int = int(value)
+            category = sections_map.get(value_int)
+            if category:
+                data[field_name] = category.name
+        except (ValueError, TypeError):
+            pass
+        return
+
+    async def handle_section_review(
+        self,
+        form_value: str,
+        current_value: int | None,
+        section_value: int | None,
+        subsection_value: int | None,
+    ) -> int | None:
+        try:
+            all_sections = await self.get_entities(
+                ["external_id", "name", "section_id"]
+            )
+
+            sections_map = {s.external_id: s for s in all_sections}
+
+            if current_value:
+                current_section = sections_map.get(current_value)
+                if current_section and current_section.name == form_value:
+                    return None
+            if subsection_value:
+                new_section = sections_map.get(subsection_value)
+                if new_section and new_section.name == form_value:
+                    return subsection_value
+            for section in all_sections:
+                if section.name == form_value:
+                    if section.section_id is not None:
+                        return int(section.external_id)
+            product_section_data: dict[str, Any] = {
+                "name": form_value,
+                "catalog_id": 25,
+                "section_id": section_value,
+            }
+            create_product_section = Productsection(**product_section_data)
+            new_product_section = await self.create_in_bitrix_and_db(
+                create_product_section
+            )
+            if new_product_section:
+                return int(new_product_section.external_id)
+            return None
+        except Exception:
+            return None

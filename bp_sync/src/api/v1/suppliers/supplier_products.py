@@ -54,7 +54,9 @@ async def test(
     # SupplierComplectUpdate,;
     # SupplierProductUpdate,
     try:
-        import uuid
+        # import uuid
+
+        from schemas.enums import SourcesProductEnum
 
         # repo = supp_client.supplier_product_repo
         # su = SupplierProductCreate(
@@ -62,10 +64,11 @@ async def test(
         #     name="str",
         #     source=SourcesProductEnum.LABSET,
         # )
-        prod, dik1, dik2 = await supp_client.get_supplier_product_review_data(
-            uuid.UUID("b8025b0b-b7e6-4616-a377-c989872a101e")
-        )
-        # logger.info(prod)
+        # p, d, di = await supp_client.get_supplier_product_review_data(
+        #     uuid.UUID("b8025b0b-b7e6-4616-a377-c989872a101e")
+        # )
+        cats = await supp_client._category_cache.get(SourcesProductEnum.LABSET)
+        logger.info(f"{cats}========================================")
         # logger.info(dik1)
         # logger.info(dik2)
 

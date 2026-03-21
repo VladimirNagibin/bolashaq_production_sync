@@ -49,6 +49,7 @@ class DataTransformer:
     @staticmethod
     def transform_change_logs(
         change_logs: list[Any],
+        supplier_product_name: str,
     ) -> dict[str, dict[str, Any]]:
         """
         Агрегирует логи изменений, находя самое старое и самое новое значение.
@@ -70,7 +71,9 @@ class DataTransformer:
             result = DataTransformer._process_field_groups(logs_by_field)
 
             # Добавляем обязательное поле name
-            result = DataTransformer._ensure_required_fields(result)
+            result = DataTransformer._ensure_required_fields(
+                result, supplier_product_name
+            )
 
             logger.debug(f"Transformed {len(result)} fields from logs")
             return result
@@ -122,11 +125,12 @@ class DataTransformer:
     @staticmethod
     def _ensure_required_fields(
         data: dict[str, dict[str, Any]],
+        old_value: str,
     ) -> dict[str, dict[str, Any]]:
         """Добавляет обязательные поля, если они отсутствуют."""
         if data and "name" not in data:
             data["name"] = {
-                "old_value": None,
+                "old_value": old_value,
                 "new_value": None,
                 "created_at": None,
             }
@@ -198,14 +202,13 @@ class DataTransformer:
         complects: list[SupplierComplectUpdate] = []
         for kit in kit_data:
             try:
-                specs_json = self._serialize_specifications(kit.specifications)
-
+                specifics = self.transform_specifications(kit.specifications)
                 complects.append(
                     SupplierComplectUpdate(
                         name=kit.name,
                         code=kit.code,
                         description=kit.description,
-                        specifications=specs_json,
+                        specifications=specifics,
                     )
                 )
             except Exception as e:
@@ -214,6 +217,22 @@ class DataTransformer:
                 )
 
         return complects
+
+    def transform_specifications(self, specifications: Any) -> str | None:
+        # Преобразование словаря из KitItem.specifications в строку
+        # для SupplierComplectCreate.specifications
+        if not specifications:
+            return None
+        specifics: list[str] = []
+        try:
+            for key, value in specifications.items():
+                try:
+                    specifics.append(f"{key}: {str(value)}")
+                except Exception:
+                    pass
+            return ", ".join(specifics)
+        except Exception:
+            return None
 
     def _serialize_specifications(self, specifications: Any) -> str | None:
         """Сериализует спецификации в JSON строку."""

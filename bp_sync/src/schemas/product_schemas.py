@@ -322,7 +322,7 @@ class BaseProduct(CommonFieldMixin):
         None,
         validation_alias=AliasChoices("PROPERTY_125", "property125"),
     )  # Комплект поставки для печати
-    complect: FieldValue | None = Field(
+    complects: FieldValue | None = Field(
         None,
         validation_alias=AliasChoices("PROPERTY_127", "property127"),
     )  # Комплект поставки

@@ -4,6 +4,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.redis import get_redis
 from services.products.product_services import ProductClient
+from services.productsections.productsection_services import (
+    ProductsectionClient,
+)
 from services.suppliers.file_import_service import FileImportService
 from services.suppliers.repositories.import_config_repo import (
     ImportConfigRepository,
@@ -13,7 +16,7 @@ from services.suppliers.repositories.supplier_product_repo import (
 )
 from services.suppliers.supplier_services import SupplierClient
 
-from .dependencies import get_product_service
+from .dependencies import get_product_service, get_productsection_service
 from .dependencies_repo import get_session_context
 
 
@@ -48,6 +51,9 @@ async def get_supplier_service(
     file_import_service: FileImportService = Depends(get_file_import_service),
     redis_client: Redis = Depends(get_redis),
     product_client: ProductClient = Depends(get_product_service),
+    product_section_client: ProductsectionClient = Depends(
+        get_productsection_service
+    ),
 ) -> SupplierClient:
     return SupplierClient(
         import_config_repo=import_config_repo,
@@ -55,4 +61,5 @@ async def get_supplier_service(
         file_import_service=file_import_service,
         redis_client=redis_client,
         product_client=product_client,
+        product_section_client=product_section_client,
     )

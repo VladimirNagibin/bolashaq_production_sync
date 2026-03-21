@@ -32,7 +32,7 @@ class ProductTransformationService:
                 "description": "технических характеристик",
             },
             {
-                "source": "complect",
+                "source": "complects",
                 "target": "complect_for_print",
                 "title": "Комплект поставки",
                 "description": "комплекта поставки",
