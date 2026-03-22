@@ -441,8 +441,33 @@ class ReviewHandler:
         supplier_product: SupplierProductDetail,
     ) -> list[dict[str, Any]]:
         result: list[dict[str, Any]] = []
-        # TODO: upd
-        return result
+        try:
+            if (
+                field_name not in transformed_logs
+                and field_name not in preprocessed_data
+            ):
+                return result
+            field_data = None
+            if field_name in transformed_logs:
+                field_data = transformed_logs[field_name]
+            elif field_name in preprocessed_data:
+                field_data = preprocessed_data[field_name]
+            if not field_data:
+                return result
+            result.append(
+                {
+                    "field_name": field_name,
+                    "old_value": field_data.get("old_value"),
+                    "new_value": field_data.get("new_value"),
+                    "current_product_value": getattr(
+                        product, field_name, None
+                    ),
+                    "value_type": "str",
+                }
+            )
+            return result
+        except Exception:
+            return []
 
     def _get_more_photos(
         self,

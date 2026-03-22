@@ -14,3 +14,4 @@ class ProductImageRepository(
 
     model = ProductImageDB
     entity_type = EntityType.PRODUCT_IMAGE
+    schema_update_class = ProductImageUpdate
