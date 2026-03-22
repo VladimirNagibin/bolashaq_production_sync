@@ -3,6 +3,7 @@ from typing import Any
 from core.logger import logger
 from core.settings import settings
 from schemas.enums import ImageType
+from schemas.product_image_schemas import ProductImageCreate
 
 from ..file_download_service import FileDownloadService
 from ..products.product_data_raw import ProductRawDataService
@@ -212,3 +213,21 @@ class ProductImageService:
             f"fields%5BfileId%5D={image_id}&"
             f"fields%5BproductId%5D={product_id}"
         )
+
+    async def get_pictures_by_product_id(
+        self, product_id: int
+    ) -> list[ProductImageCreate]:
+        try:
+            payload = {"productId": product_id}
+            response = await self.product_data_raw.call_api(
+                "catalog.productImage.list", params=payload
+            )
+            if response:
+                images = response.get("productImages", [])
+                return [ProductImageCreate(**image) for image in images]
+        except Exception as e:
+            logger.error(
+                "Failed to get detail_picture from product_id "
+                f"{product_id} :{str(e)}"
+            )
+        return []
