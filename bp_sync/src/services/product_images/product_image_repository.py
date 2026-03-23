@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.exc import SQLAlchemyError
 
 from core.logger import logger
@@ -26,7 +26,10 @@ class ProductImageRepository(
         """Получает картинки товара по его ID."""
         try:
             stmt = select(ProductImageDB).where(
-                ProductImageDB.product_id == product_id
+                and_(
+                    ProductImageDB.product_id == product_id,
+                    ProductImageDB.is_deleted_in_bitrix.is_(False),
+                )
             )
 
             result = await self.session.execute(stmt)

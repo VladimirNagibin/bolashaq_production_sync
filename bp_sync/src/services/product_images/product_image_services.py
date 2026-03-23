@@ -418,9 +418,9 @@ class ProductImageClient:
                 f"{detail_id}---{detail_url}-------------------------------"
             )
             await self.bitrix_client.set_detail_picture(product_id, detail_url)
-            # await self.bitrix_client.delete_picture_by_id(
-            #     product_id, detail_id
-            # )
+            await self.bitrix_client.delete_picture_by_id(
+                product_id, detail_id
+            )
             # await self.import_from_bitrix(product_id)
             return True
         return False
