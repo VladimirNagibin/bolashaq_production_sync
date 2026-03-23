@@ -370,12 +370,16 @@ class ProductClient(
                 image_repo = self.image_client.repo
                 await image_repo.set_delete_in_bitrix_by_product_id(product_id)
                 return self._success_response("Product is deleted in Bitrix")
-            success = await self.bitrix_client.transform_product_fields(
+            success_field = await self.bitrix_client.transform_product_fields(
                 product_id
             )
             await self.import_from_bitrix(product_id)
             await self.image_client.import_from_bitrix(product_id)
-            success = await self._transform_product_picture_fields(product_id)
+            success_picture = await self._transform_product_picture_fields(
+                product_id
+            )
+            await self.image_client.import_from_bitrix(product_id)
+            success = success_field and success_picture
             if success:
                 logger.info(f"Successfully processed product ID: {product_id}")
                 return self._success_response(
@@ -423,30 +427,10 @@ class ProductClient(
         )
 
     async def _transform_product_picture_fields(self, product_id: int) -> bool:
-        image_client = self.image_client
-        pictures = await image_client.repo.get_pictures_by_product_id(
-            product_id
-        )
-        detail_id = None
-        detail_url = None
-        for picture in pictures:
-            if picture.image_type == "DETAIL_PICTURE":
-                return True
-            if (
-                detail_id is None
-                and picture.image_type == "MORE_PHOTO"
-                and picture.source is None
-            ):
-                detail_id = picture.external_id
-                detail_url = picture.detail_url
-        if detail_id and detail_url:
-            await image_client.bitrix_client.set_detail_picture(
-                product_id, detail_url
+        result: bool = (
+            await self.image_client.transform_product_picture_fields(
+                product_id
             )
-            # image_update = ProductImageUpdate(
-            #     external_id=detail_id,
-            #     image_type="DETAIL_PICTURE",
-            # )
-            # await image_client.repo.update(image_update)
-            return True
-        return False
+        )
+
+        return result

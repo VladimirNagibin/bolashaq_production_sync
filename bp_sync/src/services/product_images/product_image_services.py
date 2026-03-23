@@ -395,3 +395,25 @@ class ProductImageClient:
                 ),
             },
         )
+
+    async def transform_product_picture_fields(self, product_id: int) -> bool:
+        pictures = await self.repo.get_pictures_by_product_id(product_id)
+        detail_id = None
+        detail_url = None
+        for picture in pictures:
+            if picture.image_type == "DETAIL_PICTURE":
+                return True
+            if (
+                detail_id is None
+                and picture.image_type == "MORE_PHOTO"
+                and picture.source is None
+            ):
+                detail_id = picture.external_id
+                detail_url = picture.detail_url
+        if detail_id and detail_url:
+            await self.bitrix_client.set_detail_picture(product_id, detail_url)
+            await self.bitrix_client.delete_picture_by_id(
+                product_id, detail_id
+            )
+            return True
+        return False
