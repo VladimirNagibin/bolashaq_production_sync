@@ -3331,8 +3331,8 @@ async def check(
                         await product_client.import_from_bitrix(ext_id)
                         await product_image_repo.create_or_update(pr)
                 total += 1
-            if total > 3:
-                break
+            # if total > 3:
+            #     break
             try:
                 start = int(product_ids.next)
             except Exception:
