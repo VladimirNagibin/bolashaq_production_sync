@@ -397,7 +397,10 @@ class ProductImageClient:
         )
 
     async def transform_product_picture_fields(self, product_id: int) -> bool:
+        # await self.import_from_bitrix(product_id)
+
         pictures = await self.repo.get_pictures_by_product_id(product_id)
+        logger.info(f"{pictures}--------------------------------------")
         detail_id = None
         detail_url = None
         for picture in pictures:
@@ -411,9 +414,13 @@ class ProductImageClient:
                 detail_id = picture.external_id
                 detail_url = picture.detail_url
         if detail_id and detail_url:
-            await self.bitrix_client.set_detail_picture(product_id, detail_url)
-            await self.bitrix_client.delete_picture_by_id(
-                product_id, detail_id
+            logger.info(
+                f"{detail_id}---{detail_url}-------------------------------"
             )
+            await self.bitrix_client.set_detail_picture(product_id, detail_url)
+            # await self.bitrix_client.delete_picture_by_id(
+            #     product_id, detail_id
+            # )
+            # await self.import_from_bitrix(product_id)
             return True
         return False

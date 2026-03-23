@@ -72,7 +72,7 @@ async def check(
         # from core.logger import logger
 
         # from schemas.enums import SourcesProductEnum
-        await product_image_client.import_from_bitrix(2350)
+        await product_image_client.transform_product_picture_fields(2350)
         # from schemas.enums import SourcesProductEnum
         # from schemas.product_image_schemas import ProductImageCreate
         # product_image_create = ProductImageCreate(
