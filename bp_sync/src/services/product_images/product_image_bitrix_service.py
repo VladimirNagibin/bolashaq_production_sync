@@ -16,10 +16,12 @@ class ProductImageService:
     def __init__(
         self,
         product_data_raw: ProductRawDataService,
-        file_download_service: FileDownloadService,
+        file_download_service: FileDownloadService | None = None,
     ) -> None:
         self.product_data_raw = product_data_raw
-        self.file_download_service = file_download_service
+        self.file_download_service = (
+            file_download_service or FileDownloadService()
+        )
 
     async def set_detail_picture(
         self,

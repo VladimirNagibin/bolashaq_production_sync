@@ -8,6 +8,9 @@ from core.settings import settings
 from models.product_models import Product as ProductDB
 from schemas.enums import EntityTypeAbbr
 from schemas.product_schemas import ListProductEntity, ProductEntityCreate
+from services.product_images.product_image_services import (
+    ProductImageClient,
+)
 from services.users.user_services import UserClient
 
 from ..base_services.base_service import BaseEntityClient
@@ -29,11 +32,13 @@ class ProductClient(
         self,
         product_bitrix_client: ProductBitrixClient,
         product_repo: ProductRepository,
+        image_client: ProductImageClient,
         user_client: UserClient | None = None,
     ):
         super().__init__()
         self._bitrix_client = product_bitrix_client
         self._repo = product_repo
+        self._image_client = image_client
 
         if user_client is not None:
             self._repo.set_user_client(user_client)
@@ -49,6 +54,10 @@ class ProductClient(
     @property
     def repo(self) -> ProductRepository:
         return self._repo
+
+    @property
+    def image_client(self) -> ProductImageClient:
+        return self._image_client
 
     @property
     def webhook_config(self) -> dict[str, Any]:
@@ -358,11 +367,15 @@ class ProductClient(
             logger.info(f"Processing product ID: {product_id}")
             if webhook_payload.event == "ONCRMPRODUCTDELETE":
                 await self.repo.set_deleted_in_bitrix(product_id)
+                image_repo = self.image_client.repo
+                await image_repo.set_delete_in_bitrix_by_product_id(product_id)
                 return self._success_response("Product is deleted in Bitrix")
             success = await self.bitrix_client.transform_product_fields(
                 product_id
             )
             await self.import_from_bitrix(product_id)
+            await self.image_client.import_from_bitrix(product_id)
+            success = await self._transform_product_picture_fields(product_id)
             if success:
                 logger.info(f"Successfully processed product ID: {product_id}")
                 return self._success_response(
@@ -408,3 +421,32 @@ class ProductClient(
                 "error_type": error_type,
             },
         )
+
+    async def _transform_product_picture_fields(self, product_id: int) -> bool:
+        image_client = self.image_client
+        pictures = await image_client.repo.get_pictures_by_product_id(
+            product_id
+        )
+        detail_id = None
+        detail_url = None
+        for picture in pictures:
+            if picture.image_type == "DETAIL_PICTURE":
+                return True
+            if (
+                detail_id is None
+                and picture.image_type == "MORE_PHOTO"
+                and picture.source is None
+            ):
+                detail_id = picture.external_id
+                detail_url = picture.detail_url
+        if detail_id and detail_url:
+            await image_client.bitrix_client.set_detail_picture(
+                product_id, detail_url
+            )
+            # image_update = ProductImageUpdate(
+            #     external_id=detail_id,
+            #     image_type="DETAIL_PICTURE",
+            # )
+            # await image_client.repo.update(image_update)
+            return True
+        return False

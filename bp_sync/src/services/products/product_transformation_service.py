@@ -75,9 +75,11 @@ class ProductTransformationService:
             text_fields = await self._transform_text_fields(product_data)
 
             # Трансформация изображений
-            image_fields = await self._transform_image_fields(
-                product_data_dict, product_id
-            )
+            # image_fields = await self._transform_image_fields(
+            #     product_data_dict, product_id
+            # )
+
+            image_fields: dict[str, Any] = {}
 
             transformed_count = len(text_fields) + (1 if image_fields else 0)
             self.logger.info(
