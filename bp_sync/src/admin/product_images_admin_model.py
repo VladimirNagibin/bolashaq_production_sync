@@ -16,6 +16,7 @@ class ProductImageAdmin(
         "name",
         "product",
         "image_type",
+        "is_deleted_in_bitrix",
         "source",
     ]
     column_labels_local = {  # Надписи полей в списке
