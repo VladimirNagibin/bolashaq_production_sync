@@ -1,3 +1,4 @@
+import base64
 from typing import Any
 
 from core.logger import logger
@@ -8,6 +9,7 @@ from schemas.product_image_schemas import (
 )
 from services.exceptions import BitrixApiError, DatabaseException
 
+from ..file_download_service import FileDownloadService
 from .product_image_bitrix_service import ProductImageService
 from .product_image_repository import ProductImageRepository
 
@@ -19,6 +21,7 @@ class ProductImageClient:
         self,
         product_image_bitrix_client: ProductImageService,
         product_image_repo: ProductImageRepository,
+        download_service: FileDownloadService | None = None,
     ) -> None:
         """
         Инициализирует клиент картинок товаров.
@@ -30,6 +33,7 @@ class ProductImageClient:
         super().__init__()
         self._bitrix_client = product_image_bitrix_client
         self._repo = product_image_repo
+        self.download_service = download_service or FileDownloadService()
 
     @property
     def entity_name(self) -> str:
@@ -413,20 +417,16 @@ class ProductImageClient:
         self, product_id: int, detail_picture: ProductImageDB | None
     ) -> bool:
         # -----------------------------------TEST
-        detail_picture = await self.repo.get_detail_picture_by_product_id(
-            product_id
-        )
-        await self.import_from_bitrix_by_product_id(product_id)
+        # detail_picture = await self.repo.get_detail_picture_by_product_id(
+        #     product_id
+        # )
+        # await self.import_from_bitrix_by_product_id(product_id)
         # -----------------------------------TEST
 
         pictures = await self.repo.get_pictures_by_product_id(product_id)
-        logger.info(f"{pictures}--------------------------------------")
         detail_id = None
         detail_url = None
         for picture in pictures:
-            logger.info(
-                f"{picture.image_type}--------------------------------------"
-            )
             if picture.image_type == "DETAIL_PICTURE":
                 return True
             if (
@@ -437,39 +437,92 @@ class ProductImageClient:
                 detail_id = picture.external_id
                 detail_url = picture.detail_url
         if detail_picture:
-            picture_id, _ = await self.bitrix_client.set_detail_picture(
-                product_id, detail_picture.detail_url
+            content = detail_picture.content
+            if not content:
+                return False
+            file_content_base64 = base64.b64encode(content.image_data).decode(
+                "utf-8"
             )
-            if (
-                detail_picture.source or detail_picture.supplier_image_url
-            ) and picture_id:
-                db_picture = await self.import_from_bitrix(
-                    picture_id, product_id
-                )
-                if not db_picture:
-                    return True
-                image_data: dict[str, Any] = {
-                    "externan_id": db_picture.external_id,
+            picture_data: dict[str, Any] = {
+                "content": file_content_base64,
+                "filename": detail_picture.name,
+                "content_type": content.mime_type,
+                "file_size": content.file_size,
+                "raw_bytes": content.image_data,
+                "file_hash": content.file_hash,
+            }
+            supplier_picture_data: dict[str, Any] | None = None
+            if detail_picture.source or detail_picture.supplier_image_url:
+                supplier_picture_data = {
                     "source": detail_picture.source,
                     "supplier_image_url": detail_picture.supplier_image_url,
                 }
-                image_update = ProductImageUpdate(**image_data)
-                await self.repo.update(image_update)
+
+            result = await self.create_detail_picture_from_dict(
+                product_id, picture_data, supplier_picture_data
+            )
+
             # ------------------------------------TEST
-            await self.import_from_bitrix_by_product_id(product_id)
+            # await self.import_from_bitrix_by_product_id(product_id)
             # ------------------------------------TEST
             return True
         if detail_id and detail_url:
-            logger.info(
-                f"{detail_id}---{detail_url}-------------------------------"
-            )
-            await self.bitrix_client.set_detail_picture(product_id, detail_url)
-            # TODO: if set success then del
-            await self.bitrix_client.delete_picture_by_id(
-                product_id, detail_id
-            )
+
+            result = await self.create_detail_picture(product_id, detail_url)
+            if result:
+                await self.bitrix_client.delete_picture_by_id(
+                    product_id, detail_id
+                )
             # ------------------------------------TEST
-            await self.import_from_bitrix_by_product_id(product_id)
+            # await self.import_from_bitrix_by_product_id(product_id)
             # ------------------------------------TEST
             return True
         return False
+
+    async def create_detail_picture(
+        self, product_id: int, detail_url: str
+    ) -> bool:
+        try:
+            picture_data = await self.download_service.download_file(
+                detail_url
+            )
+            if not picture_data:
+                return False
+            return await self.create_detail_picture_from_dict(
+                product_id, picture_data
+            )
+        except Exception:
+            return False
+
+    async def create_detail_picture_from_dict(
+        self,
+        product_id: int,
+        picture_data: dict[str, Any],
+        supplier_picture_data: dict[str, Any] | None = None,
+    ) -> bool:
+        try:
+            if not picture_data:
+                return False
+            bitrix_picture = await self.bitrix_client.create_product_picture(
+                product_id, picture_data, "DETAIL_PICTURE"
+            )
+            if not bitrix_picture:
+                return False
+            db_picture = await self.repo.create(bitrix_picture)
+            if not db_picture:
+                return False
+            if supplier_picture_data:
+                image_data: dict[str, Any] = {
+                    "external_id": db_picture.external_id,
+                    "source": supplier_picture_data.get("source"),
+                    "supplier_image_url": (
+                        supplier_picture_data.get("supplier_image_url")
+                    ),
+                }
+                image_update = ProductImageUpdate(**image_data)
+                await self.repo.update(image_update)
+            await self.repo.add_image_content(db_picture.id, picture_data)
+            return True
+        except Exception as e:
+            logger.exception(f"ERROR: {str(e)}")
+            return False

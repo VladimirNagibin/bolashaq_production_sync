@@ -1,27 +1,27 @@
 import base64
+import hashlib
 import mimetypes
 import re
 from typing import Any
-from urllib.parse import unquote
+from urllib.parse import unquote, urlparse
 
-import requests  # type: ignore[import-untyped]
-from requests import RequestException, Timeout
+import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from core.logger import logger
 
 from .exceptions import FileDownloadError
 
-MAX_FILE_SIZE: int = 10 * 1024 * 1024  # 10 МБ
+MAX_FILE_SIZE: int = 20 * 1024 * 1024  # 20 МБ
 
 
 class FileDownloadService:
-    """Сервис для скачивания файлов из Bitrix24"""
+    """Сервис для скачивания файлов"""
 
     def __init__(self, timeout: int = 30, max_retries: int = 3):
         self.timeout = timeout
         self.max_retries = max_retries
-        self.session = requests.Session()
+        self.client = httpx.AsyncClient(timeout=self.timeout)
 
     @retry(
         stop=stop_after_attempt(3),
@@ -47,57 +47,82 @@ class FileDownloadService:
             FileDownloadError: при критических ошибках скачивания
         """
         try:
-            logger.debug(f"Starting file download from URL: {file_url}")
+            logger.debug(f"Starting async file download from URL: {file_url}")
 
-            response = self.session.get(
-                file_url, timeout=self.timeout, stream=True
-            )
-            response.raise_for_status()
+            # Используем stream=True, чтобы скачивать частями и
+            # контролировать размер
+            async with self.client.stream("GET", file_url) as response:
+                response.raise_for_status()
 
-            # Проверяем размер файла
-            content_length = response.headers.get("content-length")
-            if content_length and int(content_length) > MAX_FILE_SIZE:
-                logger.error(
-                    f"File too large: {content_length} bytes, "
-                    f"max allowed: {MAX_FILE_SIZE} bytes"
+                # 1. Проверяем Content-Length, если он есть
+                content_length = response.headers.get("content-length")
+                if content_length and int(content_length) > MAX_FILE_SIZE:
+                    logger.error(
+                        f"File too large (header): {content_length} bytes, "
+                        f"max allowed: {MAX_FILE_SIZE} bytes"
+                    )
+                    return None
+
+                # 2. Читаем файл кусками, проверяя реальный размер и считая хэш
+                chunks: list[bytes] = []
+                total_size = 0
+                sha256_hash = hashlib.sha256()
+
+                async for chunk in response.aiter_bytes(chunk_size=8192):
+                    total_size += len(chunk)
+
+                    if total_size > MAX_FILE_SIZE:
+                        logger.error(
+                            "File too large (downloaded): "
+                            f"{total_size} bytes, "
+                            f"max allowed: {MAX_FILE_SIZE} bytes"
+                        )
+                        return None
+
+                    sha256_hash.update(chunk)
+                    chunks.append(chunk)
+
+                # Собираем байты
+                file_bytes = b"".join(chunks)
+
+                # 3. Готовим метаданные
+                content_type = response.headers.get(
+                    "content-type", "application/octet-stream"
                 )
-                return None
+                extension = mimetypes.guess_extension(content_type) or ".bin"
+                filename = self._extract_filename(
+                    response, file_url, extension
+                )
 
-            # Определяем тип контента и расширение файла
-            content_type = response.headers.get(
-                "content-type", "application/octet-stream"
-            )
-            extension = mimetypes.guess_extension(content_type) or ".bin"
+                # Base64 (для старой совместимости)
+                file_content_base64 = base64.b64encode(file_bytes).decode(
+                    "utf-8"
+                )
 
-            # Получаем имя файла
-            filename = self._extract_filename(response, file_url, extension)
+                file_info: dict[str, Any] = {
+                    # "Старые" данные
+                    "content": file_content_base64,
+                    "filename": filename,
+                    "content_type": content_type,
+                    "file_size": total_size,
+                    # "Новые" данные для БД
+                    "raw_bytes": file_bytes,
+                    "file_hash": sha256_hash.hexdigest(),
+                }
 
-            # Читаем и кодируем контент
-            file_content = response.content
-            file_content_base64 = base64.b64encode(file_content).decode(
-                "utf-8"
-            )
+                logger.info(
+                    f"Successfully downloaded file: {filename}, "
+                    f"size: {total_size} bytes, "
+                    f"hash: {file_info['file_hash']}"
+                )
 
-            file_info: dict[str, Any] = {
-                "content": file_content_base64,
-                "filename": filename,
-                "content_type": content_type,
-                "file_size": len(file_content),
-            }
+                return file_info
 
-            logger.info(
-                f"Successfully downloaded file: {filename}, "
-                f"size: {file_info['file_size']} bytes, "
-                f"type: {content_type}"
-            )
-
-            return file_info
-
-        except Timeout as e:
+        except httpx.TimeoutException as e:
             logger.error(f"Timeout downloading file from {file_url}: {e}")
             raise FileDownloadError(f"Download timeout: {e}")
 
-        except RequestException as e:
+        except httpx.HTTPStatusError as e:
             logger.error(f"HTTP error downloading file from {file_url}: {e}")
             raise FileDownloadError(f"HTTP error: {e}")
 
@@ -110,7 +135,7 @@ class FileDownloadService:
 
     def _extract_filename(
         self,
-        response: requests.Response,
+        response: httpx.Response,
         fallback_url: str,
         default_extension: str,
     ) -> str:
@@ -126,10 +151,10 @@ class FileDownloadService:
         try:
             headers = response.headers
 
-            # 1. Пробуем извлечь из Content-Disposition (filename*)
+            # 1. Content-Disposition
             content_disposition = headers.get("Content-Disposition", "")
             if content_disposition:
-                # Ищем filename* (с кодировкой)
+                # filename*
                 match = re.search(
                     r"filename\*=([^;]+)", content_disposition, re.IGNORECASE
                 )
@@ -140,7 +165,7 @@ class FileDownloadService:
                         filename = unquote(filename[7:])
                     return self._sanitize_filename(filename)
 
-                # Ищем обычный filename
+                # filename
                 match = re.search(
                     r"filename=([^;]+)", content_disposition, re.IGNORECASE
                 )
@@ -149,15 +174,13 @@ class FileDownloadService:
                     filename = filename.strip("\"'")
                     return self._sanitize_filename(unquote(filename))
 
-            # 2. Пробуем извлечь из URL
-            from urllib.parse import urlparse
-
+            # 2. URL path
             parsed_url = urlparse(fallback_url)
             url_filename = parsed_url.path.split("/")[-1]
             if url_filename and "." in url_filename:
                 return self._sanitize_filename(url_filename)
 
-            # 3. Генерируем имя на основе timestamp
+            # 3. Fallback timestamp
             from datetime import datetime
 
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -180,9 +203,7 @@ class FileDownloadService:
         Returns:
             str: Очищенное имя файла
         """
-        # Удаляем недопустимые символы
         filename = re.sub(r'[<>:"/\\|?*]', "_", filename)
-        # Ограничиваем длину
         if len(filename) > 255:
             name, ext = (
                 filename.rsplit(".", 1) if "." in filename else (filename, "")
@@ -190,7 +211,6 @@ class FileDownloadService:
             filename = f"{name[:250]}.{ext}" if ext else name[:255]
         return filename
 
-    def __del__(self) -> None:
-        """Закрываем сессию при удалении объекта"""
-        if hasattr(self, "session"):
-            self.session.close()
+    async def close(self) -> None:
+        """Важно закрывать клиент при завершении работы"""
+        await self.client.aclose()

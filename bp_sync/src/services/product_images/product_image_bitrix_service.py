@@ -252,3 +252,36 @@ class ProductImageService:
                 f"{product_id} :{str(e)}"
             )
         return None
+
+    async def create_product_picture(
+        self,
+        product_id: int,
+        image_data: dict[str, Any],
+        image_type: str,
+    ) -> ProductImageCreate | None:
+        """Установка картинки"""
+        try:
+            # Формируем данные для загрузки
+            picture_data: dict[str, Any] = {
+                "fields": {
+                    "productId": product_id,
+                    "type": image_type,
+                },
+                "fileContent": [image_data["filename"], image_data["content"]],
+            }
+
+            logger.info(f"Creating image for product {product_id}")
+            result = await self.product_data_raw.call_api(
+                "catalog.productImage.add", picture_data
+            )
+            if not result:
+                return None
+            if product_image := result.get("productImage"):
+                return ProductImageCreate(**product_image)
+            return None
+        except Exception as e:
+            logger.error(
+                "Fail to set picture to product_id: "
+                f"{product_id}, type: {image_type} :{str(e)}"
+            )
+            return None

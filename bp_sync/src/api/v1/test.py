@@ -69,33 +69,13 @@ async def check(
     external_id = 0
     try:
         ...
-        import asyncio
+        # import asyncio
 
         from core.logger import logger
 
         logger.info(" --- ")
-        error_: list[str] = []
-        # from schemas.enums import SourcesProductEnum
-        images = await product_image_repo.get_pictures(
-            image_type="DETAIL_PICTURE"
-        )
-        count = 0
-        for image in images:
-            try:
-                await product_image_repo.add_image_content_from_url(
-                    image.id,
-                    image.detail_url,
-                )
-                count += 1
-                if count % 50 == 0:
-                    await asyncio.sleep(2)
-            except Exception as e:
-                logger.info(f"===============ERROR============={e}")
-                error_.append(f"---{image.name}---ERROR----{e}")
 
-        # await product_image_client.transform_product_picture_fields(
-        #     2350, None
-        # )
+        await product_image_client.transform_product_picture_fields(2350, None)
         # from schemas.enums import SourcesProductEnum
         # from schemas.product_image_schemas import ProductImageCreate
         # product_image_create = ProductImageCreate(
@@ -152,7 +132,7 @@ async def check(
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
-            "loaded": count,
-            "errors": "; ".join(error_),
+            "loaded": "count",
+            "errors": "; ".join([]),
         },
     )

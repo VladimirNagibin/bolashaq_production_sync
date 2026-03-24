@@ -1,9 +1,9 @@
-import hashlib
+from typing import Any
 from uuid import UUID
 
-import httpx
 from sqlalchemy import and_, select
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.logger import logger
 from models.product_images_models import ProductImage as ProductImageDB
@@ -15,6 +15,7 @@ from schemas.product_image_schemas import (
 )
 
 from ..base_repositories.base_repository import BaseRepository
+from ..file_download_service import FileDownloadService
 
 
 class ProductImageRepository(
@@ -24,6 +25,10 @@ class ProductImageRepository(
     model = ProductImageDB
     entity_type = EntityType.PRODUCT_IMAGE
     schema_update_class = ProductImageUpdate
+
+    def __init__(self, session: AsyncSession):
+        super().__init__(session)
+        self.download_service = FileDownloadService()
 
     async def get_pictures_by_product_id(
         self, product_id: int
@@ -84,45 +89,43 @@ class ProductImageRepository(
         и привязывает к product_image_id.
         """
         try:
-            # 1. Скачиваем картинку (используем httpx для асинхронности)
-            # Устанавливаем таймаут, чтобы не зависнуть,
-            # если сервер не отвечает
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(image_url)
-                response.raise_for_status()
+            data = await self.download_service.download_file(image_url)
 
-                image_bytes = response.content
-
-                # 2. Подготавливаем метаданные
-                mime_type = response.headers.get("content-type")
-                file_size = len(image_bytes)
-                file_hash = hashlib.sha256(image_bytes).hexdigest()
-
-                # 3. Создаем объект модели
-                db_content = ProductImageContent(
-                    product_image_id=product_image_id,
-                    image_data=image_bytes,
-                    mime_type=mime_type,
-                    file_size=file_size,
-                    file_hash=file_hash,
+            if not data:
+                raise ValueError(
+                    "Не удалось скачать файл или он слишком большой"
                 )
+            return await self.add_image_content(product_image_id, data)
 
-                # 4. Сохраняем в базу
-                self.session.add(db_content)
-                await self.session.commit()
-                await self.session.refresh(db_content)
+        except Exception as e:
+            logger.error(f"Ошибка при сохранении контента картинки в БД: {e}")
+            raise
 
-                return db_content
+    async def add_image_content(
+        self, product_image_id: UUID, image_data: dict[str, Any]
+    ) -> ProductImageContent:
+        try:
+            # Распаковываем данные
+            image_bytes = image_data["raw_bytes"]
+            file_hash = image_data["file_hash"]
+            file_size = image_data["file_size"]
+            mime_type = image_data["content_type"]
 
-        except httpx.HTTPStatusError as e:
-            logger.error(
-                "Ошибка при скачивании картинки "
-                f"{image_url}: {e.response.status_code}"
+            # Создаем объект модели
+            db_content = ProductImageContent(
+                product_image_id=product_image_id,
+                image_data=image_bytes,
+                mime_type=mime_type,
+                file_size=file_size,
+                file_hash=file_hash,
             )
-            raise
-        except httpx.RequestError as e:
-            logger.error(f"Ошибка сети при запросе {image_url}: {e}")
-            raise
+
+            # Сохраняем в базу
+            self.session.add(db_content)
+            await self.session.commit()
+            await self.session.refresh(db_content)
+
+            return db_content
         except SQLAlchemyError as e:
             await self.session.rollback()
             logger.error(f"Ошибка при сохранении контента картинки в БД: {e}")
@@ -134,7 +137,7 @@ class ProductImageRepository(
         image_type: str | None = None,
         source: SourcesProductEnum | None = None,
     ) -> list[ProductImageDB]:
-        """Получает картинки товара по его ID."""
+        """Получает картинки по фильтрам."""
         try:
             stmt = select(ProductImageDB)
             if not_deleted_in_bitrix:
