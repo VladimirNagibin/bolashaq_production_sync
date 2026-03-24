@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 
 from core.logger import logger
 from core.settings import settings
+from models.product_images_models import ProductImage as ProductImageDB
 from models.product_models import Product as ProductDB
 from schemas.enums import EntityTypeAbbr
 from schemas.product_schemas import ListProductEntity, ProductEntityCreate
@@ -374,11 +375,27 @@ class ProductClient(
                 product_id
             )
             await self.import_from_bitrix(product_id)
-            await self.image_client.import_from_bitrix(product_id)
-            success_picture = await self._transform_product_picture_fields(
+
+            # detail_picture = (
+            #     await self.image_client.repo.
+            #     get_detail_picture_by_product_id(
+            #         product_id
+            #     )
+            # )
+            # image_data = await self.image_client.bitrix_client.
+            #     file_download_service.download_file(
+            #     detail_picture.detail_url
+            # )
+            detail_picture = None
+            await self.image_client.import_from_bitrix_by_product_id(
                 product_id
             )
-            await self.image_client.import_from_bitrix(product_id)
+            success_picture = await self._transform_product_picture_fields(
+                product_id, detail_picture
+            )
+            await self.image_client.import_from_bitrix_by_product_id(
+                product_id
+            )
             success = success_field and success_picture
             if success:
                 logger.info(f"Successfully processed product ID: {product_id}")
@@ -426,10 +443,12 @@ class ProductClient(
             },
         )
 
-    async def _transform_product_picture_fields(self, product_id: int) -> bool:
+    async def _transform_product_picture_fields(
+        self, product_id: int, detail_picture: ProductImageDB | None
+    ) -> bool:
         result: bool = (
             await self.image_client.transform_product_picture_fields(
-                product_id
+                product_id, detail_picture
             )
         )
 

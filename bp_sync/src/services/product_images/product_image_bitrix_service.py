@@ -233,3 +233,22 @@ class ProductImageService:
                 f"{product_id} :{str(e)}"
             )
         return []
+
+    async def get_picture(
+        self, picture_id: int, product_id: int
+    ) -> ProductImageCreate | None:
+        try:
+            payload = {"productId": product_id, "id": picture_id}
+            response = await self.product_data_raw.call_api(
+                "catalog.productImage.get", params=payload
+            )
+            if response:
+                image = response.get("productImage")
+                if image:
+                    return ProductImageCreate(**image)
+        except Exception as e:
+            logger.error(
+                "Failed to get detail_picture from product_id "
+                f"{product_id} :{str(e)}"
+            )
+        return None
