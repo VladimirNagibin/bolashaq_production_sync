@@ -355,6 +355,10 @@ class ProductImageClient:
             if source_image.external_id not in target_index:
                 try:
                     new_image = await self.repo.create(source_image)
+                    if new_image and new_image.image_type == "DETAIL_PICTURE":
+                        await self.repo.add_image_content_from_url(
+                            new_image.id, new_image.detail_url
+                        )
                     created_images.append(new_image)
                     stats["created"] += 1
                     logger.debug(

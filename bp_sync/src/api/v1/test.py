@@ -75,7 +75,7 @@ async def check(
 
         logger.info(" --- ")
 
-        await product_image_client.transform_product_picture_fields(2350, None)
+        await product_image_client.import_from_bitrix_by_product_id(2350)
         # from schemas.enums import SourcesProductEnum
         # from schemas.product_image_schemas import ProductImageCreate
         # product_image_create = ProductImageCreate(
