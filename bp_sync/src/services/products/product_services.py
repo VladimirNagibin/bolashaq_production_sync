@@ -368,7 +368,7 @@ class ProductClient(
             if webhook_payload.event == "ONCRMPRODUCTDELETE":
                 await self.repo.set_deleted_in_bitrix(product_id)
                 image_repo = self.image_client.repo
-                await image_repo.set_delete_in_bitrix_by_product_id(product_id)
+                await image_repo.mark_all_deleted_by_product_id(product_id)
                 return self._success_response("Product is deleted in Bitrix")
             success_field = await self.bitrix_client.transform_product_fields(
                 product_id
@@ -376,7 +376,7 @@ class ProductClient(
             await self.import_from_bitrix(product_id)
 
             detail_picture = (
-                await self.image_client.repo.get_detail_picture_by_product_id(
+                await self.image_client.repo.get_detail_by_product_id(
                     product_id
                 )
             )

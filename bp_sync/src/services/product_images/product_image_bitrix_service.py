@@ -12,6 +12,9 @@ DETAIL_PICTURE = ImageType.DETAIL_PICTURE.name
 
 
 class ProductImageService:
+    """
+    Сервис для взаимодействия с API Битрикс касательно изображений товаров.
+    """
 
     def __init__(
         self,

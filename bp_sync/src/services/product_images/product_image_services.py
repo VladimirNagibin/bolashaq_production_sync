@@ -146,7 +146,7 @@ class ProductImageClient:
                 product_id
             )
             logger.debug(
-                "Retrieved {len(images)} images from Bitrix for product "
+                f"Retrieved {len(images)} images from Bitrix for product "
                 f"{product_id}"
             )
             return images
@@ -168,9 +168,9 @@ class ProductImageClient:
             list[ProductImageDB]: Список изображений из БД
         """
         try:
-            images = await self.repo.get_pictures_by_product_id(product_id)
+            images = await self.repo.get_active_by_product_id(product_id)
             logger.debug(
-                "Retrieved {len(images)} images from DB for product "
+                f"Retrieved {len(images)} images from DB for product "
                 f"{product_id}"
             )
             return images
@@ -356,9 +356,12 @@ class ProductImageClient:
                 try:
                     new_image = await self.repo.create(source_image)
                     if new_image and new_image.image_type == "DETAIL_PICTURE":
-                        await self.repo.add_image_content_from_url(
-                            new_image.id, new_image.detail_url
+                        data = await self.download_service.download_file(
+                            new_image.detail_url
                         )
+                        if not data:
+                            continue
+                        await self.repo.save_image_content(new_image.id, data)
                     created_images.append(new_image)
                     stats["created"] += 1
                     logger.debug(
@@ -427,7 +430,7 @@ class ProductImageClient:
         # await self.import_from_bitrix_by_product_id(product_id)
         # -----------------------------------TEST
 
-        pictures = await self.repo.get_pictures_by_product_id(product_id)
+        pictures = await self.repo.get_active_by_product_id(product_id)
         detail_id = None
         detail_url = None
         for picture in pictures:
@@ -525,7 +528,7 @@ class ProductImageClient:
                 }
                 image_update = ProductImageUpdate(**image_data)
                 await self.repo.update(image_update)
-            await self.repo.add_image_content(db_picture.id, picture_data)
+            await self.repo.save_image_content(db_picture.id, picture_data)
             return True
         except Exception as e:
             logger.exception(f"ERROR: {str(e)}")
