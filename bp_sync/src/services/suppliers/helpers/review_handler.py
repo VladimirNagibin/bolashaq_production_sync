@@ -1,3 +1,6 @@
+import base64
+import hashlib
+import mimetypes
 from typing import Any
 from uuid import UUID
 
@@ -43,7 +46,7 @@ class ReviewHandler:
         self.product_section_client = product_section_client
         self.transformer = DataTransformer()
 
-    def prepare_review_context(
+    async def prepare_review_context(
         self,
         supplier_product: SupplierProductDetail,
         transformed_logs: dict[str, dict[str, Any]],
@@ -63,7 +66,7 @@ class ReviewHandler:
             review_data.extend(
                 self._prepare_complex_fields(transformed_logs, product)
             )
-            review_special_data = self._prepare_special_fields(
+            review_special_data = await self._prepare_special_fields(
                 supplier_product, transformed_logs, preprocessed_data, product
             )
             return review_data, review_special_data
@@ -133,7 +136,7 @@ class ReviewHandler:
 
         return review_data
 
-    def _prepare_special_fields(
+    async def _prepare_special_fields(
         self,
         supplier_product: SupplierProductDetail,
         transformed_logs: dict[str, dict[str, Any]],
@@ -144,7 +147,7 @@ class ReviewHandler:
         review_special_data: list[dict[str, Any]] = []
         special_fields = FIELDS_SUPPLIER_PRODUCT.get("individual_fields", ())
         for field_name, _ in special_fields:
-            field_data = self._get_value_special_fields(
+            field_data = await self._get_value_special_fields(
                 field_name,
                 transformed_logs,
                 preprocessed_data,
@@ -154,7 +157,7 @@ class ReviewHandler:
             review_special_data.extend(field_data)
         return review_special_data
 
-    def _get_value_special_fields(
+    async def _get_value_special_fields(
         self,
         field_name: str,
         transformed_logs: dict[str, dict[str, Any]],
@@ -185,7 +188,7 @@ class ReviewHandler:
                 product,
             )
         elif field_name == "detail_picture":
-            return self._get_detail_picture(
+            return await self._get_detail_picture(
                 field_name,
                 transformed_logs,
                 preprocessed_data,
@@ -432,7 +435,7 @@ class ReviewHandler:
         except Exception:
             return []
 
-    def _get_detail_picture(
+    async def _get_detail_picture(
         self,
         field_name: str,
         transformed_logs: dict[str, dict[str, Any]],
@@ -441,26 +444,31 @@ class ReviewHandler:
         supplier_product: SupplierProductDetail,
     ) -> list[dict[str, Any]]:
         result: list[dict[str, Any]] = []
-        try:
+        try:  # detail_picture_process
+            field_name_process = f"{field_name}_process"
             if (
                 field_name not in transformed_logs
-                and field_name not in preprocessed_data
+                and field_name_process not in preprocessed_data
             ):
                 return result
             field_data = None
+            old_value = None
             if field_name in transformed_logs:
                 field_data = transformed_logs[field_name]
-            elif field_name in preprocessed_data:
-                field_data = preprocessed_data[field_name]
+                old_value = field_data.get("old_value")
+            elif field_name_process in preprocessed_data:
+                field_data = preprocessed_data[field_name_process]
+                old_value = supplier_product.detail_picture
             if not field_data:
                 return result
+
             result.append(
                 {
                     "field_name": field_name,
-                    "old_value": field_data.get("old_value"),
+                    "old_value": old_value,
                     "new_value": field_data.get("new_value"),
-                    "current_product_value": getattr(
-                        product, field_name, None
+                    "current_product_value": (
+                        await self._get_current_image_data(product)
                     ),
                     "value_type": "str",
                 }
@@ -468,6 +476,26 @@ class ReviewHandler:
             return result
         except Exception:
             return []
+
+    async def _get_current_image_data(
+        self, product: ProductCreate | None
+    ) -> dict[str, Any] | None:
+        try:
+            if not product or not product.external_id:
+                return None
+            image_repo = self.product_client.image_client.repo
+            current_image = await image_repo.get_detail_by_product_id(
+                int(product.external_id)
+            )
+            if not current_image:
+                return None
+            return {
+                "detail_url": current_image.detail_url,
+                "source": current_image.source,
+                "supplier_image_url": current_image.supplier_image_url,
+            }
+        except Exception:
+            return None
 
     def _get_more_photos(
         self,
@@ -505,10 +533,18 @@ class ReviewHandler:
 
             new_section_id = getattr(product_update, "section_id", None)
             # Сохраняем в CRM
-            return (
-                await self._save_to_crm(product, product_update),
-                new_section_id or section_id,
+            db_product_id, bitrix_product_id = await self._save_to_crm(
+                product, product_update
             )
+
+            await self._handle_image_fields(
+                supplier_product,
+                form_data,
+                preprocessed_data,
+                bitrix_product_id,
+            )
+
+            return (db_product_id, new_section_id or section_id)
 
         except NameNotFoundError:
             raise
@@ -623,14 +659,17 @@ class ReviewHandler:
         special_fields = FIELDS_SUPPLIER_PRODUCT.get("individual_fields", [])
         for field_name, value_type in special_fields:
             if self._should_update_field(form_data, field_name):
-                if await self._update_special_field(
-                    product_update,
-                    existing_product,
-                    field_name,
-                    value_type,
-                    form_data,
-                ):
+                if field_name == "detail_picture":
                     has_changes = True
+                else:
+                    if await self._update_special_field(
+                        product_update,
+                        existing_product,
+                        field_name,
+                        value_type,
+                        form_data,
+                    ):
+                        has_changes = True
 
         return has_changes
 
@@ -638,10 +677,16 @@ class ReviewHandler:
         self, form_data: FormData, field_name: str
     ) -> bool:
         """Проверяет, нужно ли обновлять поле."""
-        field_key = f"{self.FIELD_PREFIX}{field_name}"
-        update_key = f"{self.UPDATE_PREFIX}{field_name}"
+        if field_name == "detail_picture":
+            pic_upload_choice = form_data.get("pic_upload_choice")
+            if not pic_upload_choice:
+                return False
+            return True
+        else:
+            field_key = f"{self.FIELD_PREFIX}{field_name}"
+            update_key = f"{self.UPDATE_PREFIX}{field_name}"
 
-        return field_key in form_data and form_data.get(update_key) == "on"
+            return field_key in form_data and form_data.get(update_key) == "on"
 
     def _update_simple_field(
         self,
@@ -907,7 +952,7 @@ class ReviewHandler:
         self,
         existing_product: ProductCreate | None,
         product_update: ProductUpdate,
-    ) -> UUID | None:
+    ) -> tuple[UUID | None, int]:
         """Сохраняет продукт в CRM и возвращает локальный ID."""
         bitrix_client = self.product_client.bitrix_client
 
@@ -929,8 +974,202 @@ class ReviewHandler:
                 int(external_id)
             )
 
-            return imported.id if imported else None
+            return imported.id if imported else None, int(external_id)
 
         except Exception as e:
             logger.error(f"Failed to save to CRM: {e}", exc_info=True)
             raise
+
+    async def _handle_image_fields(
+        self,
+        supplier_product: SupplierProductDetail,
+        form_data: FormData,
+        preprocessed_data: dict[str, dict[str, Any]],
+        product_id: int,
+    ) -> None:
+        """
+        Обрабатывает переданные картинки.
+        """
+
+        try:
+            await self._handle_detail_image(
+                supplier_product,
+                form_data,
+                preprocessed_data,
+                product_id,
+            )
+            await self._handle_more_images(
+                supplier_product,
+                form_data,
+                preprocessed_data,
+                product_id,
+            )
+        except Exception as e:
+            logger.error(f"Error loading pictures: {e}")
+
+    async def _handle_detail_image(
+        self,
+        supplier_product: SupplierProductDetail,
+        form_data: FormData,
+        preprocessed_data: dict[str, dict[str, Any]],
+        product_id: int,
+    ) -> bool:
+        """
+        Обрабатывает детальную картинку.
+        """
+
+        try:
+            # --- НАЧАЛО БЛОКА ОБРАБОТКИ ДЕТАЛЬНОЙ КАРТИНКИ ---
+
+            # Получаем выбор пользователя
+            pic_upload_choice = form_data.get("pic_upload_choice")
+            if not pic_upload_choice:
+                logger.info(
+                    "Не выбран вариант изображения. "
+                    "Пропускаем обновление картинки."
+                )
+                return False
+            if pic_upload_choice in ["old", "new"]:
+                # Переменная для хранения результата, который пойдет в Битрикс
+                image_to_update = None
+
+                # Получаем значения старой и новой картинки (из скрытых полей)
+                pic_old_value = form_data.get("pic_old_value")
+                pic_new_value = form_data.get("pic_new_value")
+
+                # Получаем данные из 3-й колонки
+                pic_current_source = form_data.get("pic_current_source")
+                pic_current_supplier_url = form_data.get(
+                    "pic_current_supplier_url"
+                )
+
+                if pic_upload_choice == "old" and pic_old_value:
+                    image_to_update = pic_old_value
+                elif pic_upload_choice == "new" and pic_new_value:
+                    image_to_update = pic_new_value
+
+                if (
+                    image_to_update == pic_current_supplier_url
+                    and supplier_product.source.value == pic_current_source
+                ):
+                    return True
+
+                if image_to_update:
+                    image_client = self.product_client.image_client
+                    supplier_picture_data: dict[str, Any] = {
+                        "source": supplier_product.source,
+                        "supplier_image_url": str(image_to_update),
+                    }
+                    await image_client.create_detail_picture(
+                        product_id,
+                        str(image_to_update),
+                        supplier_picture_data,
+                    )
+                    await image_client.import_from_bitrix_by_product_id(
+                        product_id
+                    )
+                    return True
+            elif pic_upload_choice == "custom":
+                # --- ВАРИАНТ 3: Загрузка своего файла ---
+                # Получаем данные из 4-й колонки (загрузка файла)
+                raw_base64 = form_data.get("pic_custom_base64", "")
+                filename = form_data.get("pic_custom_name", "")
+
+                if raw_base64 and filename:
+                    logger.info(f"Подготовка файла к загрузке: {filename}")
+
+                    raw_base64 = str(raw_base64)
+                    filename = str(filename)
+
+                    # 1. Извлекаем content_type из заголовка Data URI
+                    # (если он есть)
+                    # Формат строки: "data:image/png;base64,iVBORw0KGgo..."
+                    content_type = "application/octet-stream"
+                    clean_base64 = raw_base64
+
+                    if "," in raw_base64:
+                        header, payload = raw_base64.split(",", 1)
+                        # Парсим заголовок "data:image/png;base64"
+                        # Разбиваем по ";" чтобы отделить mime-type от
+                        # encoding
+                        header_parts = header.split(";")
+                        if header_parts and header_parts[0].startswith(
+                            "data:"
+                        ):
+                            content_type = header_parts[0].replace("data:", "")
+
+                        # Чистый Base64 без заголовка для декодирования
+                        clean_base64 = payload
+                    else:
+                        # Если заголовка нет (строка пришла чистой),
+                        # пробуем угадать тип по имени файла
+                        guessed_type, _ = mimetypes.guess_type(filename)
+                        if guessed_type:
+                            content_type = guessed_type
+
+                    # 2. Декодируем Base64 в байты (raw_bytes)
+                    try:
+                        file_bytes = base64.b64decode(clean_base64)
+
+                        # 3. Вычисляем размер файла (file_size)
+                        total_size = len(file_bytes)
+                        if total_size > settings.MAX_FILE_SIZE:
+                            logger.error(
+                                f"File too large (header): {total_size} bytes,"
+                                f" max allowed: {settings.MAX_FILE_SIZE} bytes"
+                            )
+                            return False
+                        # 4. Вычисляем SHA256 хэш (file_hash)
+                        sha256_hash = hashlib.sha256()
+                        sha256_hash.update(file_bytes)
+
+                        # 5. Формируем итоговый словарь file_info
+                        file_info: dict[str, Any] = {
+                            "content": clean_base64,
+                            "filename": filename,
+                            "content_type": content_type,
+                            "file_size": total_size,
+                            "raw_bytes": file_bytes,
+                            "file_hash": sha256_hash.hexdigest(),
+                        }
+
+                        logger.info(
+                            f"Файл обработан. Размер: {total_size} байт, "
+                            f"Тип: {content_type}, "
+                            f"Хэш: {file_info['file_hash'][:8]}..."
+                        )
+
+                        image_client = self.product_client.image_client
+                        await image_client.create_detail_picture_from_dict(
+                            product_id, file_info
+                        )
+                        await image_client.import_from_bitrix_by_product_id(
+                            product_id
+                        )
+                        logger.info(
+                            f"Base64 получен (длина: {len(clean_base64)}), "
+                            "готов к отправке."
+                        )
+                        return True
+                    except Exception as e:
+                        logger.error(
+                            "Ошибка при декодировании Base64 или обработке "
+                            f"файла: {e}"
+                        )
+                        return False
+        except Exception as e:
+            logger.error(f"Error loading detail pictures: {e}")
+            return False
+        return True
+
+    async def _handle_more_images(
+        self,
+        supplier_product: SupplierProductDetail,
+        form_data: FormData,
+        preprocessed_data: dict[str, dict[str, Any]],
+        product_id: int,
+    ) -> bool:
+        """
+        Обрабатывает переданные картинки.
+        """
+        return True

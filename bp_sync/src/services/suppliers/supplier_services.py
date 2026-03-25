@@ -128,7 +128,7 @@ class SupplierClient:
             extra={
                 "config_key": config_key,
                 "config_name": config_name,
-                "filename": file.filename,
+                "file_name": file.filename,
                 "file_size": file.size,
             },
         )
@@ -160,7 +160,7 @@ class SupplierClient:
             logger.debug(
                 "File read successfully",
                 extra={
-                    "filename": file.filename,
+                    "file_name": file.filename,
                     "content_size": len(content),
                 },
             )
@@ -188,7 +188,7 @@ class SupplierClient:
             error_msg = f"Import error: {str(e)}"
             logger.error(
                 error_msg,
-                extra={"config_key": config_key, "filename": file.filename},
+                extra={"config_key": config_key, "file_name": file.filename},
                 exc_info=True,
             )
             raise HTTPException(
@@ -268,7 +268,7 @@ class SupplierClient:
         product: ProductCreate | None,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         """Делегирует подготовку контекста шаблона ReviewHandler."""
-        return self._review_handler.prepare_review_context(
+        return await self._review_handler.prepare_review_context(
             supplier_product, transformed_logs, preprocessed_data, product
         )
 
@@ -358,6 +358,14 @@ class SupplierClient:
             for key, value in descriptions.items():
                 setattr(supp_update, key, value)
             has_local_changes = True
+
+        detail_picture_data = preprocessed_data.get(
+            "detail_picture_process", {}
+        )
+        if detail_picture := detail_picture_data.get("new_value"):
+            if supplier_product.detail_picture != detail_picture:
+                supp_update.detail_picture = detail_picture
+                has_local_changes = True
 
         # Помечаем логи как обработанные
         change_log_repo = self.supplier_product_repo.change_log_repo

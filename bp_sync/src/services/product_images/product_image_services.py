@@ -487,7 +487,10 @@ class ProductImageClient:
         return False
 
     async def create_detail_picture(
-        self, product_id: int, detail_url: str
+        self,
+        product_id: int,
+        detail_url: str,
+        supplier_picture_data: dict[str, Any] | None = None,
     ) -> bool:
         try:
             picture_data = await self.download_service.download_file(
@@ -496,7 +499,7 @@ class ProductImageClient:
             if not picture_data:
                 return False
             return await self.create_detail_picture_from_dict(
-                product_id, picture_data
+                product_id, picture_data, supplier_picture_data
             )
         except Exception:
             return False

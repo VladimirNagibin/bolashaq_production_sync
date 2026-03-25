@@ -48,6 +48,42 @@
             word-wrap: break-word;
         }
 
+        /* --- НОВЫЕ СТИЛИ ДЛЯ КАРТИНОК --- */
+        .img-col-container {
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .img-preview-box {
+            width: 100%;
+            height: 200px; /* Фиксированная высота для выравнивания */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #e9ecef;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            overflow: hidden;
+            border: 1px dashed #ced4da;
+        }
+        .img-preview-box img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        .img-placeholder {
+            color: #6c757d;
+            font-size: 0.9em;
+            text-align: center;
+        }
+        /* --- КОНЕЦ НОВЫХ СТИЛЕЙ --- */
+
         /* Анимация переключения */
         #visual-editor-container,
         #html-editor-container,
@@ -255,6 +291,7 @@
                         </tr>
                         {% endfor %}
                         {% for item in review_complex_data %}
+                        {% if item.field_name in ['brend', 'characteristics', 'complects', 'internal_section_id', 'supplier_category', 'supplier_subcategory'] %}
                         <tr>
                             <td><strong>{{ field_labels.get(item.field_name, item.field_name) }}</strong></td>
                                 {% if item.field_name in ['characteristics', 'complects'] %}
@@ -393,7 +430,7 @@
                                 {#>#}
                                 {% endif %}
                                 {# <small class="text-muted d-block mt-1">Принять или изменить</small> #}
-                                {% if item.field_name not in ['supplier_category', 'supplier_subcategory'] %}
+                                {% if item.field_name in ['brend', 'characteristics', 'complects', 'internal_section_id'] %}
                                     <!-- --- ДОБАВЛЕННЫЙ БЛОК С ГАЛКОЙ --- -->
                                     <!-- Скрывается, если should_export_to_crm == False -->
                                     <div class="form-check mt-2 update-field-row"
@@ -410,6 +447,7 @@
                                 {% endif %}
                             </td>
                         </tr>
+                        {% endif %}
                         {% endfor %}
                     </tbody>
                 </table>
@@ -419,6 +457,16 @@
 
         </div>
         <!-- --- НОВЫЙ БЛОК: СРАВНЕНИЕ ОПИСАНИЙ --- -->
+
+        <!-- --- ПРОВЕРКА НАЛИЧИЯ ДАННЫХ ДЛЯ РЕДАКТОРА --- -->
+        {% set ns = namespace(has_data=false) %}
+        {% for item in review_complex_data %}
+            {% if item.field_name in ['description', 'preview_for_offer', 'description_for_offer'] %}
+                {% set ns.has_data = true %}
+            {% endif %}
+        {% endfor %}
+        <!-- --- КОНЕЦ ПРОВЕРКИ --- -->
+        {% if ns.has_data %}
         <div class="card mb-4">
             <div class="card-header bg-info text-white">
                 <strong>Сравнение и редактирование описаний</strong>
@@ -519,6 +567,7 @@
                 <hr>
 
                 <!-- 4. ИТОГОВОЕ РЕДАКТИРУЕМОЕ ПОЛЕ -->
+
                 <div class="mb-2">
                     <label class="form-label fw-bold">
                         Итоговое описание для предложений (Редактируемое)
@@ -598,10 +647,142 @@
                         Обновить это поле в CRM (Описание предложения)
                     </label>
                 </div>
-
             </div>
         </div>
+        {% endif %}
         <!-- --- КОНЕЦ НОВОГО БЛОКА --- -->
+
+        <!-- --- НОВЫЙ БЛОК: ОБРАБОТКА ДЕТАЛЬНОЙ КАРТИНКИ --- -->
+        <!-- Ищем данные в review_complex_data -->
+        {% for item in review_complex_data %}
+            {% if item.field_name == 'detail_picture' %}
+
+            <!-- Скрытые поля для Старого и Нового значения, чтобы передать их на бэкенд -->
+            <input type="hidden" name="pic_old_value" value="{{ item.old_value or '' }}">
+            <input type="hidden" name="pic_new_value" value="{{ item.new_value or '' }}">
+
+        <div class="card mb-4 border-info">
+            <div class="card-header bg-info text-white">
+                <strong>Обработка детальной картинки</strong>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+
+                    <!-- 1. Старое значение -->
+                    <div class="col-md-3">
+                        <div class="img-col-container">
+                            <label class="fw-bold mb-2 text-center w-100">Старое значение</label>
+                            <div class="img-preview-box">
+                                {% if item.old_value %}
+                                    <img src="{{ item.old_value }}" alt="Old Image">
+                                {% else %}
+                                    <span class="img-placeholder">Нет изображения</span>
+                                {% endif %}
+                            </div>
+                            <div class="mt-auto w-100">
+                                <div class="form-check text-center">
+                                    <input class="form-check-input pic-upload-check" type="checkbox"
+                                           id="pic_check_old" name="pic_upload_choice" value="old">
+                                    <label class="form-check-label" for="pic_check_old">
+                                        Загрузить в Битрикс24
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. Новое значение (По умолчанию активно) -->
+                    <div class="col-md-3">
+                        <div class="img-col-container" style="background-color: #e8f0fe; border-color: #0d6efd;">
+                            <label class="fw-bold mb-2 text-center w-100 text-primary">Новое значение</label>
+                            <div class="img-preview-box">
+                                {% if item.new_value %}
+                                    <img src="{{ item.new_value }}" alt="New Image">
+                                {% else %}
+                                    <span class="img-placeholder">Нет изображения</span>
+                                {% endif %}
+                            </div>
+                            <div class="mt-auto w-100">
+                                <div class="form-check text-center">
+                                    <input class="form-check-input pic-upload-check" type="checkbox"
+                                           id="pic_check_new" name="pic_upload_choice" value="new" checked>
+                                    <label class="form-check-label fw-bold text-primary" for="pic_check_new">
+                                        Загрузить в Битрикс24
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. Текущее значение в Битрикс + Скрытые поля -->
+                    <div class="col-md-3">
+                        <div class="img-col-container">
+                            <label class="fw-bold mb-2 text-center w-100">Текущее в Битрикс24</label>
+                            <div class="img-preview-box">
+                                {% set current_pic = item.current_product_value %}
+                                {% if current_pic and current_pic.detail_url %}
+                                    <img src="{{ current_pic.detail_url }}" alt="Current Bitrix Image">
+                                {% else %}
+                                    <span class="img-placeholder">Нет изображения</span>
+                                {% endif %}
+                            </div>
+
+                            <!-- Скрытые поля для передачи контекста на бэкенд -->
+                            {% if current_pic %}
+                                <input type="hidden" name="pic_current_source" value="{{ current_pic.source }}">
+                                <input type="hidden" name="pic_current_supplier_url" value="{{ current_pic.supplier_image_url }}">
+                            {% else %}
+                                <input type="hidden" name="pic_current_source" value="">
+                                <input type="hidden" name="pic_current_supplier_url" value="">
+                            {% endif %}
+
+                            <div class="text-center mt-2">
+                                <small class="text-muted">Справочные данные</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 4. Загрузка своего файла -->
+                    <div class="col-md-3">
+                        <div class="img-col-container">
+                            <label class="fw-bold mb-2 text-center w-100">Загрузить новый файл</label>
+
+                            <div class="img-preview-box d-flex flex-column">
+                                <img id="preview_custom_img" src="" alt="" style="display:none; max-width:100%; max-height:100%;">
+                                <span id="preview_custom_placeholder" class="img-placeholder">
+                                    Файл не выбран
+                                </span>
+                            </div>
+
+                            <div class="w-100 mb-2">
+                                <input class="form-control form-control-sm" type="file" id="pic_custom_file" accept="image/*">
+                            </div>
+
+                            <!-- Скрытые поля для Base64 данных -->
+                            <input type="hidden" id="pic_custom_base64" name="pic_custom_base64">
+                            <input type="hidden" id="pic_custom_name" name="pic_custom_name">
+
+                            <div class="mt-auto w-100">
+                                <div class="form-check text-center">
+                                    <input class="form-check-input pic-upload-check" type="checkbox"
+                                           id="pic_check_custom" name="pic_upload_choice" value="custom">
+                                    <label class="form-check-label" for="pic_check_custom">
+                                        Загрузить в Битрикс24
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+                <div class="form-text text-center mt-2">
+                    Выберите одно из трех действий. По умолчанию выбрано "Новое значение".
+                </div>
+            </div>
+        </div>
+            {% endif %}
+        {% endfor %}
+        <!-- --- КОНЕЦ БЛОКА КАРТИНКИ --- -->
 
         <div class="card-footer text-end">
             <button type="submit" class="btn btn-success btn-lg">Подтвердить изменения</button>
@@ -920,6 +1101,71 @@
 
     <script>
         document.addEventListener("DOMContentLoaded", function() {
+            // --- ЛОГИКА КАРТИНОК ---
+
+            // 1. Обработка взаимного исключения чекбоксов
+            const picCheckboxes = document.querySelectorAll('.pic-upload-check');
+
+            picCheckboxes.forEach(chk => {
+                chk.addEventListener('change', function() {
+                    if (this.checked) {
+                        picCheckboxes.forEach(other => {
+                            if (other !== this) {
+                                other.checked = false;
+                            }
+                        });
+                    }
+                });
+            });
+
+            // 2. Обработка выбора файла и конвертация в Base64
+            const fileInput = document.getElementById('pic_custom_file');
+            const base64Input = document.getElementById('pic_custom_base64');
+            const nameInput = document.getElementById('pic_custom_name');
+            const previewImg = document.getElementById('preview_custom_img');
+            const previewPlaceholder = document.getElementById('preview_custom_placeholder');
+            const customCheckbox = document.getElementById('pic_check_custom');
+
+            if (fileInput) {
+                fileInput.addEventListener('change', function(e) {
+                    const file = e.target.files[0];
+                    if (file) {
+                        // Конвертация в Base64
+                        const reader = new FileReader();
+                        reader.onload = function(evt) {
+                            base64Input.value = evt.target.result;
+                            nameInput.value = file.name;
+
+                            // Показываем превью
+                            previewImg.src = evt.target.result;
+                            previewImg.style.display = 'block';
+                            previewPlaceholder.style.display = 'none';
+
+                            // Автоматически выбираем этот чекбокс при выборе файла
+                            // (Опционально, но логично: если файл выбран, значит пользователь хочет его загрузить)
+                            picCheckboxes.forEach(c => c.checked = false);
+                            customCheckbox.checked = true;
+                        };
+                        reader.readAsDataURL(file);
+                    } else {
+                        // Сброс если файл убран
+                        base64Input.value = '';
+                        nameInput.value = '';
+                        previewImg.style.display = 'none';
+                        previewPlaceholder.style.display = 'inline';
+
+                        // Возвращаем выбор на "Новое значение" по умолчанию, если кастомный был выбран
+                        if (customCheckbox.checked) {
+                            customCheckbox.checked = false;
+                            const newChk = document.getElementById('pic_check_new');
+                            if(newChk) newChk.checked = true;
+                        }
+                    }
+                });
+            }
+
+            // --- ОБЩАЯ ЛОГИКА ФОРМЫ ---
+
             // Находим главный переключатель
             const masterToggle = document.getElementById('should_export_to_crm');
             // Находим все строки с галочками обновления
