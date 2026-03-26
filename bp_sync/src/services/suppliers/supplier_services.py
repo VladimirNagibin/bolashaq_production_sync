@@ -367,6 +367,13 @@ class SupplierClient:
                 supp_update.detail_picture = detail_picture
                 has_local_changes = True
 
+        more_photo_data = preprocessed_data.get("more_photo_process", {})
+        if more_photos := more_photo_data.get("new_value"):
+            more_photos_str = ";".join(more_photos)
+            if supplier_product.more_photo_process != more_photos_str:
+                supp_update.more_photo_process = more_photos_str
+                has_local_changes = True
+
         # Помечаем логи как обработанные
         change_log_repo = self.supplier_product_repo.change_log_repo
         await change_log_repo.mark_change_logs_as_processed(

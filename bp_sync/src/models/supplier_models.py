@@ -216,6 +216,10 @@ class SupplierProduct(Base):  # type: ignore[misc]
         Text, comment="Описание для предложения"
     )
 
+    more_photo_process: Mapped[str | None] = mapped_column(
+        Text, comment="Обработанные доп картинки"
+    )
+
     # Связь с характеристиками
     characteristics: Mapped[list["SupplierCharacteristic"]] = relationship(
         "SupplierCharacteristic",

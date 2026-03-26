@@ -172,7 +172,7 @@
 
     <form method="post" action="/api/v1/suppliers/review/{{ supplier_product.id }}">
 
-        <!-- --- НОВАЯ КАРТОЧКА: УПРАВЛЕНИЕ СТАТУСАМИ --- -->
+        <!-- --- УПРАВЛЕНИЕ СТАТУСАМИ --- -->
         <div class="card mb-4 border-primary">
             <div class="card-header bg-light">
                 <strong>Управление статусами товара</strong>
@@ -281,7 +281,7 @@
                                     <input class="form-check-input" type="checkbox"
                                            name="update_{{ item.field_name }}"
                                            id="update_{{ item.field_name }}"
-                                           {% if supplier_product.should_export_to_crm %}checked{% endif %}>
+                                           {% if supplier_product.should_export_to_crm and item.new_value is not none %}checked{% endif %}>
                                     <label class="form-check-label small text-primary fw-bold" for="update_{{ item.field_name }}">
                                         Обновить это поле в CRM
                                     </label>
@@ -438,7 +438,7 @@
                                         <input class="form-check-input" type="checkbox"
                                             name="update_{{ item.field_name }}"
                                             id="update_{{ item.field_name }}"
-                                            {% if supplier_product.should_export_to_crm %}checked{% endif %}>
+                                            {% if supplier_product.should_export_to_crm  and item.new_value is not none %}checked{% endif %}>
                                         <label class="form-check-label small text-primary fw-bold" for="update_{{ item.field_name }}">
                                             Обновить это поле в CRM
                                         </label>
@@ -456,8 +456,8 @@
             </div>
 
         </div>
-        <!-- --- НОВЫЙ БЛОК: СРАВНЕНИЕ ОПИСАНИЙ --- -->
 
+        <!-- --- НОВЫЙ БЛОК: СРАВНЕНИЕ ОПИСАНИЙ --- -->
         <!-- --- ПРОВЕРКА НАЛИЧИЯ ДАННЫХ ДЛЯ РЕДАКТОРА --- -->
         {% set ns = namespace(has_data=false) %}
         {% for item in review_complex_data %}
@@ -652,9 +652,10 @@
         {% endif %}
         <!-- --- КОНЕЦ НОВОГО БЛОКА --- -->
 
-        <!-- --- НОВЫЙ БЛОК: ОБРАБОТКА ДЕТАЛЬНОЙ КАРТИНКИ --- -->
+
         <!-- Ищем данные в review_complex_data -->
         {% for item in review_complex_data %}
+            <!-- --- НОВЫЙ БЛОК: ОБРАБОТКА ДЕТАЛЬНОЙ КАРТИНКИ --- -->
             {% if item.field_name == 'detail_picture' %}
 
             <!-- Скрытые поля для Старого и Нового значения, чтобы передать их на бэкенд -->
@@ -776,15 +777,162 @@
 
                 </div>
                 <div class="form-text text-center mt-2">
-                    Выберите одно из трех действий. По умолчанию выбрано "Новое значение".
+                    Выберите одно из трех изображений либо уберите все галки. По умолчанию выбрано "Новое значение".
+                </div>
+            </div>
+        </div>
+            {% endif %}
+        <!-- --- КОНЕЦ БЛОКА КАРТИНКИ --- -->
+
+        <!-- --- НОВЫЙ БЛОК: ОБРАБОТКА ГАЛЕРЕИ (MORE_PICTURES) --- -->
+            {% if item.field_name == 'more_photos' %}
+            <input type="hidden" name="gallery_block_active" value="1">
+        <div class="card mb-4 border-warning">
+            <div class="card-header bg-warning text-dark">
+                <strong>Обработка галереи изображений (More Pictures)</strong>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+
+                    <!-- 1. Старые значения (Old Value) -->
+                    <div class="col-md-3">
+                        <div class="img-col-container h-100">
+                            <label class="fw-bold mb-2 text-center w-100">Старые значения</label>
+                            <div class="w-100" style="max-height: 350px; overflow-y: auto;">
+                                {% if item.old_value %}
+                                    {% for url in item.old_value %}
+                                        <div class="mb-2 p-1 border rounded bg-white">
+                                            <div class="img-preview-box mb-1" style="height: 100px;">
+                                                <img src="{{ url }}" alt="Old Pic">
+                                            </div>
+                                            <div class="form-check text-center">
+                                                <input class="form-check-input" type="checkbox"
+                                                       name="more_pics_old_urls"
+                                                       value="{{ url }}"
+                                                       id="more_old_{{ loop.index }}">
+                                                <label class="form-check-label small" for="more_old_{{ loop.index }}">
+                                                    Загрузить
+                                                </label>
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <div class="text-center text-muted small p-2">Нет старых картинок</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. Новые значения (New Value) -->
+                    <div class="col-md-3">
+                        <div class="img-col-container h-100" style="background-color: #fff3cd; border-color: #ffc107;">
+                            <label class="fw-bold mb-2 text-center w-100 text-warning">Новые значения</label>
+                            <div class="w-100" style="max-height: 350px; overflow-y: auto;">
+                                {% if item.new_value %}
+                                    {% for url in item.new_value %}
+                                        <div class="mb-2 p-1 border rounded bg-white border-warning">
+                                            <div class="img-preview-box mb-1" style="height: 100px;">
+                                                <img src="{{ url }}" alt="New Pic">
+                                            </div>
+                                            <div class="form-check text-center">
+                                                <input class="form-check-input" type="checkbox"
+                                                       name="more_pics_new_urls"
+                                                       value="{{ url }}"
+                                                       id="more_new_{{ loop.index }}" checked>
+                                                <label class="form-check-label small fw-bold" for="more_new_{{ loop.index }}">
+                                                    Загрузить
+                                                </label>
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <div class="text-center text-muted small p-2">Нет новых картинок</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. Текущее в Битрикс (Current Bitrix) -->
+                    <div class="col-md-3">
+                        <div class="img-col-container h-100">
+                            <label class="fw-bold mb-2 text-center w-100">Текущие в Битрикс24</label>
+                            <div class="w-100" style="max-height: 350px; overflow-y: auto;">
+                                {% set current_pics = item.current_product_value %}
+                                {% if current_pics %}
+                                    {% for img in current_pics %}
+                                        <div class="mb-2 p-1 border rounded bg-white">
+                                            <div class="img-preview-box mb-1" style="height: 100px;">
+                                                <img src="{{ img.detail_url }}" alt="Bitrix Pic">
+                                            </div>
+
+                                            <!-- Скрытые поля для передачи данных на бэкенд -->
+                                            <input type="hidden" name="curr_img_{{ img.image_id }}_source" value="{{ img.source }}">
+                                            <input type="hidden" name="curr_img_{{ img.image_id }}_supplier_url" value="{{ img.supplier_image_url }}">
+
+                                            <div class="form-check text-center">
+                                                <input class="form-check-input" type="checkbox"
+                                                       name="more_pics_current_ids"
+                                                       value="{{ img.image_id }}"
+                                                       id="more_curr_{{ img.image_id }}" checked>
+                                                <label class="form-check-label small text-info" for="more_curr_{{ img.image_id }}">
+                                                    Оставить (ID: {{ img.image_id }})
+                                                </label>
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <div class="text-center text-muted small p-2">Нет загруженных</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 4. Загрузка своего файла -->
+                    <div class="col-md-3">
+                        <div class="img-col-container h-100">
+                            <label class="fw-bold mb-2 text-center w-100">Загрузить файл</label>
+
+                            <div class="img-preview-box mb-2 d-flex flex-column justify-content-center" style="height: 150px;">
+                                <img id="preview_more_custom_img" src="" alt="" style="display:none; max-width:100%; max-height:100%;">
+                                <span id="preview_more_custom_placeholder" class="img-placeholder">
+                                    Файл не выбран
+                                </span>
+                            </div>
+
+                            <div class="w-100 mb-2">
+                                <input class="form-control form-control-sm" type="file"
+                                       id="more_pics_custom_file" accept="image/*">
+                            </div>
+
+                            <!-- Скрытые поля для Base64 -->
+                            <input type="hidden" id="more_pics_custom_base64" name="more_pics_custom_base64">
+                            <input type="hidden" id="more_pics_custom_name" name="more_pics_custom_name">
+
+                            <div class="mt-auto w-100">
+                                <div class="form-check text-center">
+                                    <input class="form-check-input" type="checkbox"
+                                           id="more_pics_custom_check" name="more_pics_custom_check" value="1">
+                                    <label class="form-check-label" for="more_pics_custom_check">
+                                        Загрузить в Битрикс24
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+                <div class="form-text text-center mt-3">
+                    Логика: Удаляются снятые галочки из "Текущих". Добавляются отмеченные из "Старых", "Новых" и "Свой файл".
                 </div>
             </div>
         </div>
             {% endif %}
         {% endfor %}
-        <!-- --- КОНЕЦ БЛОКА КАРТИНКИ --- -->
+        <!-- --- КОНЕЦ БЛОКА ГАЛЕРЕИ --- -->
 
-        <div class="card-footer text-end">
+        {# % endfor % #}
+
+        <div class="card-footer text-end mb-2">
             <button type="submit" class="btn btn-success btn-lg">Подтвердить изменения</button>
         </div>
     </form>
@@ -1160,6 +1308,44 @@
                             const newChk = document.getElementById('pic_check_new');
                             if(newChk) newChk.checked = true;
                         }
+                    }
+                });
+            }
+
+            // --- ЛОГИКА ДЛЯ MORE PICTURES (ГАЛЕРЕЯ) ---
+
+            const morePicsFileInput = document.getElementById('more_pics_custom_file');
+            const morePicsBase64Input = document.getElementById('more_pics_custom_base64');
+            const morePicsNameInput = document.getElementById('more_pics_custom_name');
+            const morePicsPreviewImg = document.getElementById('preview_more_custom_img');
+            const morePicsPlaceholder = document.getElementById('preview_more_custom_placeholder');
+            const morePicsCheckbox = document.getElementById('more_pics_custom_check');
+
+            if (morePicsFileInput) {
+                morePicsFileInput.addEventListener('change', function(e) {
+                    const file = e.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = function(evt) {
+                            morePicsBase64Input.value = evt.target.result;
+                            morePicsNameInput.value = file.name;
+
+                            // Превью
+                            morePicsPreviewImg.src = evt.target.result;
+                            morePicsPreviewImg.style.display = 'block';
+                            morePicsPlaceholder.style.display = 'none';
+
+                            // Автоматически ставим галку загрузки при выборе файла
+                            morePicsCheckbox.checked = true;
+                        };
+                        reader.readAsDataURL(file);
+                    } else {
+                        // Сброс
+                        morePicsBase64Input.value = '';
+                        morePicsNameInput.value = '';
+                        morePicsPreviewImg.style.display = 'none';
+                        morePicsPlaceholder.style.display = 'inline';
+                        morePicsCheckbox.checked = false;
                     }
                 });
             }

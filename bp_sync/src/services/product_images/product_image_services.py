@@ -3,6 +3,7 @@ from typing import Any
 
 from core.logger import logger
 from models.product_images_models import ProductImage as ProductImageDB
+from schemas.enums import ImageType
 from schemas.product_image_schemas import (
     ProductImageCreate,
     ProductImageUpdate,
@@ -423,12 +424,6 @@ class ProductImageClient:
     async def transform_product_picture_fields(
         self, product_id: int, detail_picture: ProductImageDB | None
     ) -> bool:
-        # -----------------------------------TEST
-        # detail_picture = await self.repo.get_detail_picture_by_product_id(
-        #     product_id
-        # )
-        # await self.import_from_bitrix_by_product_id(product_id)
-        # -----------------------------------TEST
 
         pictures = await self.repo.get_active_by_product_id(product_id)
         detail_id = None
@@ -465,31 +460,30 @@ class ProductImageClient:
                     "supplier_image_url": detail_picture.supplier_image_url,
                 }
 
-            result = await self.create_detail_picture_from_dict(
-                product_id, picture_data, supplier_picture_data
+            result = await self.create_product_picture_from_dict(
+                product_id,
+                picture_data,
+                ImageType.DETAIL_PICTURE,
+                supplier_picture_data,
             )
 
-            # ------------------------------------TEST
-            # await self.import_from_bitrix_by_product_id(product_id)
-            # ------------------------------------TEST
             return True
         if detail_id and detail_url:
-
-            result = await self.create_detail_picture(product_id, detail_url)
+            result = await self.create_product_picture_from_url(
+                product_id, detail_url, ImageType.DETAIL_PICTURE
+            )
             if result:
                 await self.bitrix_client.delete_picture_by_id(
                     product_id, detail_id
                 )
-            # ------------------------------------TEST
-            # await self.import_from_bitrix_by_product_id(product_id)
-            # ------------------------------------TEST
             return True
         return False
 
-    async def create_detail_picture(
+    async def create_product_picture_from_url(
         self,
         product_id: int,
         detail_url: str,
+        image_type: ImageType,
         supplier_picture_data: dict[str, Any] | None = None,
     ) -> bool:
         try:
@@ -498,23 +492,27 @@ class ProductImageClient:
             )
             if not picture_data:
                 return False
-            return await self.create_detail_picture_from_dict(
-                product_id, picture_data, supplier_picture_data
+            return await self.create_product_picture_from_dict(
+                product_id,
+                picture_data,
+                image_type,
+                supplier_picture_data,
             )
         except Exception:
             return False
 
-    async def create_detail_picture_from_dict(
+    async def create_product_picture_from_dict(
         self,
         product_id: int,
         picture_data: dict[str, Any],
+        image_type: ImageType,
         supplier_picture_data: dict[str, Any] | None = None,
     ) -> bool:
         try:
             if not picture_data:
                 return False
             bitrix_picture = await self.bitrix_client.create_product_picture(
-                product_id, picture_data, "DETAIL_PICTURE"
+                product_id, picture_data, image_type.name
             )
             if not bitrix_picture:
                 return False

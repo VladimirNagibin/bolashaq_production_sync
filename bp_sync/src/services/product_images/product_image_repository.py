@@ -168,6 +168,7 @@ class ProductImageRepository(
         not_deleted_in_bitrix: bool = True,
         image_type: str | None = None,
         source: SourcesProductEnum | None = None,
+        product_id: int | None = None,
     ) -> list[ProductImageDB]:
         """Получает картинки по фильтрам."""
         try:
@@ -180,6 +181,8 @@ class ProductImageRepository(
                 stmt = stmt.where(ProductImageDB.image_type == image_type)
             if source:
                 stmt = stmt.where(ProductImageDB.source == source)
+            if product_id:
+                stmt = stmt.where(ProductImageDB.product_id == product_id)
 
             result = await self.session.execute(stmt)
             return result.scalars().all()  # type: ignore[no-any-return]
@@ -191,6 +194,8 @@ class ProductImageRepository(
                 filters.append(f"type: {image_type}")
             if source:
                 filters.append(f"source: {source}")
+            if product_id:
+                filters.append(f"product_id: {product_id}")
 
             logger.error(
                 "Failed to get images by filters "

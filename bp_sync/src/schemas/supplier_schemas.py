@@ -121,6 +121,8 @@ class SupplierProductBase(BaseFields):
     preview_for_offer: str | None = None
     description_for_offer: str | None = None
 
+    more_photo_process: str | None = None
+
 
 class SupplierProductCreate(SupplierProductBase):
     """Создание товара поставщика."""
