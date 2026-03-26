@@ -157,7 +157,6 @@ async def review_product(
                 "Для заведения нового товара в Битрикс необходимо, "
                 "чтобы было заполнено поле Name."
             )
-
         return templates.TemplateResponse(
             "edit.html",
             {

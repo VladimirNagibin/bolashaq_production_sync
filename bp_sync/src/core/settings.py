@@ -85,6 +85,8 @@ class Settings(BaseSettings):  # type: ignore
     DEFAULT_TAX_RATE_ID: int = 3
     DEFAULT_MEASURE: int = 9
 
+    MAX_FILE_SIZE: int = 20 * 1024 * 1024  # 20 МБ
+
     @property
     def dsn(self) -> str:
         return (

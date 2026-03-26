@@ -9,10 +9,9 @@ import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from core.logger import logger
+from core.settings import settings
 
 from .exceptions import FileDownloadError
-
-MAX_FILE_SIZE: int = 20 * 1024 * 1024  # 20 МБ
 
 
 class FileDownloadService:
@@ -56,10 +55,13 @@ class FileDownloadService:
 
                 # 1. Проверяем Content-Length, если он есть
                 content_length = response.headers.get("content-length")
-                if content_length and int(content_length) > MAX_FILE_SIZE:
+                if (
+                    content_length
+                    and int(content_length) > settings.MAX_FILE_SIZE
+                ):
                     logger.error(
                         f"File too large (header): {content_length} bytes, "
-                        f"max allowed: {MAX_FILE_SIZE} bytes"
+                        f"max allowed: {settings.MAX_FILE_SIZE} bytes"
                     )
                     return None
 
@@ -71,11 +73,11 @@ class FileDownloadService:
                 async for chunk in response.aiter_bytes(chunk_size=8192):
                     total_size += len(chunk)
 
-                    if total_size > MAX_FILE_SIZE:
+                    if total_size > settings.MAX_FILE_SIZE:
                         logger.error(
                             "File too large (downloaded): "
                             f"{total_size} bytes, "
-                            f"max allowed: {MAX_FILE_SIZE} bytes"
+                            f"max allowed: {settings.MAX_FILE_SIZE} bytes"
                         )
                         return None
 

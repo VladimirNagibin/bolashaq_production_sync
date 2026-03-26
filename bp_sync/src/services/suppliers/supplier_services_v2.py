@@ -18,9 +18,13 @@ from schemas.supplier_schemas import (
     SupplierProductUpdate,
 )
 from services.products.product_services import ProductClient
+from services.productsections.productsection_services import (
+    ProductsectionClient,
+)
 
 from ..open_ai_services import OpenAIService
 from .file_import_service import FileImportService
+from .helpers.category_cache import CategoryCacheService
 from .helpers.data_transformer import DataTransformer
 from .helpers.preprocessor import SupplierDataPreprocessor
 from .helpers.review_handler import ReviewHandler
@@ -41,25 +45,44 @@ class SupplierClient:
         file_import_service: FileImportService,
         redis_client: Redis,
         product_client: ProductClient,
+        product_section_client: ProductsectionClient,
     ) -> None:
         self.import_config_repo = import_config_repo
         self.supplier_product_repo = supplier_product_repo
         self.file_import_service = file_import_service
+        self.product_section_client = product_section_client
+        self._category_cache = CategoryCacheService(
+            redis_client=redis_client,
+            supplier_product_repo=supplier_product_repo,
+        )
 
         # Инициализация помощников
-        self._init_helpers(redis_client, product_client)
+        self._init_helpers(
+            redis_client,
+            product_client,
+            product_section_client,
+            self._category_cache,
+        )
 
         logger.debug("SupplierClient initialized")
 
     def _init_helpers(
-        self, redis_client: Redis, product_client: ProductClient
+        self,
+        redis_client: Redis,
+        product_client: ProductClient,
+        product_section_client: ProductsectionClient,
+        category_cache: CategoryCacheService,
     ) -> None:
         """Инициализирует вспомогательные сервисы."""
         self.transformer = DataTransformer()
         self.preprocessor = SupplierDataPreprocessor(
-            openai_service=OpenAIService(), redis_client=redis_client
+            openai_service=OpenAIService(),
+            redis_client=redis_client,
+            category_cache=category_cache,
         )
-        self.review_handler = ReviewHandler(product_client)
+        self.review_handler = ReviewHandler(
+            product_client, product_section_client
+        )
 
     async def get_supplier_config(
         self, source: SourcesProductEnum, config_name: Optional[str] = None
@@ -217,7 +240,9 @@ class SupplierClient:
         change_logs = await self._get_change_logs(supplier_product_id)
 
         # Трансформируем логи
-        transformed_logs = self.transformer.transform_change_logs(change_logs)
+        transformed_logs = self.transformer.transform_change_logs(
+            change_logs, supplier_product.name
+        )
 
         # Предобрабатываем данные
         preprocessed_data = await self.preprocessor.process(
@@ -271,7 +296,7 @@ class SupplierClient:
         product: Any,
     ) -> Tuple[list[Dict[str, Any]], list[Dict[str, Any]]]:
         """Делегирует подготовку контекста шаблона ReviewHandler."""
-        return self.review_handler.prepare_review_context(
+        return await self.review_handler.prepare_review_context(
             supplier_product, transformed_logs, preprocessed_data, product
         )
 

@@ -8,8 +8,6 @@ from schemas.product_image_schemas import ProductImageCreate
 from ..file_download_service import FileDownloadService
 from ..products.product_data_raw import ProductRawDataService
 
-DETAIL_PICTURE = ImageType.DETAIL_PICTURE.name
-
 
 class ProductImageService:
     """
@@ -25,6 +23,100 @@ class ProductImageService:
         self.file_download_service = (
             file_download_service or FileDownloadService()
         )
+
+    async def create_product_picture(
+        self,
+        product_id: int,
+        image_data: dict[str, Any],
+        image_type: str,
+    ) -> ProductImageCreate | None:
+        """Установка картинки"""
+        try:
+            # Формируем данные для загрузки
+            picture_data: dict[str, Any] = {
+                "fields": {
+                    "productId": product_id,
+                    "type": image_type,
+                },
+                "fileContent": [image_data["filename"], image_data["content"]],
+            }
+
+            logger.info(f"Creating image for product {product_id}")
+            result = await self.product_data_raw.call_api(
+                "catalog.productImage.add", picture_data
+            )
+            if not result:
+                return None
+            if product_image := result.get("productImage"):
+                return ProductImageCreate(**product_image)
+            return None
+        except Exception as e:
+            logger.error(
+                "Fail to set picture to product_id: "
+                f"{product_id}, type: {image_type} :{str(e)}"
+            )
+            return None
+
+    async def get_picture(
+        self, picture_id: int, product_id: int
+    ) -> ProductImageCreate | None:
+        try:
+            payload = {"productId": product_id, "id": picture_id}
+            response = await self.product_data_raw.call_api(
+                "catalog.productImage.get", params=payload
+            )
+            if response:
+                image = response.get("productImage")
+                if image:
+                    return ProductImageCreate(**image)
+        except Exception as e:
+            logger.error(
+                "Failed to get detail_picture from product_id "
+                f"{product_id} :{str(e)}"
+            )
+        return None
+
+    async def get_pictures_by_product_id(
+        self, product_id: int
+    ) -> list[ProductImageCreate]:
+        try:
+            payload = {"productId": product_id}
+            response = await self.product_data_raw.call_api(
+                "catalog.productImage.list", params=payload
+            )
+            if response:
+                images = response.get("productImages", [])
+                return [ProductImageCreate(**image) for image in images]
+        except Exception as e:
+            logger.error(
+                "Failed to get detail_picture from product_id "
+                f"{product_id} :{str(e)}"
+            )
+        return []
+
+    async def delete_picture_by_id(
+        self, product_id: int, picture_id: int
+    ) -> bool:
+        """Удаление картинки"""
+        try:
+            payload = {"productId": product_id, "id": picture_id}
+            response = await self.product_data_raw.call_api(
+                "catalog.productImage.delete", params=payload
+            )
+            if response:
+                logger.info(
+                    f"Successfully deleted image {picture_id} "
+                    f"from product {product_id}"
+                )
+                return True
+            else:
+                return False
+        except Exception as e:
+            logger.error(
+                "Failed to delete detail_picture fron product_id "
+                f"{product_id} :{str(e)}"
+            )
+            return False
 
     async def set_detail_picture(
         self,
@@ -65,7 +157,7 @@ class ProductImageService:
 
             # Формируем данные для загрузки
             picture_update_data = {
-                DETAIL_PICTURE: {
+                ImageType.DETAIL_PICTURE.name: {
                     "fileData": [image_data["filename"], image_data["content"]]
                 }
             }
@@ -124,30 +216,6 @@ class ProductImageService:
                 f"{product_id} :{str(e)}"
             )
             return None
-
-    async def delete_picture_by_id(
-        self, product_id: int, picture_id: int
-    ) -> bool:
-        """Удаление детальной картинки"""
-        try:
-            payload = {"productId": product_id, "id": picture_id}
-            response = await self.product_data_raw.call_api(
-                "catalog.productImage.delete", params=payload
-            )
-            if response:
-                logger.info(
-                    f"Successfully deleted image {picture_id} "
-                    f"from product {product_id}"
-                )
-                return True
-            else:
-                return False
-        except Exception as e:
-            logger.error(
-                "Failed to delete detail_picture fron product_id "
-                f"{product_id} :{str(e)}"
-            )
-            return False
 
     async def add_to_gallery(
         self, product_id: int, picture_url: str
@@ -218,73 +286,3 @@ class ProductImageService:
             f"fields%5BfileId%5D={image_id}&"
             f"fields%5BproductId%5D={product_id}"
         )
-
-    async def get_pictures_by_product_id(
-        self, product_id: int
-    ) -> list[ProductImageCreate]:
-        try:
-            payload = {"productId": product_id}
-            response = await self.product_data_raw.call_api(
-                "catalog.productImage.list", params=payload
-            )
-            if response:
-                images = response.get("productImages", [])
-                return [ProductImageCreate(**image) for image in images]
-        except Exception as e:
-            logger.error(
-                "Failed to get detail_picture from product_id "
-                f"{product_id} :{str(e)}"
-            )
-        return []
-
-    async def get_picture(
-        self, picture_id: int, product_id: int
-    ) -> ProductImageCreate | None:
-        try:
-            payload = {"productId": product_id, "id": picture_id}
-            response = await self.product_data_raw.call_api(
-                "catalog.productImage.get", params=payload
-            )
-            if response:
-                image = response.get("productImage")
-                if image:
-                    return ProductImageCreate(**image)
-        except Exception as e:
-            logger.error(
-                "Failed to get detail_picture from product_id "
-                f"{product_id} :{str(e)}"
-            )
-        return None
-
-    async def create_product_picture(
-        self,
-        product_id: int,
-        image_data: dict[str, Any],
-        image_type: str,
-    ) -> ProductImageCreate | None:
-        """Установка картинки"""
-        try:
-            # Формируем данные для загрузки
-            picture_data: dict[str, Any] = {
-                "fields": {
-                    "productId": product_id,
-                    "type": image_type,
-                },
-                "fileContent": [image_data["filename"], image_data["content"]],
-            }
-
-            logger.info(f"Creating image for product {product_id}")
-            result = await self.product_data_raw.call_api(
-                "catalog.productImage.add", picture_data
-            )
-            if not result:
-                return None
-            if product_image := result.get("productImage"):
-                return ProductImageCreate(**product_image)
-            return None
-        except Exception as e:
-            logger.error(
-                "Fail to set picture to product_id: "
-                f"{product_id}, type: {image_type} :{str(e)}"
-            )
-            return None
