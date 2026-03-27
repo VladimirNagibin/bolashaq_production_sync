@@ -137,7 +137,7 @@ async def review_product(
 
         # Подготавливаем данные для отображения
         review_data, review_complex_data = (
-            await supplier_service.get_review_data(
+            await supplier_service.get_review_context(
                 supplier_product,
                 transformed_logs,
                 preprocessed_data,

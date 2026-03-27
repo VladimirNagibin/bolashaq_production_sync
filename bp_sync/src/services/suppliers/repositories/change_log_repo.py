@@ -82,28 +82,31 @@ class ChangeLogRepository(BaseRepository[SuppChangeLog]):
     async def get_change_logs_by_product_id(
         self, supp_product_id: UUID
     ) -> list[SuppChangeLog]:
-        stmt = (
-            select(SuppChangeLog)
-            .where(SuppChangeLog.supplier_product_id == supp_product_id)
-            .where(SuppChangeLog.is_processed.is_(False))
-        )
-        result = await self._execute_query(
-            stmt,
-            operation="get_change_log_by_product_id_for_rewiew",
-            supp_product_id=str(supp_product_id),
-        )
+        try:
+            stmt = (
+                select(SuppChangeLog)
+                .where(SuppChangeLog.supplier_product_id == supp_product_id)
+                .where(SuppChangeLog.is_processed.is_(False))
+            )
+            result = await self._execute_query(
+                stmt,
+                operation="get_change_log_by_product_id_for_rewiew",
+                supp_product_id=str(supp_product_id),
+            )
 
-        change_logs = result.scalars().all()
+            change_logs = result.scalars().all()
 
-        self.logger.info(
-            "Fetched supplier products need review",
-            extra={
-                "supp_product_id": str(supp_product_id),
-                "count": len(change_logs),
-            },
-        )
+            self.logger.info(
+                "Fetched supplier products need review",
+                extra={
+                    "supp_product_id": str(supp_product_id),
+                    "count": len(change_logs),
+                },
+            )
 
-        return change_logs  # type: ignore[no-any-return]
+            return change_logs  # type: ignore[no-any-return]
+        except Exception:
+            return []
 
     async def mark_change_logs_as_processed(
         self, supp_product_id: UUID

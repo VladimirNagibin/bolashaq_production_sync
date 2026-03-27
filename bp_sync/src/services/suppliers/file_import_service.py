@@ -732,10 +732,11 @@ class FileImportService:
         created_product = await self._repo.create(supplier_product)
         result.local_create = supplier_product
 
-        # Обновляем ID в логах
-        for log in result.change_logs:
-            log.supplier_product_id = created_product.id
-        return result
+        if created_product:
+            # Обновляем ID в логах
+            for log in result.change_logs:
+                log.supplier_product_id = created_product.id
+            return result
 
     def _extract_field_value(
         self, data: dict[str, Any], field_name: str

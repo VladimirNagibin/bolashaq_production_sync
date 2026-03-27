@@ -64,7 +64,7 @@ class SupplierProductRepository(BaseRepository[SupplierProduct]):
         product_data: SupplierProductCreate,
         characteristics: list[SupplierCharacteristicUpdate] | None = None,
         complects: list[SupplierComplectUpdate] | None = None,
-    ) -> SupplierProductDetail:
+    ) -> SupplierProductDetail | None:
         """Создать товар поставщика с характеристиками и комплектующими."""
         self.logger.info(
             "Creating supplier product",
@@ -140,32 +140,38 @@ class SupplierProductRepository(BaseRepository[SupplierProduct]):
                 selectinload(self.model.complects),
             )
         )
-
-        result = await self._execute_query(
-            stmt,
-            operation="get_product_with_relations",
-            product_id=str(product_id),
-        )
-
-        product = result.scalar_one_or_none()
-
-        if not product:
-            self.logger.warning(
-                "Supplier product not found",
-                extra={"product_id": str(product_id)},
+        try:
+            result = await self._execute_query(
+                stmt,
+                operation="get_product_with_relations",
+                product_id=str(product_id),
             )
+
+            product = result.scalar_one_or_none()
+
+            if not product:
+                self.logger.warning(
+                    "Supplier product not found",
+                    extra={"product_id": str(product_id)},
+                )
+                return None
+
+            supplier_product = SupplierProductDetail.model_validate(product)
+
+            self.logger.info(
+                "Supplier product fetched successfully",
+                extra={
+                    "product_id": str(product_id),
+                    "characteristics_count": len(
+                        supplier_product.characteristics
+                    ),
+                    "complects_count": len(supplier_product.complects),
+                },
+            )
+
+            return supplier_product
+        except Exception:
             return None
-
-        self.logger.info(
-            "Supplier product fetched successfully",
-            extra={
-                "product_id": str(product_id),
-                "characteristics_count": len(product.characteristics),
-                "complects_count": len(product.complects),
-            },
-        )
-
-        return SupplierProductDetail.model_validate(product)
 
     async def get_by_source_code(
         self, source: SourcesProductEnum, code: str

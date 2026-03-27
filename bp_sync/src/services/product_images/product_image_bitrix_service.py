@@ -118,6 +118,7 @@ class ProductImageService:
             )
             return False
 
+    # legacy methods
     async def set_detail_picture(
         self,
         product_id: int,
