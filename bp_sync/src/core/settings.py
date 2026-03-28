@@ -25,6 +25,7 @@ class Settings(BaseSettings):  # type: ignore
     USER_ADMIN: str = "admin"
     PASS_ADMIN: str = "pass"
     TOKEN_EXPIRY_MINUTES: int = 60
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
     # BITRIX_LOGIN: str = ""
     # BITRIX_PASS: str = ""

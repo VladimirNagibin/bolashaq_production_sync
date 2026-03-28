@@ -1,4 +1,4 @@
-from models.user_models import Manager, User
+from models.user_models import Manager, User, UserAuth
 
 from .base_admin import BaseAdmin
 
@@ -60,12 +60,14 @@ class UserAdmin(BaseAdmin, model=User):  # type: ignore[call-arg]
         "full_name",
         "active",
         "department",
+        "email",
     ]
     column_labels = {  # Надписи полей в списке
         "external_id": "Код пользователя",
         "full_name": "Имя",
         "active": "Активный",
         "department": "Отдел",
+        "auth": "Авторизация",
     }
     column_default_sort = [("external_id", True)]  # Сортировка по умолчанию
     column_sortable_list = [  # Список полей по которым возможна сортировка
@@ -79,11 +81,62 @@ class UserAdmin(BaseAdmin, model=User):  # type: ignore[call-arg]
     form_columns = [
         "external_id",
         "active",
+        "email",
     ]
     column_details_list = [
         "external_id",
         "full_name",
         "department",
         "active",
+        "email",
+        "auth",
     ]
     icon = "fa-solid fa-user"
+
+
+class UserAuthAdmin(BaseAdmin, model=UserAuth):  # type: ignore[call-arg]
+
+    name = "Авторизация пользователя"
+    name_plural = "Авторизация пользователей"
+    category = "Сотрудники"
+    icon = "fa-solid fa-id-card"
+
+    column_list = [  # Поля в списке
+        "user_id",
+        "user",
+        "role",
+        "is_verified",
+        "last_login_attempt",
+    ]
+    column_labels = {  # Надписи полей в списке
+        "user_id": "Код пользователя",
+        "user": "Пользователь",
+        "role": "Роль пользователя",
+        "is_verified": "Email подтвержден",
+        "last_login_attempt": "Последняя попытка входа",
+    }
+    column_default_sort = [("user_id", True)]  # Сортировка по умолчанию
+    column_sortable_list = [  # Список полей по которым возможна сортировка
+        "user_id",
+        "role",
+    ]
+    column_searchable_list = [  # Список полей по которым возможен поиск
+        "user_id",
+        "role",
+    ]
+    form_columns = [
+        "user_id",
+        "role",
+        "is_verified",
+        "last_login_attempt",
+    ]
+
+    column_details_list = [
+        "user",
+        "role",
+        "is_verified",
+        "last_login_attempt",
+        "created_at",
+        "updated_at",
+        "is_deleted_in_bitrix",
+    ]

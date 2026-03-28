@@ -36,7 +36,7 @@ from models.supplier_models import (  # noqa: F401
     SupplierProductChangeLog,
 )
 from models.timeline_comment_models import TimelineComment  # noqa: F401
-from models.user_models import Manager, User  # noqa: F401
+from models.user_models import Manager, User, UserAuth  # noqa: F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

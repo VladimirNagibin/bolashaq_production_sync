@@ -35,7 +35,7 @@ from .supplier_admin_model import (
     SupplierProductAdmin,
     SupplierProductChangeLogAdmin,
 )
-from .user_admin_model import ManagerAdmin, UserAdmin
+from .user_admin_model import ManagerAdmin, UserAdmin, UserAuthAdmin
 
 
 class DepartmentAdmin(BaseAdmin, model=Department):  # type: ignore[call-arg]
@@ -244,3 +244,4 @@ def register_models(admin: Admin) -> None:
     admin.add_view(ProductImageAdmin)
     admin.add_view(SupplierProductChangeLogAdmin)
     admin.add_view(ProductImageContentAdmin)
+    admin.add_view(UserAuthAdmin)

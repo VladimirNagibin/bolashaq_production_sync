@@ -1,7 +1,16 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
+from uuid import UUID
 
-from sqlalchemy import DateTime, ForeignKey
+from sqlalchemy import (
+    TIMESTAMP,
+)
+from sqlalchemy import UUID as sql_uuid
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    String,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from db.postgres import Base
@@ -237,6 +246,18 @@ class User(IntIdEntity):
         foreign_keys="[Product.created_by]",
     )
 
+    auth: Mapped["UserAuth | None"] = relationship(
+        "UserAuth",
+        back_populates="user",
+        uselist=False,  # Один-к-одному
+        cascade="all, delete-orphan",
+    )
+
+    @property
+    def has_auth(self) -> bool:
+        """Проверка наличия auth записи"""
+        return self.auth is not None
+
 
 class Manager(Base):  # type: ignore[misc]
     """
@@ -260,3 +281,44 @@ class Manager(Base):  # type: ignore[misc]
     )
     disk_id: Mapped[int | None] = mapped_column(comment="ИД диска")
     chat_id: Mapped[int | None] = mapped_column(comment="ИД служебного чата")
+
+
+class UserAuth(Base):  # type: ignore[misc]
+    """
+    Модель для хранения учетных данных (логин/пароль).
+    Связана с User один-к-одному.
+    """
+
+    __tablename__ = "user_auths"
+
+    user_id: Mapped[UUID] = mapped_column(
+        sql_uuid(as_uuid=True),
+        ForeignKey("users.id"),
+        unique=True,  # Важно: один-к-одному
+        nullable=False,
+        comment="ID пользователя",
+    )
+
+    hashed_password: Mapped[str] = mapped_column(
+        String(255), comment="Хеш пароля"
+    )
+
+    role: Mapped[str] = mapped_column(
+        String(10), comment="Роль пользователя"  # admin, manager, user, guest
+    )
+    # Опционально: поля для безопасности
+    is_verified: Mapped[bool] = mapped_column(
+        default=False, comment="Email подтвержден"
+    )
+    last_login_attempt: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True),  # ← WITH TIME ZONE
+        nullable=True,
+        comment="Последняя попытка входа",
+    )
+
+    user: Mapped["User"] = relationship(
+        "User", back_populates="auth", lazy="joined"
+    )
+
+    def __repr__(self) -> str:
+        return f"<UserAuth for user_id={self.user_id}>"
