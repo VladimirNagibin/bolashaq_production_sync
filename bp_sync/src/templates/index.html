@@ -2,23 +2,296 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Выбор источника</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Управление поставщиками</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Подключаем JS Bootstrap для работы модальных окон -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </head>
 <body class="container mt-5">
-    <h1>Обработка данных от поставщиков</h1>
-    <div class="card p-4">
-        <form action="/api/v1/suppliers/products/" method="get">
-            <div class="mb-3">
-                <label for="source" class="form-label">Выберите источник данных (Source):</label>
-                <select class="form-select" name="source" id="source" required>
-                    {% for s in sources %}
-                    <option value="{{ s }}">{{ s }}</option>
-                    {% endfor %}
-                </select>
+
+    <h1 class="mb-4">Обработка данных от поставщиков</h1>
+
+    <!-- Блок для простых сообщений -->
+    <div id="alert-container" class="mb-3" style="display: none;"></div>
+
+    <div class="row">
+
+        <!-- КОЛОНКА 1: Выбор источника и Просмотр -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">1. Выбор источника</h5>
+                    <span class="badge bg-light text-dark">Общий</span>
+                </div>
+                <div class="card-body">
+                    <form id="listForm" action="/api/v1/suppliers/products/" method="get">
+                        <div class="mb-4">
+                            <label for="source" class="form-label fw-bold">Источник данных (Source / Config):</label>
+                            <select class="form-select" name="source" id="source" required onchange="updateImportButtonState()">
+                                <option value="" selected disabled>-- Выберите источник --</option>
+                                {% for s in sources %}
+                                <option value="{{ s }}">{{ s }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">
+                                Выбранный источник используется и для просмотра товаров, и для конфигурации импорта.
+                            </div>
+                        </div>
+
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                Показать товары к проверке
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
-            <button type="submit" class="btn btn-primary">Показать товары к проверке</button>
-        </form>
+        </div>
+
+        <!-- КОЛОНКА 2: Импорт из файла -->
+        <div class="col-md-6">
+            <div class="card h-100 border-success">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">2. Импорт из файла</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        Загрузите файл для импорта в выбранный источник (<strong id="selectedSourceLabel">...</strong>).
+                    </p>
+
+                    <form id="importForm">
+                        <!-- Поле для файла -->
+                        <div class="mb-3">
+                            <label for="file" class="form-label">Файл данных:</label>
+                            <input type="file" class="form-control" name="file" id="file" required>
+                        </div>
+
+                        <!-- Опциональное имя конфигурации -->
+                        <div class="mb-3">
+                            <label for="config_name" class="form-label">Имя конфигурации (опционально):</label>
+                            <input type="text" class="form-control" name="config_name" id="config_name" placeholder="Например: Мартовский прайс">
+                        </div>
+
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-success" id="importBtn" disabled>
+                                <span id="btnText">Загрузить и импортировать</span>
+                                <span id="spinner" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                            </button>
+                        </div>
+                        <div class="form-text text-center mt-2" id="urlPreview"></div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
     </div>
+
+    <!-- МОДАЛЬНОЕ ОКНО РЕЗУЛЬТАТОВ ИМПОРТА -->
+    <div class="modal fade" id="importResultModal" tabindex="-1" aria-labelledby="importResultModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title" id="importResultModalLabel">Импорт завершен</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+
+                    <!-- Статистика -->
+                    <div class="row text-center mb-4">
+                        <div class="col-6 col-md-3">
+                            <div class="p-2 border rounded bg-light">
+                                <h4 class="mb-0" id="res-total">0</h4>
+                                <small class="text-muted">Всего обработано</small>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="p-2 border rounded border-success bg-success bg-opacity-10">
+                                <h4 class="mb-0 text-success" id="res-added">0</h4>
+                                <small class="text-success">Добавлено</small>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="p-2 border rounded border-warning bg-warning bg-opacity-10">
+                                <h4 class="mb-0 text-warning" id="res-updated">0</h4>
+                                <small class="text-warning">Обновлено</small>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="p-2 border rounded bg-light">
+                                <h4 class="mb-0" id="res-bitrix">0</h4>
+                                <small class="text-muted">Обновлено в Битрикс</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Детальная статистика -->
+                    <ul class="list-group list-group-flush small mb-3">
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Принудительный импорт
+                            <span class="badge bg-secondary rounded-pill" id="res-force">0</span>
+                        </li>
+                    </ul>
+
+                    <!-- Ошибки -->
+                    <div id="errorsSection" style="display: none;">
+                        <h6 class="text-danger">Ошибки (<span id="errorCount">0</span>):</h6>
+                        <div class="bg-danger bg-opacity-10 border border-danger p-2 rounded" style="max-height: 200px; overflow-y: auto;">
+                            <ul class="list-unstyled mb-0" id="errorList">
+                                <!-- Сюда вставятся ошибки -->
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Скрытый блок с сырыми данными (по желанию) -->
+                    <div class="accordion mt-3" id="accordionRaw">
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed btn-sm py-2" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne">
+                                    Показать подробности обновлений Битрикс (JSON)
+                                </button>
+                            </h2>
+                            <div id="collapseOne" class="accordion-collapse collapse" data-bs-parent="#accordionRaw">
+                                <div class="accordion-body">
+                                    <pre class="bg-light p-2 small" id="rawBitrixUpdates" style="max-height: 300px; overflow: auto;"></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- КОНЕЦ МОДАЛЬНОГО ОКНА -->
+
+    <script>
+        const sourceSelect = document.getElementById('source');
+        const importForm = document.getElementById('importForm');
+        const importBtn = document.getElementById('importBtn');
+        const btnText = document.getElementById('btnText');
+        const spinner = document.getElementById('spinner');
+        const alertContainer = document.getElementById('alert-container');
+        const selectedSourceLabel = document.getElementById('selectedSourceLabel');
+        const urlPreview = document.getElementById('urlPreview');
+
+        function updateImportButtonState() {
+            const selectedSource = sourceSelect.value;
+            const baseUrl = "/api/v1/suppliers/import/";
+
+            if (selectedSource) {
+                importBtn.disabled = false;
+                selectedSourceLabel.textContent = selectedSource;
+                urlPreview.textContent = `URL: ${baseUrl}${selectedSource}`;
+            } else {
+                importBtn.disabled = true;
+                selectedSourceLabel.textContent = "...";
+                urlPreview.textContent = "";
+            }
+        }
+
+        importForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const selectedConfig = sourceSelect.value;
+
+            if (!selectedConfig) {
+                showAlert("Сначала выберите источник данных в левой колонке.", "danger");
+                return;
+            }
+
+            setLoading(true);
+            const formData = new FormData(importForm);
+            const url = `/api/v1/suppliers/import/${selectedConfig}`;
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    // Показываем детальный результат в модальном окне
+                    showImportResultModal(result.data);
+                    importForm.reset();
+                    updateImportButtonState();
+                } else {
+                    showAlert(result.detail || "Произошла ошибка при импорте.", "danger");
+                }
+
+            } catch (error) {
+                console.error('Error:', error);
+                showAlert("Ошибка сети или сервера.", "danger");
+            } finally {
+                setLoading(false);
+            }
+        });
+
+        function showImportResultModal(data) {
+            // 1. Заполняем цифры
+            document.getElementById('res-total').textContent = data.total_processed || 0;
+            document.getElementById('res-added').textContent = data.added_count || 0;
+            document.getElementById('res-updated').textContent = data.updated_count || 0;
+            document.getElementById('res-bitrix').textContent = data.bitrix_update_count || 0;
+            document.getElementById('res-force').textContent = data.force_import_count || 0;
+
+            // 2. Обрабатываем ошибки
+            const errorSection = document.getElementById('errorsSection');
+            const errorList = document.getElementById('errorList');
+            const errorCount = document.getElementById('errorCount');
+
+            if (data.errors && data.errors.length > 0) {
+                errorSection.style.display = 'block';
+                errorCount.textContent = data.errors.length;
+                errorList.innerHTML = data.errors.map(err => `<li>• ${err}</li>`).join('');
+            } else {
+                errorSection.style.display = 'none';
+            }
+
+            // 3. Сырые данные обновлений Битрикс (для отладки)
+            const rawUpdates = document.getElementById('rawBitrixUpdates');
+            if (data.bitrix_updates && data.bitrix_updates.length > 0) {
+                rawUpdates.textContent = JSON.stringify(data.bitrix_updates, null, 2);
+            } else {
+                rawUpdates.textContent = "Нет данных об обновлениях.";
+            }
+
+            // 4. Открываем модалку
+            const myModal = new bootstrap.Modal(document.getElementById('importResultModal'));
+            myModal.show();
+        }
+
+        function setLoading(isLoading) {
+            if (isLoading) {
+                importBtn.disabled = true;
+                btnText.textContent = "Импортирование...";
+                spinner.classList.remove('d-none');
+            } else {
+                importBtn.disabled = false;
+                updateImportButtonState();
+                btnText.textContent = "Загрузить и импортировать";
+                spinner.classList.add('d-none');
+            }
+        }
+
+        function showAlert(message, type) {
+            alertContainer.style.display = 'block';
+            alertContainer.className = `alert alert-${type} alert-dismissible fade show`;
+            alertContainer.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" onclick="this.parentElement.style.display='none'"></button>
+            `;
+            setTimeout(() => {
+                alertContainer.style.display = 'none';
+            }, 5000);
+        }
+
+        updateImportButtonState();
+    </script>
 </body>
 </html>

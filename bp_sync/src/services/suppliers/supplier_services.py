@@ -147,8 +147,8 @@ class SupplierClient:
         )
         # Валидация ключа конфигурации
         try:
-            source_enum = SourcesProductEnum[config_key]
-        except KeyError as e:
+            source_enum = SourcesProductEnum(config_key)
+        except (KeyError, ValueError) as e:
             error_msg = f"Invalid configuration key: {config_key}"
             logger.error(error_msg, extra={"config_key": config_key})
             raise HTTPException(
