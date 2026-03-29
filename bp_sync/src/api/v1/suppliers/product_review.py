@@ -43,13 +43,15 @@ templates = Jinja2Templates(directory=f"{settings.BASE_DIR}/templates")
 @supplier_product_review.get(  # type: ignore[misc]
     "/", response_class=HTMLResponse
 )
-async def read_root(request: Request) -> HTMLResponse:
+async def read_root(
+    request: Request,
+) -> HTMLResponse:
     """Выбор источника данных"""
     try:
         # Получаем список возможных источников из Enum
         sources = [e.value for e in SourcesProductEnum]
         logger.debug(f"Available sources: {sources}")
-
+        # user = request.state.user
         return templates.TemplateResponse(
             "index.html", {"request": request, "sources": sources}
         )
@@ -137,7 +139,7 @@ async def review_product(
 
         # Подготавливаем данные для отображения
         review_data, review_complex_data = (
-            await supplier_service.get_review_data(
+            await supplier_service.get_review_context(
                 supplier_product,
                 transformed_logs,
                 preprocessed_data,

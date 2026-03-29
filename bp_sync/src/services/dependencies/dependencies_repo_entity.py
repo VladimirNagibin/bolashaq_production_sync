@@ -13,6 +13,7 @@ from services.timeline_comments.timeline_comment_repository import (
     TimelineCommentRepository,
 )
 from services.users.user_repository import UserRepository
+from services.users_auth.user_auth_services import UserAuthService
 
 from .dependencies_repo import get_session_context
 
@@ -63,3 +64,9 @@ async def get_product_image_repo(
     session: AsyncSession = Depends(get_session_context),
 ) -> ProductImageRepository:
     return ProductImageRepository(session=session)
+
+
+async def get_user_auth_service(
+    session: AsyncSession = Depends(get_session_context),
+) -> UserAuthService:
+    return UserAuthService(session=session)

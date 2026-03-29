@@ -37,55 +37,58 @@ class ImportConfigRepository(BaseRepository[SourceImportConfig]):
         active_only: bool = True,
     ) -> ImportConfigDetail | None:
         """Получить конфигурацию по источнику."""
-        self.logger.info(
-            "Fetching import config",
-            extra={
-                "source": source.value,
-                "config_name": config_name,
-                "active_only": active_only,
-            },
-        )
-
-        stmt = select(self.model).where(self.model.source == source.value)
-
-        if config_name is not None:
-            stmt = stmt.where(self.model.config_name == config_name)
-
-        if active_only:
-            stmt = stmt.where(self.model.is_active.is_(True))
-
-        stmt = stmt.options(selectinload(self.model.column_mappings))
-
-        result = await self._execute_query(
-            stmt,
-            operation="get_config",
-            source=source.value,
-            config_name=config_name,
-        )
-
-        config = result.scalar_one_or_none()
-
-        if not config:
-            self.logger.warning(
-                "Import config not found",
-                extra={"source": source.value, "config_name": config_name},
+        try:
+            self.logger.info(
+                "Fetching import config",
+                extra={
+                    "source": source.value,
+                    "config_name": config_name,
+                    "active_only": active_only,
+                },
             )
-            return None
 
-        self.logger.info(
-            "Import config fetched successfully",
-            extra={
-                "config_id": str(config.id),
-                "column_count": (
-                    len(config.column_mappings)
-                    if config.column_mappings
-                    else 0
-                ),
-            },
-        )
-        if config:
-            return ImportConfigDetail.model_validate(config)
-        return None
+            stmt = select(self.model).where(self.model.source == source.value)
+
+            if config_name is not None:
+                stmt = stmt.where(self.model.config_name == config_name)
+
+            if active_only:
+                stmt = stmt.where(self.model.is_active.is_(True))
+
+            stmt = stmt.options(selectinload(self.model.column_mappings))
+
+            result = await self._execute_query(
+                stmt,
+                operation="get_config",
+                source=source.value,
+                config_name=config_name,
+            )
+
+            config = result.scalar_one_or_none()
+
+            if not config:
+                self.logger.warning(
+                    "Import config not found",
+                    extra={"source": source.value, "config_name": config_name},
+                )
+                return None
+
+            self.logger.info(
+                "Import config fetched successfully",
+                extra={
+                    "config_id": str(config.id),
+                    "column_count": (
+                        len(config.column_mappings)
+                        if config.column_mappings
+                        else 0
+                    ),
+                },
+            )
+            if config:
+                return ImportConfigDetail.model_validate(config)
+            return None
+        except Exception:
+            return None
 
     async def create(
         self,

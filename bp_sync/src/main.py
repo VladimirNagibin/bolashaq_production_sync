@@ -13,6 +13,7 @@ from sqladmin import Admin
 
 from admin.admin_models import register_models
 from admin.authenticate import BasicAuthBackend
+from api.v1.auth import auth_router
 from api.v1.b24.b24_router import b24_router
 from api.v1.health_checker import health_router
 from api.v1.schemas.response_schemas import ErrorResponse
@@ -22,6 +23,7 @@ from core.logger import LOGGING, logger
 from core.settings import settings
 from db.postgres import engine
 from db.redis import close_redis, init_redis
+from middleware.auth_middleware import AuthMiddleware
 from services.dependencies.dependencies_bitrix import (
     initialize_container,
     shutdown_container,
@@ -120,6 +122,7 @@ def setup_routes(app: FastAPI) -> None:
     app.include_router(b24_router, prefix="/api/v1/b24", tags=["b24"])
     app.include_router(test_router, prefix="/api/v1/test", tags=["test"])
     app.include_router(health_router, prefix="/api/v1", tags=["health"])
+    app.include_router(auth_router, prefix="/api/v1/auth", tags=["auth"])
     app.include_router(
         suppliers_router, prefix="/api/v1/suppliers", tags=["suppliers"]
     )
@@ -173,6 +176,10 @@ def register_exception_handler(app: FastAPI) -> None:
         )
 
 
+def add_middlewares(app: FastAPI) -> None:
+    app.add_middleware(AuthMiddleware)
+
+
 def create_app() -> FastAPI:
     """Фабрика для создания экземпляра приложения FastAPI."""
     app = FastAPI(
@@ -186,7 +193,7 @@ def create_app() -> FastAPI:
     setup_routes(app)
     setup_admin_panel(app)
     register_exception_handler(app)
-
+    add_middlewares(app)
     return app
 
 

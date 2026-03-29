@@ -51,3 +51,10 @@ class ErrorResponse(BaseResponse):
     message: str = Field(
         ..., description="Описание ошибки, понятное пользователю"
     )
+
+
+class TokenData(BaseModel):  # type: ignore[misc]
+    """Данные полученные из токена."""
+
+    role: str
+    user_bitrix_id: int
