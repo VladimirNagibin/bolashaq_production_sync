@@ -96,8 +96,8 @@ class User(IntIdEntity):
         DateTime(timezone=True), comment="Дата рождения"
     )  # PERSONAL_BIRTHDAY : Дата рождения
     employment_date: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), comment="Новая дата"
-    )  # UF_EMPLOYMENT_DATE : Новая дата
+        DateTime(timezone=True), comment="Дата принятия на работу"
+    )  # UF_EMPLOYMENT_DATE : Дата принятия на работу
     date_new: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), comment="Новая дата"
     )  # UF_USR_1699347879988 : Новая дата
