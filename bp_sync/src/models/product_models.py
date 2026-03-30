@@ -4,12 +4,10 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Type
 from uuid import UUID
 
-from sqlalchemy import DateTime, ForeignKey
+from sqlalchemy import JSON, DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from schemas.enums import EntityType, EntityTypeAbbr
-
-# from schemas.fields import FIELDS_PRODUCT_ALT
 from schemas.product_schemas import (
     FieldText,
     FieldValue,
@@ -126,6 +124,14 @@ class Product(IntIdEntity):
     description_type: Mapped[str | None] = mapped_column(
         comment="Тип описания"
     )  # DESCRIPTION_TYPE : Тип описания
+
+    specifications: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSON, default=list, nullable=True, comment="Характеристики в списке"
+    )  # PROPERTY_137 : Технические характеристики множественное поле
+
+    configuration: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSON, default=list, nullable=True, comment="Характеристики в списке"
+    )  # PROPERTY_139 : Комплектация множественное поле
 
     properties: Mapped[list["ProductProperty"]] = relationship(
         "ProductProperty",
@@ -257,6 +263,8 @@ class Product(IntIdEntity):
             data[property.property_code] = property.to_pydantic_()
         for property in self.properties:
             data[property.property_code] = property.to_pydantic_()
+        if spec := data.get("specifications"):
+            data["specifications"] = [FieldValue(**data) for data in spec]
         return schema_class(**data)
 
 

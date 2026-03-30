@@ -1,4 +1,4 @@
-from typing import Sequence, Type
+from typing import Any, Sequence, Type
 
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -9,6 +9,7 @@ from db.postgres import Base
 from models.department_models import Department
 from models.user_models import Manager as ManagerDB
 from models.user_models import User as UserDB
+from models.user_models import UserAuth
 from schemas.enums import EntityType
 from schemas.user_schemas import (
     ManagerCreate,
@@ -16,6 +17,7 @@ from schemas.user_schemas import (
     UserCreate,
     UserUpdate,
 )
+from services.users_auth.security import hash_password
 
 from ..base_repositories.base_repository import BaseRepository
 
@@ -30,7 +32,21 @@ class UserRepository(BaseRepository[UserDB, UserCreate, UserUpdate, int]):
         logger.info(f"Creating user entity: {data.external_id}")
 
         await self._check_related_objects(data)
-        return await self.create(data=data)
+        # TODO: add post_commit_hook - create UserAuth
+        return await self.create(
+            data=data, post_commit_hook=self._create_auth_user
+        )
+
+    async def _create_auth_user(
+        self, obj: UserDB, data: dict[str, Any] | None = None
+    ) -> None:
+        auth = UserAuth(
+            user_id=obj.id,
+            hashed_password=hash_password(str(obj.external_id)),
+            role="user",
+        )
+        self.session.add(auth)
+        await self.session.commit()
 
     async def update_entity(self, data: UserCreate | UserUpdate) -> UserDB:
         """Обновляет существующего пользователя"""

@@ -76,23 +76,20 @@ async def check(
         from core.logger import logger
 
         logger.info(" --- ")
-        from models.user_models import UserAuth
-        from services.users_auth.security import hash_password
 
-        for i in range(1, 70, 2):
-            logger.info(i)
-            try:
-                user, _ = await user_client.import_from_bitrix(i)
-                auth = UserAuth(
-                    user_id=user.id,
-                    hashed_password=hash_password(str(user.external_id)),
-                    role="user",
-                )
-                user_client.repo.session.add(auth)
+        # result = await product_client.import_from_bitrix(2350)
 
-            except Exception:
-                ...
-        await user_client.repo.session.commit()
+        product = await product_client.repo.get(2350)
+        pr = await product.to_pydantic()
+        from schemas.product_schemas import FieldValue
+
+        pr.configuration = [
+            FieldValue(value="configuration1"),
+            FieldValue(value="configuration2"),
+        ]
+        result = await product_client.bitrix_client.update(pr)
+        logger.info(f"{result}++++++++++++++++++++++++++++++++++++++++++")
+
         # await product_image_client.import_from_bitrix_by_product_id(2350)
         # from schemas.enums import SourcesProductEnum
         # from schemas.product_image_schemas import ProductImageCreate

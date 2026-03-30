@@ -434,6 +434,7 @@ class EntityAwareSchema(BaseModel):  # type: ignore[misc]
                 value is None or not int(value)
             ):
                 data[key] = None
+
             # elif key in self.FIELDS_BY_TYPE_ALT.get("dict_none_str", []):
             #     if value is None:
             #         data[key] = None
@@ -624,6 +625,14 @@ class EntityAwareSchema(BaseModel):  # type: ignore[misc]
         """Применяет все необходимые преобразования к значению поля"""
         from .product_schemas import FieldValue
 
+        if (
+            isinstance(value, list)
+            and value
+            and isinstance(value[0], FieldValue)
+        ):
+            return [
+                self._transform_field_value(v, alias_choice) for v in value
+            ]
         if isinstance(value, FieldValue):
             return self._transform_field_value(value, alias_choice)
         if (
@@ -638,6 +647,8 @@ class EntityAwareSchema(BaseModel):  # type: ignore[misc]
             return self._transform_datetime_value(field_alias, value)
         elif isinstance(value, float):
             return self._transform_float_value(field_alias, value)
+        elif isinstance(value, UUID):
+            return str(value)
         elif isinstance(value, tuple):
             return self._transform_tuple_value(
                 field_alias, value, alias_choice
