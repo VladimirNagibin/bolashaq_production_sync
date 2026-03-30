@@ -123,7 +123,7 @@ async def login(
         # При ошибке редиректим обратно на логин с параметром ошибки
         # e.detail обычно "Incorrect email or password"
         return RedirectResponse(
-            url=f"/api/v1/login?error={e.detail}", status_code=303
+            url=f"/api/v1/auth/login?error={e.detail}", status_code=303
         )
 
 

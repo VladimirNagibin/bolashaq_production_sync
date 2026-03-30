@@ -425,9 +425,12 @@ class EntityAwareSchema(BaseModel):  # type: ignore[misc]
             except KeyError:
                 ...
         for key, value in data.items():
-            if key in self.FIELDS_BY_TYPE_ALT["str_none"] and not value:
+            if (
+                key in self.FIELDS_BY_TYPE_ALT.get("str_none", [])
+                and not value
+            ):
                 data[key] = None
-            elif key in self.FIELDS_BY_TYPE_ALT["int_none"] and (
+            elif key in self.FIELDS_BY_TYPE_ALT.get("int_none", []) and (
                 value is None or not int(value)
             ):
                 data[key] = None

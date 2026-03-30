@@ -4,7 +4,7 @@ from typing import ClassVar
 from pydantic import ConfigDict, Field, field_validator
 
 from .base_schemas import CommonFieldMixin, EntityAwareSchema
-from .fields import FIELDS_USER
+from .fields import FIELDS_USER, FIELDS_USER_ALT
 
 
 class BaseUser(CommonFieldMixin):
@@ -14,6 +14,7 @@ class BaseUser(CommonFieldMixin):
     """
 
     FIELDS_BY_TYPE: ClassVar[dict[str, str]] = FIELDS_USER
+    FIELDS_BY_TYPE_ALT: ClassVar[dict[str, str]] = FIELDS_USER_ALT
 
     # Идентификаторы и основные данные
     name: str | None = Field(None, alias="NAME")
@@ -29,7 +30,7 @@ class BaseUser(CommonFieldMixin):
     date_register: datetime | None = Field(None, alias="DATE_REGISTER")
     personal_birthday: datetime | None = Field(None, alias="PERSONAL_BIRTHDAY")
     employment_date: datetime | None = Field(None, alias="UF_EMPLOYMENT_DATE")
-    date_new: datetime | None = Field(None, alias="UF_USR_1699347879988")
+    date_new: datetime | None = Field(None, alias="UF_USR_1699347879988")  # ?
 
     # География и источники
     time_zone: str | None = Field(None, alias="TIME_ZONE")
