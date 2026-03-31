@@ -334,13 +334,44 @@
                                 {% endif %}
                             <td>
                                 {% if item.field_name in ['characteristics', 'complects'] %}
-                                    <textarea
-                                        class="form-control w-100"
-                                        name="field_{{ item.field_name }}"
-                                        rows="3"
-                                        title="{{ item.new_value or '-' }}"
-                                        style="resize: vertical;"
-                                    >{{ item.new_value or '' }}</textarea>
+                                    <!-- Контейнер для списка строк -->
+                                    <div id="list_container_{{ item.field_name }}">
+                                    {% if item.new_value_list %}
+                                        {% for val in item.new_value_list %}
+                                        <div class="input-group mb-2">
+                                            <!-- Заменили input на textarea -->
+                                            <textarea
+                                                class="form-control"
+                                                name="field_{{ item.field_name }}[]"
+                                                rows="1"
+                                                placeholder="Значение"
+                                                style="resize: vertical; min-height: 38px; overflow-x: hidden;"
+                                            >{{ val }}</textarea>
+
+                                            <button class="btn btn-outline-danger"
+                                                    type="button"
+                                                    onclick="this.parentElement.remove()"
+                                                    title="Удалить">
+                                                &times;
+                                            </button>
+                                        </div>
+                                        {% endfor %}
+                                    {% endif %}
+                                    </div>
+                                    <!-- Кнопка добавления нового значения -->
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-secondary mt-1"
+                                            onclick="addValueRow('{{ item.field_name }}')">
+                                        + Добавить значение
+                                    </button>
+
+                                    {# <textarea #}
+                                    {#    class="form-control w-100" #}
+                                    {#    name="field_{{ item.field_name }}" #}
+                                    {#    rows="3" #}
+                                    {#    title="{{ item.new_value or '-' }}" #}
+                                    {#    style="resize: vertical;" #}
+                                    {# >{{ item.new_value or '' }}</textarea> #}
                                 {% elif item.field_name == "brend" %}
                                     <!-- Специальное поле для Бренда (выпадающий список) -->
                                     <select
@@ -1522,6 +1553,31 @@
                 btn.textContent = originalText;
                 btn.disabled = false;
             }
+        }
+
+        function addValueRow(fieldName) {
+            const container = document.getElementById('list_container_' + fieldName);
+            const div = document.createElement('div');
+            div.className = 'input-group mb-2';
+
+            // HTML с textarea
+            div.innerHTML = `
+                <textarea
+                    class="form-control"
+                    name="field_${fieldName}[]"
+                    rows="1"
+                    placeholder="Новое значение"
+                    style="resize: vertical; min-height: 38px; overflow-x: hidden;"
+                ></textarea>
+                <button class="btn btn-outline-danger"
+                        type="button"
+                        onclick="this.parentElement.remove()"
+                        title="Удалить">
+                    &times;
+                </button>
+            `;
+
+            container.appendChild(div);
         }
     </script>
 
