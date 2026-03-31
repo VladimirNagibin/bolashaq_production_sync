@@ -79,16 +79,8 @@ async def check(
 
         # result = await product_client.import_from_bitrix(2350)
 
-        product = await product_client.repo.get(2350)
-        pr = await product.to_pydantic()
-        from schemas.product_schemas import FieldValue
-
-        pr.configuration = [
-            FieldValue(value="configuration1"),
-            FieldValue(value="configuration2"),
-        ]
-        result = await product_client.bitrix_client.update(pr)
-        logger.info(f"{result}++++++++++++++++++++++++++++++++++++++++++")
+        r = await product_client.bitrix_client.transform_product_fields(2350)
+        logger.info(f"{r}++++++++++++++++++++++++++++++++++++++++++")
 
         # await product_image_client.import_from_bitrix_by_product_id(2350)
         # from schemas.enums import SourcesProductEnum
