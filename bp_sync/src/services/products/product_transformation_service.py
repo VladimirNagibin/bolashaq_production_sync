@@ -26,13 +26,13 @@ class ProductTransformationService:
         # Маппинг полей для трансформации
         self.fields_mapping = [
             {
-                "source": "characteristics",
+                "source": "specifications",  # 'characteristics",
                 "target": "characteristics_for_print",
                 "title": "Технические характеристики",
                 "description": "технических характеристик",
             },
             {
-                "source": "complects",
+                "source": "configuration",  # "complects",
                 "target": "complect_for_print",
                 "title": "Комплект поставки",
                 "description": "комплекта поставки",
@@ -51,8 +51,8 @@ class ProductTransformationService:
         self,
         product_data: ProductCreate,
         product_id: int,
-        product_data_dict: dict[str, Any],
-    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        # product_data_dict: dict[str, Any],
+    ) -> dict[str, Any]:
         """
         Трансформирует поля товара
 
@@ -79,15 +79,17 @@ class ProductTransformationService:
             #     product_data_dict, product_id
             # )
 
-            image_fields: dict[str, Any] = {}
+            # image_fields: dict[str, Any] = {}
 
-            transformed_count = len(text_fields) + (1 if image_fields else 0)
+            transformed_count = len(
+                text_fields
+            )  # + (1 if image_fields else 0)
             self.logger.info(
                 f"Transformed {transformed_count} fields for product "
                 f"{product_id}"
             )
 
-            return text_fields, image_fields
+            return text_fields  # , image_fields
 
         except Exception as e:
             error_msg = f"Failed to transform product {product_id}: {str(e)}"
@@ -110,7 +112,7 @@ class ProductTransformationService:
 
         for mapping in self.fields_mapping:
             try:
-                field_update = self._transform_single_text_field(
+                update_field = self._transform_single_text_field(
                     product_data=product_data,
                     source_field=mapping["source"],
                     target_field=mapping["target"],
@@ -118,8 +120,8 @@ class ProductTransformationService:
                     field_description=mapping["description"],
                 )
 
-                if field_update:
-                    update_fields.update(field_update)
+                if update_field:
+                    update_fields.update(update_field)
                     self.logger.debug(
                         f"Transformed field {mapping['source']} -> "
                         f"{mapping['target']}"
@@ -158,10 +160,131 @@ class ProductTransformationService:
         """
         try:
             # Получаем значения полей
-            source_value = self._get_field_text_value(
+            source_value = self._get_fields_text_value(
                 product_data, source_field
             )
-            target_value = self._get_field_text_value(
+            target_value = self._get_field_complex_text_value(
+                product_data, target_field
+            )
+
+            update_data: dict[str, Any] = {}
+
+            # Если исходное значение пустое, очищаем целевое поле
+            if not source_value:
+                if target_value:
+                    self.logger.debug(
+                        f"Clearing {field_description} - source is empty"
+                    )
+                    update_data[target_field] = FieldValue(
+                        value=FieldText(text="", type="")
+                    )
+                return update_data
+
+            # Парсим и преобразуем значение
+            parsed_value = self._transform_texts_to_html(source_value, title)
+
+            # Обновляем только если значения отличаются
+            if target_value is None or target_value != parsed_value:
+                self.logger.debug(
+                    f"Updating {field_description}: "
+                    f"old length: {len(target_value or '')}, "
+                    f"new length: {len(parsed_value)}"
+                )
+
+                update_data[target_field] = FieldValue(
+                    value=FieldText(text=parsed_value, type="HTML")
+                )
+
+            return update_data
+
+        except Exception as e:
+            self.logger.error(
+                f"Error processing field {source_field} -> "
+                f"{target_field}: {str(e)}"
+            )
+            return {}
+
+    def _get_fields_text_value(
+        self, product_data: ProductCreate, field_name: str
+    ) -> list[str]:
+        """
+        Получает текстовые значения из множественного поля товара
+
+        Args:
+            product_data: Данные товара
+            field_name: Имя поля
+
+        Returns:
+            list[str]: Список текстовых значений поля
+        """
+        result: list[str] = []
+        try:
+            field_attrs = getattr(product_data, field_name, None)
+            if field_attrs:
+                for field_attr in field_attrs:
+                    if hasattr(field_attr, "value"):
+                        result.append(field_attr.value)
+            return result
+        except Exception as e:
+            self.logger.warning(f"Error getting field {field_name} value: {e}")
+            return result
+
+    def _transform_texts_to_html(self, texts: list[str], title: str) -> str:
+        """
+        Трансформипуем список строк в HTML формат
+
+        Args:
+            texts: Список строк
+            title: Заголовок для блока
+
+        Returns:
+            str: HTML форматированный текст
+        """
+        if not texts:
+            return ""
+
+        try:
+            # Формируем HTML
+            html_parts = [
+                f"<strong>{title}</strong>",
+                '<ul style="list-style: none; padding-left: 1;">',
+                *[f"<li>{line}</li>" for line in texts],
+                "</ul>",
+            ]
+
+            return "\n".join(html_parts)
+
+        except Exception as e:
+            self.logger.error(f"Error transformed text to HTML: {str(e)}")
+            return ""
+
+    def _transform_single_text_field_legacy(
+        self,
+        product_data: ProductCreate,
+        source_field: str,
+        target_field: str,
+        title: str,
+        field_description: str,
+    ) -> dict[str, Any]:
+        """
+        Трансформирует одно текстовое поле
+
+        Args:
+            product_data: Данные товара
+            source_field: Исходное поле
+            target_field: Целевое поле
+            title: Заголовок для HTML
+            field_description: Описание поля для логирования
+
+        Returns:
+            dict: Поля для обновления или пустой словарь
+        """
+        try:
+            # Получаем значения полей
+            source_value = self._get_field_complex_text_value(
+                product_data, source_field
+            )
+            target_value = self._get_field_complex_text_value(
                 product_data, target_field
             )
 
@@ -202,7 +325,7 @@ class ProductTransformationService:
             )
             return {}
 
-    def _get_field_text_value(
+    def _get_field_complex_text_value(
         self, product_data: ProductCreate, field_name: str
     ) -> str | None:
         """

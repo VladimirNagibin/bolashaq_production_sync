@@ -204,19 +204,16 @@ class ProductBitrixClient(
 
             # Получаем данные товара
             product_data = await self.get(product_id)
-            product_data_dict = await self.raw_data_service.get(product_id)
-            if not product_data or not product_data_dict:
+            # product_data_dict = await self.raw_data_service.get(product_id)
+            if not product_data:  # or not product_data_dict:
                 logger.error(f"Product {product_id} not found or empty result")
                 return False
-
-            text_fields, image_fields = (
-                await self.transformation_service.transform_product_fields(
-                    product_data=product_data,
-                    product_id=product_id,
-                    product_data_dict=product_data_dict,
-                )
+            trans_service = self.transformation_service
+            text_fields = await trans_service.transform_product_fields(
+                product_data=product_data,
+                product_id=product_id,
+                # product_data_dict=product_data_dict,
             )
-
             # Обновляем текстовые поля
             if text_fields:
                 logger.info(
@@ -228,18 +225,18 @@ class ProductBitrixClient(
                 await self.update(product_update)
 
             # Обновляем изображение
-            if image_fields:
-                logger.info(f"Updating image for product {product_id}")
-                success = await self.raw_data_service.update(
-                    product_id, image_fields
-                )
-                if not success:
-                    logger.error(
-                        f"Failed to update image for product {product_id}"
-                    )
-                    return False
+            # if image_fields:
+            #     logger.info(f"Updating image for product {product_id}")
+            #     success = await self.raw_data_service.update(
+            #         product_id, image_fields
+            #     )
+            #     if not success:
+            #         logger.error(
+            #             f"Failed to update image for product {product_id}"
+            #         )
+            #         return False
 
-            if not text_fields and not image_fields:
+            if not text_fields:  # and not image_fields:
                 logger.info(f"No fields to update for product {product_id}")
 
             logger.info(f"Successfully transformed product {product_id}")

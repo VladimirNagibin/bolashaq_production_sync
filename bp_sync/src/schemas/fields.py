@@ -526,6 +526,10 @@ FIELDS_PRODUCT_ALT: dict[str, Any] = {
         "date_create",
         "date_modify",
     ],
+    "json_none": [
+        "specifications",
+        "configuration",
+    ],
     "exclude_b24": [
         "ownerId",
         "ownerType",

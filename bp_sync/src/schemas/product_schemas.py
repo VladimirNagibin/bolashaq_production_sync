@@ -314,6 +314,17 @@ class BaseProduct(CommonFieldMixin):
         None,
         validation_alias=AliasChoices("PROPERTY_121", "property121"),
     )  # Технические характеристики
+
+    specifications: list[FieldValue] | None = Field(
+        None,
+        validation_alias=AliasChoices("PROPERTY_137", "property137"),
+    )  # Технические характеристики множественное поле
+
+    configuration: list[FieldValue] | None = Field(
+        None,
+        validation_alias=AliasChoices("PROPERTY_139", "property139"),
+    )  # Комплектация множественное поле
+
     characteristics_for_print: FieldValue | None = Field(
         None,
         validation_alias=AliasChoices("PROPERTY_123", "property123"),
