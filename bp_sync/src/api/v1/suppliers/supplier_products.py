@@ -1,6 +1,6 @@
 import time
 
-from fastapi import APIRouter, Depends, File, UploadFile, status  # Request,
+from fastapi import APIRouter, Depends, File, Request, UploadFile, status
 from fastapi.responses import JSONResponse
 
 from core.logger import logger
@@ -9,13 +9,14 @@ from services.dependencies.dependencies_suppliers import (
 )
 from services.suppliers.supplier_services import SupplierClient
 
-from ..schemas.response_schemas import SuccessResponse
+from ..schemas.response_schemas import SuccessResponse, TokenData
 
 supplier_product_router = APIRouter()
 
 
 @supplier_product_router.post("/import/{config}")  # type: ignore
 async def import_products(
+    request: Request,
     config: str,
     file: UploadFile = File(...),
     config_name: str | None = None,
@@ -24,8 +25,9 @@ async def import_products(
     """
     Импорт товаров из файла с заданной конфигурацией.
     """
+    token_data: TokenData = request.state.user
     import_result = await supplier_client.import_products(
-        config, file, config_name
+        config, file, token_data, config_name
     )
     return SuccessResponse(
         message="Success import",

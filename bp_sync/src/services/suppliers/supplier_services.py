@@ -5,6 +5,7 @@ from fastapi import HTTPException, UploadFile, status
 from redis.asyncio import Redis
 from starlette.datastructures import FormData
 
+from api.v1.schemas.response_schemas import TokenData
 from core.exceptions.supplier_exceptions import (
     ImportConfigurationError,
     NameNotFoundError,
@@ -120,6 +121,7 @@ class SupplierClient:
         self,
         config_key: str,
         file: UploadFile,
+        token_data: TokenData,
         config_name: str | None = None,
     ) -> ImportResult:
         """
@@ -177,7 +179,7 @@ class SupplierClient:
             )
 
             result = await self.file_import_service.import_file(
-                content, import_config, file.filename
+                content, import_config, token_data, file.filename
             )
 
             logger.info(
@@ -331,7 +333,6 @@ class SupplierClient:
                 if product_id:
                     update_data.product_id = product_id
                     has_changes = True
-
                 if (
                     section_id
                     and section_id != supplier_product.internal_section_id
@@ -449,7 +450,9 @@ class SupplierClient:
         # Помечаем логи как обработанные в любом случае
         change_log_repo = self.supplier_product_repo.change_log_repo
         await change_log_repo.mark_change_logs_as_processed(
-            supplier_product_id
+            supplier_product_id,
+            user_id=1,
+            loaded_value="",  # ============================
         )
 
         if has_changes or characteristics or complects:

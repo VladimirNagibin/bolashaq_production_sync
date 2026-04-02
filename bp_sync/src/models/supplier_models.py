@@ -584,6 +584,9 @@ class SupplierProductChangeLog(Base):  # type: ignore[misc]
     new_value: Mapped[str | None] = mapped_column(
         Text, comment="Значение ПОСЛЕ изменения"
     )
+    loaded_value: Mapped[str | None] = mapped_column(
+        Text, comment="Загруженное значение"
+    )
     value_type: Mapped[str | None] = mapped_column(
         comment="Тип значения (int, float, str, bool)"
     )
@@ -593,13 +596,22 @@ class SupplierProductChangeLog(Base):  # type: ignore[misc]
         Boolean,
         default=False,
         server_default="false",
-        comment="Проверено вручную?",
+        comment="Обработано",
+    )
+    force_import: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default="false",
+        comment="Перегружено в CRM без проверки",
     )
     processed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, comment="Когда проверили"
     )
     processed_by_user_id: Mapped[int | None] = mapped_column(
         nullable=True, comment="ID пользователя, который проверил"
+    )
+    loaded_by_user_id: Mapped[int | None] = mapped_column(
+        nullable=True, comment="ID пользователя, который загрузил"
     )
     comment: Mapped[str | None] = mapped_column(
         Text, nullable=True, comment="Комментарий менеджера при проверке"

@@ -1,18 +1,20 @@
+import asyncio
 import re
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
 import pandas as pd
 
+from api.v1.schemas.response_schemas import TokenData
 from core.exceptions.supplier_exceptions import (
     DatabaseError,
     DataMappingError,
     FileProcessingError,
-    ImportError,
 )
 from core.logger import logger
 from models.supplier_models import SupplierProduct
-from schemas.change_log_schemas import ChangeLogBase
+from schemas.change_log_schemas import ChangeLogUpdate
 from schemas.enums import (
     SourceKeyField,
     SourcesProductEnum,
@@ -49,6 +51,7 @@ class FileImportService:
         self,
         file_content: bytes,
         config: ImportConfigDetail,
+        token_data: TokenData,
         filename: str | None = None,
     ) -> ImportResult:
         """
@@ -69,6 +72,7 @@ class FileImportService:
         log_context = f"FileImport [{filename or 'unknown'}]"
 
         logger.info(f"{log_context}: Starting import process")
+        total_count = 0
 
         try:
             # 1. Чтение файла согласно настройкам
@@ -84,9 +88,9 @@ class FileImportService:
                 )
                 return result
 
-            logger.info(
-                f"{log_context}: Loaded {len(dataframe)} rows from file."
-            )
+            total_count = len(dataframe)
+
+            logger.info(f"{log_context}: Loaded {total_count} rows from file.")
 
             # 2. Трансформация данных и маппинг колонок
             mapped_rows = await self._map_dataframe_columns(dataframe, config)
@@ -107,7 +111,7 @@ class FileImportService:
 
             # 3.1 TODO: Если опция "Обновить все", тогда ищем отсутствующие
             # в обновлениях и деактивируем.
-            # Получить все позиции по поставщику для порлого сравнения
+            # Получить все позиции по поставщику для полного сравнения
 
             # 4. Подготовка пакетов для создания/обновления
             processing_result = await self._process_mapped_data(
@@ -115,23 +119,28 @@ class FileImportService:
                 existing_products=existing_products,
                 config=config,
                 log_context=log_context,
+                token_data=token_data,
             )
 
-            # 5. Сохранение изменений в БД
+            # 5. Синхронизация с Битрикс
+            if processing_result.bitrix_updates:
+                await self._sync_with_bitrix(
+                    processing_result,
+                    log_context,
+                    config,
+                )
+
+            # 6. Сохранение изменений в БД
             await self._save_import_results(
                 processing_result, log_context, config
             )
 
-            # 6. Синхронизация с Битрикс
-            if processing_result.bitrix_updates:
-                await self._sync_with_bitrix(
-                    processing_result.bitrix_updates, log_context
-                )
-
             # Обновляем счетчики в результате
+            result.total_count = total_count
             result.added_count = len(processing_result.products_to_create)
             result.updated_count = len(processing_result.products_to_update)
             result.bitrix_update_count = len(processing_result.bitrix_updates)
+            result.errors_count = len(processing_result.errors)
             result.errors = processing_result.errors
 
             logger.info(
@@ -153,12 +162,12 @@ class FileImportService:
             error_msg = f"Database error: {str(e)}"
             logger.error(f"{log_context}: {error_msg}", exc_info=True)
             result.errors.append(error_msg)
-            raise ImportError(error_msg) from e
+            # raise ImportError(error_msg) from e
         except Exception as e:
             error_msg = f"Critical import failure: {str(e)}"
             logger.error(f"{log_context}: {error_msg}", exc_info=True)
             result.errors.append(error_msg)
-            raise ImportError(error_msg) from e
+            # raise ImportError(error_msg) from e
 
         return result
 
@@ -623,6 +632,7 @@ class FileImportService:
         existing_products: dict[str, SupplierProductCreate],
         config: ImportConfigDetail,
         log_context: str,
+        token_data: TokenData,
     ) -> ProcessingResult:
         """Обработка всех строк данных."""
         result = ProcessingResult()
@@ -633,6 +643,7 @@ class FileImportService:
                     existing_products=existing_products,
                     config=config,
                     result=result,
+                    token_data=token_data,
                 )
             except Exception as e:
                 error_msg = f"Error processing row {idx}: {str(e)}"
@@ -646,6 +657,7 @@ class FileImportService:
         existing_products: dict[str, SupplierProductCreate],
         config: ImportConfigDetail,
         result: ProcessingResult,
+        token_data: TokenData,
     ) -> None:
         """Обработка одной строки данных."""
         # Получаем значение ключевого поля
@@ -662,81 +674,107 @@ class FileImportService:
 
         if not existing_record:
             # Создание нового товара
-            creates = await self._prepare_new_product(
-                row_data, config.source, config.config_name
+            creates = await self._prepare_product_create(
+                row_data,
+                config.source,
+                token_data,
+                config.config_name,
             )
             result.change_logs.extend(creates.change_logs)
             if creates.local_create:
                 result.products_to_create.append(creates.local_create)
+            if creates.error:
+                result.errors.append(creates.error)
         else:
             # Обновление существующего
-            updates = await self._prepare_product_updates(
+            updates = await self._prepare_product_update(
                 existing_product=existing_record,
                 new_row_data=row_data,
                 source=config.source,
+                token_data=token_data,
                 config_name=config.config_name,
             )
 
             if updates.local_update:
                 result.products_to_update.append(updates.local_update)
-
             if updates.bitrix_update:
                 result.bitrix_updates.append(updates.bitrix_update)
-
             if updates.change_logs:
                 result.change_logs.extend(updates.change_logs)
+            if updates.error:
+                result.errors.append(updates.error)
+            if updates.bitrix_to_supplier_product_map:
+                result.bitrix_to_supplier_product_map.update(
+                    updates.bitrix_to_supplier_product_map
+                )
 
-    async def _prepare_new_product(
+    async def _prepare_product_create(
         self,
         data: dict[str, Any],
         source: SourcesProductEnum,
+        token_data: TokenData,
         config_name: str | None = None,
     ) -> UpdateResult:
         """Подготовка данных для создания нового товара."""
-        result = UpdateResult()
+        change_logs: list[ChangeLogUpdate] = []
+        product_name = "Undefine"
+        try:
+            # Извлекаем значения полей
+            external_id = self._extract_field_value(data, "external_id")
+            code = self._extract_field_value(data, "code")
+            product_data: dict[str, Any] = {
+                "source": source,
+                "is_validated": False,
+                "should_export_to_crm": False,
+                "needs_review": True,
+            }
 
-        # Извлекаем значения полей
-        external_id = self._extract_field_value(data, "external_id")
-        code = self._extract_field_value(data, "code")
-        product_data: dict[str, Any] = {
-            "source": source,
-            "is_validated": False,
-            "should_export_to_crm": False,
-            "needs_review": True,
-        }
+            if external_id is not None:
+                product_data["external_id"] = external_id
+            if code is not None:
+                product_data["code"] = code
 
-        if external_id is not None:
-            product_data["external_id"] = external_id
-        if code is not None:
-            product_data["code"] = code
-
-        # Добавляем остальные поля
-        for field, wrapper in data.items():
-            if self._is_valid_field(field, wrapper):
-                value = wrapper.get("value")
-                product_data[field] = value
-
-                if wrapper.get("sync_with_crm"):
-                    result.change_logs.append(
-                        self._create_change_log(
-                            supplier_product_id=None,
-                            source=source,
-                            config_name=config_name,
-                            field_name=field,
-                            old_value=None,
-                            new_value=value,
+            # Добавляем остальные поля
+            for field, wrapper in data.items():
+                if self._is_valid_field(field, wrapper):
+                    value = wrapper.get("value")
+                    product_data[field] = value
+                    if field == "name":
+                        product_name = value
+                    if wrapper.get("sync_with_crm"):
+                        change_logs.append(
+                            self._create_change_log(
+                                supplier_product_id=None,
+                                source=source,
+                                config_name=config_name,
+                                field_name=field,
+                                old_value=None,
+                                new_value=value,
+                                loaded_by_user_id=token_data.user_bitrix_id,
+                            )
                         )
-                    )
-        # Сохраняем товар
-        supplier_product = SupplierProductCreate(**product_data)
-        created_product = await self._repo.create(supplier_product)
-        result.local_create = supplier_product
+            # Сохраняем товар
+            supplier_product = SupplierProductCreate(**product_data)
 
-        if created_product:
-            # Обновляем ID в логах
-            for log in result.change_logs:
-                log.supplier_product_id = created_product.id
-            return result
+            created_product = await self._repo.create(supplier_product)
+
+            if created_product:
+                # Обновляем ID в логах
+                for log in change_logs:
+                    log.supplier_product_id = created_product.id
+                return UpdateResult(
+                    local_create=supplier_product, change_logs=change_logs
+                )
+            return UpdateResult(
+                error=("Error creating supplier product " f"{product_name}")
+            )
+        except Exception as e:
+            return UpdateResult(
+                error=(
+                    "Error during creating supplier product "
+                    f"{product_name}: {str(e)}"
+                )
+            )
 
     def _extract_field_value(
         self, data: dict[str, Any], field_name: str
@@ -762,9 +800,16 @@ class FileImportService:
         field_name: str,
         old_value: Any,
         new_value: Any,
-    ) -> ChangeLogBase:
+        loaded_by_user_id: int | None,
+        loaded_value: Any | None = None,
+        is_processed: bool = False,
+        force_import: bool = False,
+        processed_at: datetime | None = None,
+        processed_by_user_id: int | None = None,
+        comment: str | None = None,
+    ) -> ChangeLogUpdate:
         """Создание объекта лога изменений."""
-        return ChangeLogBase(
+        return ChangeLogUpdate(
             supplier_product_id=supplier_product_id,
             source=source,
             config_name=config_name,
@@ -774,88 +819,139 @@ class FileImportService:
             value_type=(
                 type(new_value).__name__ if new_value is not None else None
             ),
+            loaded_by_user_id=loaded_by_user_id,
+            loaded_value=(
+                str(loaded_value) if loaded_value is not None else None
+            ),
+            is_processed=is_processed,
+            force_import=force_import,
+            processed_at=processed_at,
+            processed_by_user_id=processed_by_user_id,
+            comment=comment,
         )
 
-    async def _prepare_product_updates(
+    async def _prepare_product_update(
         self,
         existing_product: SupplierProductCreate,
         new_row_data: dict[str, Any],
         source: SourcesProductEnum,
+        token_data: TokenData,
         config_name: str | None = None,
     ) -> UpdateResult:
         """Подготовка моделей обновления."""
         result = UpdateResult()
+        product_name = "Undefine"
+        try:
+            product_name = existing_product.name
+            local_update_data: dict[str, Any] = {
+                "external_id": existing_product.external_id,
+                "code": existing_product.code,
+            }
 
-        local_update_data: dict[str, Any] = {
-            "external_id": existing_product.external_id,
-            "code": existing_product.code,
-        }
+            has_local_changes = False
+            needs_bitrix_update = False
 
-        has_local_changes = False
-        needs_bitrix_update = False
+            # Подготовка модели Битрикса
+            bitrix_update = await self._prepare_bitrix_model(existing_product)
+            if (
+                bitrix_update
+                and bitrix_update.external_id
+                and existing_product.id
+            ):
+                result.bitrix_to_supplier_product_map = {
+                    int(bitrix_update.external_id): existing_product.id
+                }
 
-        # Подготовка модели Битрикса
-        bitrix_update = self._prepare_bitrix_model(existing_product)
-
-        # Определяем режим обработки
-        is_simple_mode = not (
-            existing_product.should_export_to_crm
-            or existing_product.needs_review
-        )
-
-        for field, wrapper in new_row_data.items():
-            if not self._is_valid_field(field, wrapper):
-                continue
-
-            new_value = wrapper.get("value")
-            old_value = getattr(existing_product, field, None)
-
-            if old_value == new_value:
-                continue
-
-            # Обновляем локальные данные
-            local_update_data[field] = new_value
-            has_local_changes = True
-
-            if is_simple_mode:
-                continue
-
-            # Обработка для CRM-режима
-            needs_review = self._process_crm_update(
-                field=field,
-                new_value=new_value,
-                old_value=old_value,
-                wrapper=wrapper,
-                existing_product=existing_product,
-                bitrix_update=bitrix_update,
-                source=source,
-                config_name=config_name,
-                result=result,
+            # Определяем режим обработки
+            is_simple_mode = not (
+                existing_product.should_export_to_crm
+                or existing_product.needs_review
             )
 
-            if wrapper.get("force_import"):
-                needs_bitrix_update = True
+            for field, wrapper in new_row_data.items():
+                if not self._is_valid_field(field, wrapper):
+                    continue
 
-            if needs_review:
-                local_update_data["needs_review"] = True
+                new_value = wrapper.get("value")
+                old_value = getattr(existing_product, field, None)
+
+                if self._is_equal_or_none(old_value, new_value):
+                    continue
+
+                # Обновляем локальные данные
+                local_update_data[field] = new_value
                 has_local_changes = True
 
-        # Формируем результат
-        if has_local_changes:
-            result.local_update = SupplierProductUpdate(**local_update_data)
+                if is_simple_mode:
+                    continue
 
-        if needs_bitrix_update and bitrix_update:
-            result.bitrix_update = bitrix_update
+                # Обработка для CRM-режима
+                needs_review = self._process_crm_update(
+                    field=field,
+                    new_value=new_value,
+                    old_value=old_value,
+                    wrapper=wrapper,
+                    existing_product=existing_product,
+                    bitrix_update=bitrix_update,
+                    source=source,
+                    config_name=config_name,
+                    result=result,
+                    loaded_by_user_id=token_data.user_bitrix_id,
+                )
 
-        return result
+                if wrapper.get("force_import"):
+                    needs_bitrix_update = True
 
-    def _prepare_bitrix_model(
+                if needs_review:
+                    local_update_data["needs_review"] = True
+                    has_local_changes = True
+
+            # Формируем результат
+            if has_local_changes:
+                result.local_update = SupplierProductUpdate(
+                    **local_update_data
+                )
+
+            if needs_bitrix_update and bitrix_update:
+                result.bitrix_update = bitrix_update
+            return result
+        except Exception as e:
+            return UpdateResult(
+                error=(
+                    "Error during updating supplier product "
+                    f"{product_name}: {str(e)}"
+                )
+            )
+
+    async def _prepare_bitrix_model(
         self, existing_product: SupplierProductCreate
     ) -> ProductUpdate | None:
         """Подготовка модели для Битрикса."""
-        if existing_product.product_id:
-            return ProductUpdate(internal_id=existing_product.product_id)
-        return None
+        try:
+            if not existing_product.product_id:
+                return None
+            bitrix_product = (
+                await self._product_client.repo.get_product_with_properties(
+                    existing_product.product_id
+                )
+            )
+            if not bitrix_product:
+                return None
+            return ProductUpdate(external_id=bitrix_product.external_id)
+        except Exception:
+            return None
+
+    def _is_equal_or_none(self, old_value: Any, new_value: Any) -> bool:
+        if new_value is None or old_value == new_value:
+            return True
+        try:
+            old_value = str(old_value)
+            new_value = str(new_value)
+            old_value = old_value.replace("\r\n", "\n").replace("\r", "\n")
+            new_value = new_value.replace("\r\n", "\n").replace("\r", "\n")
+            return bool(old_value == new_value)
+        except (TypeError, ValueError):
+            return False
 
     def _process_crm_update(
         self,
@@ -868,6 +964,7 @@ class FileImportService:
         source: SourcesProductEnum,
         config_name: str | None,
         result: UpdateResult,
+        loaded_by_user_id: int,
     ) -> bool:
         """Обработка обновления для CRM."""
         force_import = wrapper.get("force_import")
@@ -876,7 +973,21 @@ class FileImportService:
         # Принудительный импорт в CRM
         if force_import and bitrix_update and hasattr(bitrix_update, field):
             setattr(bitrix_update, field, new_value)
-
+            change_log = self._create_change_log(
+                supplier_product_id=existing_product.id,
+                source=source,
+                config_name=config_name,
+                field_name=field,
+                old_value=old_value,
+                new_value=new_value,
+                loaded_by_user_id=loaded_by_user_id,
+                force_import=True,
+                loaded_value=new_value,
+                is_processed=True,
+                processed_at=datetime.now(timezone.utc),
+                processed_by_user_id=loaded_by_user_id,
+            )
+            result.change_logs.append(change_log)
         # Синхронизация через лог изменений
         elif sync_with_crm:
             change_log = self._create_change_log(
@@ -886,6 +997,7 @@ class FileImportService:
                 field_name=field,
                 old_value=old_value,
                 new_value=new_value,
+                loaded_by_user_id=loaded_by_user_id,
             )
             result.change_logs.append(change_log)
 
@@ -928,19 +1040,134 @@ class FileImportService:
             raise DatabaseError(f"Failed to save import results: {str(e)}")
 
     async def _sync_with_bitrix(
-        self, bitrix_updates: list[ProductUpdate], log_context: str
+        self,
+        processing_result: ProcessingResult,
+        log_context: str,
+        config: ImportConfigDetail,
     ) -> None:
         """Синхронизация с Битрикс24."""
+        bitrix_updates = processing_result.bitrix_updates
+        if not bitrix_updates:
+            logger.info(f"{log_context}: No updates to sync")
+            return
+
+        logger.info(
+            f"{log_context}: Sending {len(bitrix_updates)} "
+            "updates to Bitrix24..."
+        )
+
+        total = len(bitrix_updates)
+        success_count = 0
+        error_count = 0
+        batch_size = 100
+        pause_seconds = 2  # Настраиваемая пауза
+
+        for i, bitrix_update in enumerate(bitrix_updates, 1):
+            try:
+                await self._product_client.bitrix_client.update(bitrix_update)
+                success_count += 1
+                await self._mark_as_processed_intermediate(
+                    bitrix_update, processing_result, config
+                )
+            except Exception as e:
+                await self._unmark_as_processed(
+                    bitrix_update, processing_result, config
+                )
+
+                error_count += 1
+                logger.error(
+                    f"{log_context}: Failed to update product "
+                    f"{getattr(bitrix_update, 'external_id', 'unknown')}: {e}",
+                    exc_info=False,
+                )
+                # Продолжаем со следующими обновлениями
+
+            # Пауза каждые 100 запросов
+            if i % batch_size == 0 and i < total:
+                logger.debug(
+                    f"{log_context}: Processed {i}/{total} updates. "
+                    f"Pausing for {pause_seconds} second..."
+                )
+                await asyncio.sleep(pause_seconds)
+
+        logger.info(
+            f"{log_context}: Bitrix sync completed. "
+            f"Success: {success_count}, Errors: {error_count}, Total: {total}"
+        )
+
+    async def _unmark_as_processed(
+        self,
+        bitrix_update: ProductUpdate,
+        processing_result: ProcessingResult,
+        config: ImportConfigDetail,
+    ) -> None:
         try:
-            logger.info(
-                f"{log_context}: Sending {len(bitrix_updates)} "
-                "updates to Bitrix24..."
+            if not bitrix_update.external_id:
+                return
+            supplier_product_id = (
+                processing_result.bitrix_to_supplier_product_map.get(
+                    int(bitrix_update.external_id)
+                )
             )
-            # await self._product_client.create_or_update_product(
-            #     bitrix_updates
-            #     )
+            if not supplier_product_id:
+                return
+            for log in processing_result.change_logs:
+                if log.supplier_product_id == supplier_product_id:
+                    log.loaded_value = None
+                    log.is_processed = False
+                    log.force_import = False
+                    log.processed_at = None
+                    log.processed_by_user_id = None
+            supplier_product = await self._repo.get_with_relations(
+                supplier_product_id
+            )
+            key_field_name = config.source_key_field.value
+            key = getattr(supplier_product, key_field_name, None)
+            if not key:
+                return
+            for supplier_product_upd in processing_result.products_to_update:
+                if getattr(supplier_product_upd, key_field_name, None) == key:
+                    supplier_product_upd.needs_review = True
         except Exception as e:
-            logger.error(
-                f"{log_context}: Bitrix sync failed: {str(e)}", exc_info=True
+            logger.error(f"{e}")
+
+    async def _mark_as_processed_intermediate(
+        self,
+        bitrix_update: ProductUpdate,
+        processing_result: ProcessingResult,
+        config: ImportConfigDetail,
+    ) -> None:
+        try:
+            if not bitrix_update.external_id:
+                return
+            supplier_product_id = (
+                processing_result.bitrix_to_supplier_product_map.get(
+                    int(bitrix_update.external_id)
+                )
             )
-            # Не прерываем основной импорт из-за ошибки Битрикса
+            if not supplier_product_id:
+                return
+            for log in processing_result.change_logs:
+                if (
+                    log.supplier_product_id == supplier_product_id
+                    and log.is_processed
+                ):
+                    log_repo = self._repo.change_log_repo
+                    # Для промежуточных не обработанных полей помечаем
+                    # как обработанное.
+                    # force_import=True, processed_by_user_id=None
+                    # Это означает автоматическое закрытие лога при загрузке
+                    # новых значений
+                    updated = await log_repo.mark_change_logs_as_processed(
+                        supplier_product_id, log.field_name, force_import=True
+                    )
+                    if updated > 0:
+                        # TODO: Checking supplier product. If not logs for
+                        # update after marking - set not needs_review
+
+                        logger.info(
+                            "Updated {updated} logs for product "
+                            f"{str(supplier_product_id)}"
+                        )
+        except Exception as e:
+            logger.error(f"{e}")

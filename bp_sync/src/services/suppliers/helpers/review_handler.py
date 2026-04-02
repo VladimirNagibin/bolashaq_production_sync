@@ -601,7 +601,7 @@ class ReviewHandler:
     ) -> tuple[UUID | None, int | None]:
         """
         Обрабатывает отправленную форму.
-        Возвращает: external_id_or_None, section_id_or_None
+        Возвращает: product_id_or_None, section_id_or_None
         """
         try:
             # Получаем существующий продукт или создаем новый
@@ -627,7 +627,7 @@ class ReviewHandler:
                 bitrix_product_id,
             )
 
-            return (db_product_id, new_section_id or section_id)
+            return db_product_id, new_section_id or section_id
 
         except NameNotFoundError:
             raise

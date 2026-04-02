@@ -57,7 +57,7 @@
                 </div>
                 <div class="card-body">
                     <p class="text-muted small mb-3">
-                        Загрузите файл для импорта в выбранный источник (<strong id="selectedSourceLabel">...</strong>).
+                        Загрузите файл для импорта из выбранного источника (<strong id="selectedSourceLabel">...</strong>).
                     </p>
 
                     <form id="importForm">
@@ -70,7 +70,7 @@
                         <!-- Опциональное имя конфигурации -->
                         <div class="mb-3">
                             <label for="config_name" class="form-label">Имя конфигурации (опционально):</label>
-                            <input type="text" class="form-control" name="config_name" id="config_name" placeholder="Например: Мартовский прайс">
+                            <input type="text" class="form-control" name="config_name" id="config_name" placeholder="Например: Прайс">
                         </div>
 
                         <div class="d-grid">
@@ -128,8 +128,8 @@
                     <!-- Детальная статистика -->
                     <ul class="list-group list-group-flush small mb-3">
                         <li class="list-group-item d-flex justify-content-between align-items-center">
-                            Принудительный импорт
-                            <span class="badge bg-secondary rounded-pill" id="res-force">0</span>
+                            Количество ошибок
+                            <span class="badge bg-secondary rounded-pill" id="res-errors">0</span>
                         </li>
                     </ul>
 
@@ -234,11 +234,11 @@
 
         function showImportResultModal(data) {
             // 1. Заполняем цифры
-            document.getElementById('res-total').textContent = data.total_processed || 0;
+            document.getElementById('res-total').textContent = data.total_count || 0;
             document.getElementById('res-added').textContent = data.added_count || 0;
             document.getElementById('res-updated').textContent = data.updated_count || 0;
             document.getElementById('res-bitrix').textContent = data.bitrix_update_count || 0;
-            document.getElementById('res-force').textContent = data.force_import_count || 0;
+            document.getElementById('res-errors').textContent = data.errors_count || 0;
 
             // 2. Обрабатываем ошибки
             const errorSection = document.getElementById('errorsSection');

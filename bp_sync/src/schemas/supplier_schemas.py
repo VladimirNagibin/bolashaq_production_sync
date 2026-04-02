@@ -5,7 +5,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from typing_extensions import Annotated
 
-from schemas.change_log_schemas import ChangeLogBase
+from schemas.change_log_schemas import ChangeLogUpdate
 from schemas.enums import SourceKeyField, SourcesProductEnum
 from schemas.product_schemas import ProductUpdate
 
@@ -127,7 +127,7 @@ class SupplierProductBase(BaseFields):
 class SupplierProductCreate(SupplierProductBase):
     """Создание товара поставщика."""
 
-    external_id: int = Field(description="Внешний идентификатор")
+    external_id: int | None = Field(description="Внешний идентификатор")
     name: Annotated[str, StringConstraints(max_length=500)]
     source: SourcesProductEnum
     is_validated: bool = False
@@ -291,10 +291,12 @@ class ImportConfigDetail(ImportConfigCreate):
 class ImportResult(BaseModel):  # type: ignore[misc]
     """Результат импорта."""
 
+    total_count: int = 0
     added_count: int = 0
     updated_count: int = 0
     force_import_count: int = 0
     bitrix_update_count: int = 0
+    errors_count: int = 0
     errors: list[str] = []
     bitrix_updates: list[Any] = []
 
@@ -309,8 +311,9 @@ class ProcessingResult(BaseModel):  # type: ignore[misc]
     products_to_create: list[SupplierProductCreate] = []
     products_to_update: list[SupplierProductUpdate] = []
     bitrix_updates: list[ProductUpdate] = []
-    change_logs: list[ChangeLogBase] = []
+    change_logs: list[ChangeLogUpdate] = []
     errors: list[str] = []
+    bitrix_to_supplier_product_map: dict[int, UUID] = {}
 
 
 class UpdateResult(BaseModel):  # type: ignore[misc]
@@ -319,4 +322,6 @@ class UpdateResult(BaseModel):  # type: ignore[misc]
     local_create: SupplierProductCreate | None = None
     local_update: SupplierProductUpdate | None = None
     bitrix_update: ProductUpdate | None = None
-    change_logs: list[ChangeLogBase] = []
+    change_logs: list[ChangeLogUpdate] = []
+    error: str | None = None
+    bitrix_to_supplier_product_map: dict[int, UUID] = {}
