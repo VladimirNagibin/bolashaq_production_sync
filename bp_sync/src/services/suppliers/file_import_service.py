@@ -37,6 +37,12 @@ from .repositories.supplier_product_repo import SupplierProductRepository
 class FileImportService:
     """Сервис для импорта файлов с настройками из БД."""
 
+    # Константы для настройки
+    BITRIX_SYNC_BATCH_SIZE = 50
+    BITRIX_SYNC_PAUSE_SECONDS = 1
+    BITRIX_RETRY_ATTEMPTS = 3
+    BITRIX_RETRY_DELAY_SECONDS = 2
+
     TRUE_VALUES = {"true", "yes", "1", "да", "y", "t", "1.0"}
 
     def __init__(
@@ -65,14 +71,11 @@ class FileImportService:
         Returns:
             ImportResult с результатами импорта
 
-        Raises:
-            ImportError: При критических ошибках импорта
         """
         result = ImportResult()
         log_context = f"FileImport [{filename or 'unknown'}]"
 
         logger.info(f"{log_context}: Starting import process")
-        total_count = 0
 
         try:
             # 1. Чтение файла согласно настройкам
@@ -89,7 +92,6 @@ class FileImportService:
                 return result
 
             total_count = len(dataframe)
-
             logger.info(f"{log_context}: Loaded {total_count} rows from file.")
 
             # 2. Трансформация данных и маппинг колонок
@@ -162,14 +164,14 @@ class FileImportService:
             error_msg = f"Database error: {str(e)}"
             logger.error(f"{log_context}: {error_msg}", exc_info=True)
             result.errors.append(error_msg)
-            # raise ImportError(error_msg) from e
         except Exception as e:
             error_msg = f"Critical import failure: {str(e)}"
             logger.error(f"{log_context}: {error_msg}", exc_info=True)
             result.errors.append(error_msg)
-            # raise ImportError(error_msg) from e
 
         return result
+
+    # --- Data Loading & Mapping ---
 
     async def _load_dataframe(
         self, content: bytes, config: ImportConfigDetail, log_context: str
@@ -195,24 +197,9 @@ class FileImportService:
                     }
                 )
                 dataframe = pd.read_csv(io.BytesIO(content), **read_params)
-                # # Для CSV файлов
-                # df = pd.read_csv(
-                #     io.BytesIO(content),
-                #     encoding=config.encoding or "utf-8",
-                #     delimiter=config.delimiter or ";",
-                #     header=None,
-                #     dtype=str,
-                # )
             elif file_format == "XLSX":
                 read_params["engine"] = "openpyxl"
                 dataframe = pd.read_excel(io.BytesIO(content), **read_params)
-                # # Для Excel файлов
-                # df = pd.read_excel(
-                #     io.BytesIO(content),
-                #     header=None,
-                #     dtype=str,
-                #     engine="openpyxl",
-                # )
             else:
                 raise ValueError(
                     f"Неподдерживаемый формат файла: {file_format}"
@@ -224,11 +211,7 @@ class FileImportService:
             )
 
             # Применяем настройки строк
-            dataframe = self._apply_row_settings(
-                dataframe, config, log_context
-            )
-
-            return dataframe
+            return self._apply_row_settings(dataframe, config, log_context)
 
         except pd.errors.EmptyDataError:
             raise FileProcessingError("File is empty")
@@ -257,9 +240,7 @@ class FileImportService:
             df = self._slice_data_start(df, config, log_context)
 
         # Очистка данных
-        df = self._clean_dataframe(df, log_context)
-
-        return df
+        return self._clean_dataframe(df, log_context)
 
     def _set_headers_from_row(
         self, df: pd.DataFrame, header_idx: int, log_context: str
@@ -550,6 +531,8 @@ class FileImportService:
                 pass
         return None
 
+    # --- Fetching & Processing ---
+
     async def _fetch_existing_products(
         self,
         source: SourcesProductEnum,
@@ -619,11 +602,7 @@ class FileImportService:
     ) -> str:
         """Извлечение значения ключевого поля из записи."""
         if key_field == SourceKeyField.EXTERNAL_ID:
-            return (
-                str(record.external_id)
-                if record.external_id is not None
-                else ""
-            )
+            return str(record.external_id) if record.external_id else ""
         return record.code or ""
 
     async def _process_mapped_data(
@@ -717,7 +696,7 @@ class FileImportService:
     ) -> UpdateResult:
         """Подготовка данных для создания нового товара."""
         change_logs: list[ChangeLogUpdate] = []
-        product_name = "Undefine"
+        product_name = "Undefined"
         try:
             # Извлекаем значения полей
             external_id = self._extract_field_value(data, "external_id")
@@ -840,9 +819,8 @@ class FileImportService:
     ) -> UpdateResult:
         """Подготовка моделей обновления."""
         result = UpdateResult()
-        product_name = "Undefine"
+        product_name = existing_product.name
         try:
-            product_name = existing_product.name
             local_update_data: dict[str, Any] = {
                 "external_id": existing_product.external_id,
                 "code": existing_product.code,
@@ -1006,6 +984,8 @@ class FileImportService:
                 return True
         return False
 
+    # --- Sync & Save ---
+
     async def _save_import_results(
         self,
         processing_result: ProcessingResult,
@@ -1039,6 +1019,29 @@ class FileImportService:
         except Exception as e:
             raise DatabaseError(f"Failed to save import results: {str(e)}")
 
+    async def _execute_with_retry(
+        self, bitrix_update: ProductUpdate, log_context: str
+    ) -> bool:
+        """Выполняет запрос к Битрикс с несколькими попытками."""
+        ext_id = getattr(bitrix_update, "external_id", "unknown")
+        for attempt in range(self.BITRIX_RETRY_ATTEMPTS):
+            try:
+                await self._product_client.bitrix_client.update(bitrix_update)
+                return True
+            except Exception as e:
+                if attempt < self.BITRIX_RETRY_ATTEMPTS - 1:
+                    logger.warning(
+                        f"{log_context}: Bitrix update failed for {ext_id} "
+                        f"(attempt {attempt + 1}), "
+                        f"retrying in {self.BITRIX_RETRY_DELAY_SECONDS}s... "
+                        f"Error: {e}"
+                    )
+                    await asyncio.sleep(self.BITRIX_RETRY_DELAY_SECONDS)
+                else:
+                    raise
+
+        return False
+
     async def _sync_with_bitrix(
         self,
         processing_result: ProcessingResult,
@@ -1059,12 +1062,11 @@ class FileImportService:
         total = len(bitrix_updates)
         success_count = 0
         error_count = 0
-        batch_size = 100
-        pause_seconds = 2  # Настраиваемая пауза
 
         for i, bitrix_update in enumerate(bitrix_updates, 1):
+            ext_id = getattr(bitrix_update, "external_id", "unknown")
             try:
-                await self._product_client.bitrix_client.update(bitrix_update)
+                await self._execute_with_retry(bitrix_update, log_context)
                 success_count += 1
                 await self._mark_as_processed_intermediate(
                     bitrix_update, processing_result, config
@@ -1076,19 +1078,18 @@ class FileImportService:
 
                 error_count += 1
                 logger.error(
-                    f"{log_context}: Failed to update product "
-                    f"{getattr(bitrix_update, 'external_id', 'unknown')}: {e}",
+                    f"{log_context}: Failed to update product {ext_id}: {e}",
                     exc_info=False,
                 )
                 # Продолжаем со следующими обновлениями
 
-            # Пауза каждые 100 запросов
-            if i % batch_size == 0 and i < total:
+            # Пауза каждые N запросов
+            if i % self.BITRIX_SYNC_BATCH_SIZE == 0 and i < total:
                 logger.debug(
                     f"{log_context}: Processed {i}/{total} updates. "
-                    f"Pausing for {pause_seconds} second..."
+                    f"Pausing for {self.BITRIX_SYNC_PAUSE_SECONDS} second..."
                 )
-                await asyncio.sleep(pause_seconds)
+                await asyncio.sleep(self.BITRIX_SYNC_PAUSE_SECONDS)
 
         logger.info(
             f"{log_context}: Bitrix sync completed. "
@@ -1118,16 +1119,28 @@ class FileImportService:
                     log.force_import = False
                     log.processed_at = None
                     log.processed_by_user_id = None
-            supplier_product = await self._repo.get_with_relations(
-                supplier_product_id
-            )
-            key_field_name = config.source_key_field.value
-            key = getattr(supplier_product, key_field_name, None)
-            if not key:
-                return
-            for supplier_product_upd in processing_result.products_to_update:
-                if getattr(supplier_product_upd, key_field_name, None) == key:
-                    supplier_product_upd.needs_review = True
+
+            try:
+                supplier_product = await self._repo.get_with_relations(
+                    supplier_product_id
+                )
+                key_field_name = config.source_key_field.value
+                key = getattr(supplier_product, key_field_name, None)
+                if key:
+                    for (
+                        supplier_product_upd
+                    ) in processing_result.products_to_update:
+                        if (
+                            getattr(supplier_product_upd, key_field_name, None)
+                            == key
+                        ):
+                            supplier_product_upd.needs_review = True
+            except Exception as e:
+                logger.warning(
+                    f"Failed to unmark product {supplier_product_id} as "
+                    f"needs_review: {e}"
+                )
+
         except Exception as e:
             logger.error(f"{e}")
 
@@ -1158,6 +1171,8 @@ class FileImportService:
                     # force_import=True, processed_by_user_id=None
                     # Это означает автоматическое закрытие лога при загрузке
                     # новых значений
+                    # TODO: для оптимизации только получать логи для
+                    # обновления и обновлять пакетом
                     updated = await log_repo.mark_change_logs_as_processed(
                         supplier_product_id, log.field_name, force_import=True
                     )
