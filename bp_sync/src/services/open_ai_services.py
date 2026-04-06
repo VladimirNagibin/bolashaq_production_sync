@@ -85,30 +85,32 @@ class OpenAIService:
             APIError: При других ошибках API
             ValueError: При невалидных входных данных
         """
-        return ProductSection(
-            announcement="announcement",
-            description="description",
-            characteristics=[
-                ProductCharacteristic(
-                    name="name5", value="value5", unit="unit5"
-                ),
-                ProductCharacteristic(name="name6", value="value6"),
-            ],
-            kit=[
-                KitItem(
-                    code="code2",
-                    name="name2",
-                    description="des2",
-                    specifications={"key2": "value2", "key222": 222},
-                ),
-                KitItem(
-                    code="code3",
-                    name="name3",
-                    description="des3",
-                    specifications={"key3": "value3", "key333": 333},
-                ),
-            ],
-        )
+        if settings.OPEN_AI_MOCK_MODE:
+            # Заглушка для данных
+            return ProductSection(
+                announcement="announcement",
+                description="description",
+                characteristics=[
+                    ProductCharacteristic(
+                        name="name", value="value", unit="unit"
+                    ),
+                    ProductCharacteristic(name="name_", value="value_"),
+                ],
+                kit=[
+                    KitItem(
+                        code="code",
+                        name="name",
+                        description="description",
+                        specifications={"key": "value", "key_": "value_"},
+                    ),
+                    KitItem(
+                        code="code_",
+                        name="name_",
+                        description="description_",
+                        specifications={"key": "value", "key_": "value_"},
+                    ),
+                ],
+            )
         # Валидация входных данных
         if not description_text or not description_text.strip():
             raise ValueError("Description text cannot be empty")

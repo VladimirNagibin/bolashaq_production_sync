@@ -275,6 +275,7 @@ class ProductsectionClient(
                 ):
                     parent = sections_map[current_section.section_id]
                     selected_root_id = parent.external_id
+                    selected_root_name = parent.name
                     selected_child_name = current_section.name
                 else:
                     selected_root_id = selected_child_id
@@ -292,6 +293,7 @@ class ProductsectionClient(
                 "selected_root_id": selected_root_id,
                 "selected_child_id": selected_child_id,
                 "selected_child_name": selected_child_name,
+                "selected_root_name": selected_root_name,
             }
         except Exception:
             return {}

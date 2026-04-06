@@ -366,8 +366,10 @@ class SupplierProductChangeLogAdmin(
 
     column_list = [  # Поля в списке
         "field_name",
+        "is_processed",
         "source",
         "value_type",
+        "created_at",
         "supplier_product_id",
         "supp_product",
     ]

@@ -27,6 +27,9 @@ class ChangeLogBase(BaseModel):  # type: ignore[misc]
     value_type: str | None = Field(
         None, description="Тип значения (int, float, str, bool)"
     )
+    loaded_by_user_id: int | None = Field(
+        None, description="ID пользователя, который загрузил"
+    )
 
 
 class ChangeLogCreate(ChangeLogBase):
@@ -35,10 +38,14 @@ class ChangeLogCreate(ChangeLogBase):
     pass
 
 
-class ChangeLogUpdate(BaseModel):  # type: ignore[misc]
+class ChangeLogUpdate(ChangeLogBase):
     """Схема для обновления (ручная обработка)"""
 
-    is_processed: bool = Field(False, description="Проверено вручную?")
+    loaded_value: str | None = Field(None, description="Загруженное значение")
+    is_processed: bool = Field(False, description="Обработано")
+    force_import: bool = Field(
+        False, description="Перегружено в CRM без проверки"
+    )
     processed_at: datetime | None = Field(None, description="Когда проверили")
     processed_by_user_id: int | None = Field(
         None, description="ID пользователя, который проверил"
@@ -52,7 +59,7 @@ class ChangeLogInDB(ChangeLogBase):
     """Схема для записи из БД"""
 
     id: UUID = Field(..., description="ID записи в логе")
-    is_processed: bool = Field(..., description="Проверено вручную?")
+    is_processed: bool = Field(..., description="Обработано")
     processed_at: datetime | None = Field(None, description="Когда проверили")
     processed_by_user_id: int | None = Field(
         None, description="ID пользователя, который проверил"

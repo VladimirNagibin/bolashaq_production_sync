@@ -37,6 +37,10 @@ class ReviewHandler:
     # Префиксы для полей формы
     FIELD_PREFIX = "field_"
     UPDATE_PREFIX = "update_"
+    MAPPING_FIELDS: dict[str, str] = {
+        "characteristics": "specifications",
+        "complects": "configuration",
+    }
 
     def __init__(
         self,
@@ -321,15 +325,20 @@ class ReviewHandler:
             new_value = self._transform_items(
                 field_data.get("new_value"), field_name, "new"
             )
-            current_val = self._get_complex_product_value(product, field_name)
+            current_val = self._get_list_complex_product_value(
+                product, field_name
+            )
 
             return [
                 {
                     "field_name": field_name,
-                    "old_value": old_value,
-                    "new_value": new_value,
-                    "current_product_value": current_val,
+                    "old_value": (self._transform_data_list(old_value)),
+                    "new_value": (self._transform_data_list(new_value)),
+                    "current_product_value": (
+                        self._transform_data_list(current_val)
+                    ),
                     "value_type": "str",
+                    "new_value_list": new_value,
                 }
             ]
         except Exception:
@@ -337,7 +346,7 @@ class ReviewHandler:
 
     def _transform_items(
         self, items: list[Any] | None, field_name: str, field_type: str
-    ) -> str | None:
+    ) -> list[str] | None:
         if items is None or not items:
             return None
         items_list: list[str] = []
@@ -373,7 +382,7 @@ class ReviewHandler:
                     result = "".join(complects)
             if result:
                 items_list.append(result.strip())
-        return "\n".join(items_list)
+        return items_list
 
     def _get_complex_product_value(
         self, product: ProductCreate | None, field_name: str
@@ -387,6 +396,29 @@ class ReviewHandler:
             return None
         except Exception:
             return None
+
+    def _get_list_complex_product_value(
+        self, product: ProductCreate | None, field_name: str
+    ) -> list[str] | None:
+        try:
+            current_field_name = self.MAPPING_FIELDS.get(field_name)
+            if not current_field_name:
+                return None
+            current_data = getattr(product, current_field_name, None)
+            data_list: list[str] = []
+            if current_data:
+                for data in current_data:
+                    data_list.append(data.value)
+                if data_list:
+                    return data_list
+            return None
+        except Exception:
+            return None
+
+    def _transform_data_list(self, data_list: list[str] | None) -> str | None:
+        if not data_list:
+            return None
+        return "\n---------\n".join(data_list)
 
     def _get_description(
         self,
@@ -569,7 +601,7 @@ class ReviewHandler:
     ) -> tuple[UUID | None, int | None]:
         """
         Обрабатывает отправленную форму.
-        Возвращает: external_id_or_None
+        Возвращает: product_id_or_None, section_id_or_None
         """
         try:
             # Получаем существующий продукт или создаем новый
@@ -579,7 +611,6 @@ class ReviewHandler:
             product_update = await self._prepare_product_update(
                 product, form_data
             )
-
             if not product_update:
                 return None, section_id
 
@@ -596,7 +627,7 @@ class ReviewHandler:
                 bitrix_product_id,
             )
 
-            return (db_product_id, new_section_id or section_id)
+            return db_product_id, new_section_id or section_id
 
         except NameNotFoundError:
             raise
@@ -739,6 +770,11 @@ class ReviewHandler:
                 if "gallery_block_active" in form_data:
                     return True
                 return False
+            elif field_name in ["characteristics", "complects"]:
+                result = (
+                    form_data.get(f"{self.UPDATE_PREFIX}{field_name}") == "on"
+                )
+                return bool(result)
             else:
                 field_key = f"{self.FIELD_PREFIX}{field_name}"
                 update_key = f"{self.UPDATE_PREFIX}{field_name}"
@@ -806,7 +842,6 @@ class ReviewHandler:
         form_data: FormData,
     ) -> bool:
         """Обновляет специальное поле."""
-        # TODO: реализовать логику для специальных полей
         if field_name == "brend":
             return self._handle_field_brand(
                 product_update, existing_product, field_name, form_data
@@ -941,26 +976,30 @@ class ReviewHandler:
         field_name: str,
         form_data: FormData,
     ) -> bool:
-        form_value = form_data.get(f"{self.FIELD_PREFIX}{field_name}")
-        # Если значение не передано в форме - ничего не делаем
-        if form_value is None:
-            logger.debug("No value for section field in form")
+        form_values = form_data.getlist(f"{self.FIELD_PREFIX}{field_name}[]")
+        clean_values: list[str] = [
+            str(val).strip() for val in form_values if str(val).strip()
+        ]
+        current_field_name = self.MAPPING_FIELDS.get(field_name)
+        if not current_field_name:
             return False
-        current_value = self._get_complex_product_value(
+        current_values = self._get_list_complex_product_value(
             existing_product, field_name
         )
-        form_value = str(form_value).strip()
-        if not form_value:
-            if current_value:
-                # TODO: Если значение заполнено - обнулить ?
-                return True
-            return False
-        new_value = None
-        if current_value != form_value:
-            new_value = self._create_complex_product_value(form_value)
-
-        if new_value:
-            setattr(product_update, field_name, new_value)
+        new_value: list[Any] | None = None
+        if not clean_values:
+            if current_values:
+                # Если значение заполнено - обнулить
+                new_value = []
+            else:
+                return False
+        else:
+            if current_values != clean_values:
+                new_value = self._create_list_complex_product_value(
+                    clean_values
+                )
+        if new_value is not None:
+            setattr(product_update, current_field_name, new_value)
             return True
         return False
 
@@ -970,6 +1009,14 @@ class ReviewHandler:
         try:
             complex_value = FieldText(text_field=value, type_field=type_field)
             return FieldValue(value=complex_value)
+        except Exception:
+            return None
+
+    def _create_list_complex_product_value(
+        self, values: list[str]
+    ) -> list[FieldValue] | None:
+        try:
+            return [FieldValue(value=value) for value in values]
         except Exception:
             return None
 
@@ -992,7 +1039,8 @@ class ReviewHandler:
         form_value = str(form_value).strip()
         if not form_value:
             if current_value:
-                # TODO: Если значение заполнено - обнулить ?
+                new_value = self._create_complex_product_value("", "")
+                setattr(product_update, current_field_name, new_value)
                 return True
             return False
         new_value = None

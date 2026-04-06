@@ -12,6 +12,7 @@ from fastapi import (
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
+from api.v1.schemas.response_schemas import TokenData
 from core.exceptions.supplier_exceptions import NameNotFoundError
 from core.logger import logger
 from core.settings import settings
@@ -51,7 +52,6 @@ async def read_root(
         # Получаем список возможных источников из Enum
         sources = [e.value for e in SourcesProductEnum]
         logger.debug(f"Available sources: {sources}")
-        # user = request.state.user
         return templates.TemplateResponse(
             "index.html", {"request": request, "sources": sources}
         )
@@ -185,6 +185,9 @@ async def review_product(
                 "selected_child_name": (
                     sections_review_data.get("selected_child_name")
                 ),
+                "selected_root_name": (
+                    sections_review_data.get("selected_root_name")
+                ),
                 "field_labels": FIELD_LABELS_RU,
             },
         )
@@ -218,6 +221,8 @@ async def process_review(
     logger.info(f"Processing review for product: {supp_product_id}")
 
     try:
+        token_data: TokenData = request.state.user
+        logger.info(token_data.bitrix_user_id)
         form_data = await request.form()
         source = await supplier_service.process_review(
             supp_product_id,
