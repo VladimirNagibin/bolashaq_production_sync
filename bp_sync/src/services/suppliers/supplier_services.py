@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -12,6 +13,7 @@ from core.exceptions.supplier_exceptions import (
     SupplierProductNotFoundError,
 )
 from core.logger import logger
+from schemas.change_log_schemas import ChangeLogUpdate
 from schemas.enums import SourcesProductEnum
 from schemas.product_schemas import ProductCreate
 from schemas.supplier_schemas import (
@@ -284,6 +286,7 @@ class SupplierClient:
         self,
         supplier_product_id: UUID,
         form_data: FormData,
+        token_data: TokenData,
     ) -> SourcesProductEnum:
         """
         Обрабатывает отправку формы ревью.
@@ -322,9 +325,10 @@ class SupplierClient:
             has_changes = True
 
         # 4. Обработка данных товара (если отмечена выгрузка в CRM)
+        bitrix_dict: dict[str, Any] = {}
         if flags["should_export_to_crm"]:
             try:
-                product_id, section_id = (
+                product_id, section_id, bitrix_dict = (
                     await self._review_handler.handle_submission(
                         supplier_product, form_data, preprocessed_data
                     )
@@ -381,6 +385,9 @@ class SupplierClient:
             is_unlinked=is_unlinked,
             characteristics=characteristics,
             complects=complects,
+            token_data=token_data,
+            bitrix_dict=bitrix_dict,
+            source=supplier_product.source,
         )
 
         return supplier_product.source
@@ -444,15 +451,52 @@ class SupplierClient:
         is_unlinked: bool,
         characteristics: list[SupplierCharacteristicUpdate] | None,
         complects: list[SupplierComplectUpdate] | None,
+        token_data: TokenData,
+        bitrix_dict: dict[str, Any],
+        source: SourcesProductEnum,
     ) -> None:
         """Сохраняет изменения в базу данных и помечает логи обработанными."""
-
-        # Помечаем логи как обработанные в любом случае
+        logger.info(f"{bitrix_dict}============================")
+        # Помечаем логи как обработанные
+        change_bitrix_logs: list[ChangeLogUpdate] = []
         change_log_repo = self.supplier_product_repo.change_log_repo
+        for field_name, loaded_value in bitrix_dict.items():
+            if field_name == "external_id":
+                continue
+            updated = await change_log_repo.mark_change_logs_as_processed(
+                supplier_product_id,
+                user_id=token_data.user_bitrix_id,
+                loaded_value=self._transformer.convert_to_string(loaded_value),
+                field_name=field_name,
+            )
+            if updated == 0:
+                change_bitrix_logs.append(
+                    ChangeLogUpdate(
+                        supplier_product_id=supplier_product_id,
+                        source=source,
+                        config_name=None,
+                        field_name=field_name,
+                        old_value=None,
+                        new_value=None,
+                        value_type=None,
+                        loaded_by_user_id=token_data.user_bitrix_id,
+                        loaded_value=self._transformer.convert_to_string(
+                            loaded_value
+                        ),
+                        is_processed=True,
+                        force_import=False,
+                        processed_at=datetime.now(timezone.utc),
+                        processed_by_user_id=token_data.user_bitrix_id,
+                        comment=None,
+                        crm_value_previous=None,
+                    )
+                )
+        if change_bitrix_logs:
+            await change_log_repo.bulk_create_change_logs(change_bitrix_logs)
+        # Помечаем не найденные логи
         await change_log_repo.mark_change_logs_as_processed(
             supplier_product_id,
-            user_id=1,
-            loaded_value="",  # ============================
+            user_id=token_data.user_bitrix_id,
         )
 
         if has_changes or characteristics or complects:

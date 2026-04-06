@@ -222,11 +222,11 @@ async def process_review(
 
     try:
         token_data: TokenData = request.state.user
-        logger.info(token_data.bitrix_user_id)
         form_data = await request.form()
         source = await supplier_service.process_review(
             supp_product_id,
             form_data,
+            token_data,
         )
         logger.info(
             "Review processed successfully for product: " f"{supp_product_id}"

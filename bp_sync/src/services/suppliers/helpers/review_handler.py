@@ -598,10 +598,11 @@ class ReviewHandler:
         supplier_product: SupplierProductDetail,
         form_data: FormData,
         preprocessed_data: dict[str, dict[str, Any]],
-    ) -> tuple[UUID | None, int | None]:
+    ) -> tuple[UUID | None, int | None, dict[str, Any]]:
         """
         Обрабатывает отправленную форму.
-        Возвращает: product_id_or_None, section_id_or_None
+        Возвращает: product_id_or_None, section_id_or_None,
+                    словарь с данными обновления в Битрикс
         """
         try:
             # Получаем существующий продукт или создаем новый
@@ -612,22 +613,27 @@ class ReviewHandler:
                 product, form_data
             )
             if not product_update:
-                return None, section_id
+                return None, section_id, {}
 
+            clean_dict = product_update.model_dump(exclude_none=True)
             new_section_id = getattr(product_update, "section_id", None)
             # Сохраняем в CRM
             db_product_id, bitrix_product_id = await self._save_to_crm(
                 product, product_update
             )
 
-            await self._handle_image_fields(
+            detail_picture, more_photo = await self._handle_image_fields(
                 supplier_product,
                 form_data,
                 preprocessed_data,
                 bitrix_product_id,
             )
+            if detail_picture:
+                clean_dict["detail_picture"] = detail_picture
+            if more_photo:
+                clean_dict["more_photo"] = more_photo
 
-            return db_product_id, new_section_id or section_id
+            return db_product_id, new_section_id or section_id, clean_dict
 
         except NameNotFoundError:
             raise
@@ -672,11 +678,13 @@ class ReviewHandler:
                 "external_id": product.external_id
             }
             product_update = ProductUpdate(**product_bitrix_data)
-
         # Обновляем поля
         has_changes = await self._update_product_fields(
             product_update, product, form_data
         )
+        # Fix common Bitrix validator
+        if has_changes and not self._should_update_field(form_data, "active"):
+            product_update.active = None
 
         return product_update if has_changes else None
 
@@ -724,7 +732,6 @@ class ReviewHandler:
                     form_data,
                 ):
                     has_changes = True
-
         # Сложные поля
         complex_fields = FIELDS_SUPPLIER_PRODUCT.get("complex_fields", [])
         for field_name, value_type in complex_fields:
@@ -737,7 +744,6 @@ class ReviewHandler:
                     form_data,
                 ):
                     has_changes = True
-
         # Специальные поля
         special_fields = FIELDS_SUPPLIER_PRODUCT.get("individual_fields", [])
         for field_name, value_type in special_fields:
@@ -753,7 +759,6 @@ class ReviewHandler:
                         form_data,
                     ):
                         has_changes = True
-
         return has_changes
 
     def _should_update_field(
@@ -1096,26 +1101,28 @@ class ReviewHandler:
         form_data: FormData,
         preprocessed_data: dict[str, dict[str, Any]],
         product_id: int,
-    ) -> None:
+    ) -> tuple[str | None, str | None]:
         """
         Обрабатывает переданные картинки.
         """
 
         try:
-            await self._handle_detail_image(
+            detail_image = await self._handle_detail_image(
                 supplier_product,
                 form_data,
                 preprocessed_data,
                 product_id,
             )
-            await self._handle_more_images(
+            more_images = await self._handle_more_images(
                 supplier_product,
                 form_data,
                 preprocessed_data,
                 product_id,
             )
+            return detail_image, more_images
         except Exception as e:
             logger.error(f"Error loading pictures: {e}")
+            return None, None
 
     async def _handle_detail_image(
         self,
@@ -1123,7 +1130,7 @@ class ReviewHandler:
         form_data: FormData,
         preprocessed_data: dict[str, dict[str, Any]],
         bitrix_product_id: int,
-    ) -> bool:
+    ) -> str | None:
         """
         Обрабатывает детальную картинку.
         """
@@ -1138,7 +1145,7 @@ class ReviewHandler:
                     "Не выбран вариант изображения. "
                     "Пропускаем обновление картинки."
                 )
-                return False
+                return None
             if pic_upload_choice in ["old", "new"]:
                 # Переменная для хранения результата, который пойдет в Битрикс
                 image_to_update = None
@@ -1162,7 +1169,7 @@ class ReviewHandler:
                     image_to_update == pic_current_supplier_url
                     and supplier_product.source.value == pic_current_source
                 ):
-                    return True
+                    return None
 
                 if image_to_update:
                     image_client = self.product_client.image_client
@@ -1179,7 +1186,7 @@ class ReviewHandler:
                     await image_client.import_from_bitrix_by_product_id(
                         bitrix_product_id
                     )
-                    return True
+                    return str(image_to_update)
             elif pic_upload_choice == "custom":
                 # --- ВАРИАНТ 3: Загрузка своего файла ---
                 # Получаем данные из 4-й колонки (загрузка файла)
@@ -1194,7 +1201,7 @@ class ReviewHandler:
 
                     file_info = self.build_file_data(raw_base64, filename)
                     if not file_info:
-                        return False
+                        return None
 
                     image_client = self.product_client.image_client
                     await image_client.create_product_picture_from_dict(
@@ -1209,11 +1216,11 @@ class ReviewHandler:
                         "Base64 отправлен "
                         f"(длина: {file_info.get('file_size', '-')})."
                     )
-                    return True
+                    return filename  # type: ignore[no-any-return]
         except Exception as e:
             logger.error(f"Error loading detail pictures: {e}")
-            return False
-        return True
+            return None
+        return None
 
     def build_file_data(
         self, raw_base64: str, filename: str
@@ -1288,7 +1295,7 @@ class ReviewHandler:
         form_data: FormData,
         preprocessed_data: dict[str, dict[str, Any]],
         bitrix_product_id: int,
-    ) -> bool:
+    ) -> str | None:
         """
         Обрабатывает переданные картинки.
         """
@@ -1358,7 +1365,7 @@ class ReviewHandler:
         # Убираем дубликаты внутри самих списков old/new
         # (если вдруг пришли дубли)
         urls_to_upload = list(set(urls_to_upload))
-
+        more_pictures: list[str] = []
         # Загружаем по ссылкам
         if urls_to_upload:
             logger.info(f"Uploading {len(urls_to_upload)} images by URL...")
@@ -1374,6 +1381,7 @@ class ReviewHandler:
                         ImageType.MORE_PHOTO,
                         supplier_picture_data,
                     )
+                    more_pictures.append(url)
                 except Exception as e:
                     print(f"Failed to upload URL {url}: {e}")
 
@@ -1390,24 +1398,29 @@ class ReviewHandler:
 
             if raw_base64 and filename:
                 logger.info(f"Uploading custom file: {filename}")
+                try:
+                    raw_base64 = str(raw_base64)
+                    filename = str(filename)
 
-                raw_base64 = str(raw_base64)
-                filename = str(filename)
+                    file_info = self.build_file_data(raw_base64, filename)
+                    if not file_info:
+                        return None
 
-                file_info = self.build_file_data(raw_base64, filename)
-                if not file_info:
-                    return False
-
-                await image_client.create_product_picture_from_dict(
-                    bitrix_product_id,
-                    file_info,
-                    ImageType.MORE_PHOTO,
-                )
-                await image_client.import_from_bitrix_by_product_id(
-                    bitrix_product_id
-                )
-                logger.info(
-                    "Base64 отправлен "
-                    f"(длина: {file_info.get('file_size', '-')})."
-                )
-        return True
+                    await image_client.create_product_picture_from_dict(
+                        bitrix_product_id,
+                        file_info,
+                        ImageType.MORE_PHOTO,
+                    )
+                    more_pictures.append(filename)
+                    await image_client.import_from_bitrix_by_product_id(
+                        bitrix_product_id
+                    )
+                    logger.info(
+                        "Base64 отправлен "
+                        f"(длина: {file_info.get('file_size', '-')})."
+                    )
+                except Exception as e:
+                    logger.error(f"Error loading castom more photo: {e}")
+        if more_pictures:
+            return "; ".join(more_pictures)
+        return None

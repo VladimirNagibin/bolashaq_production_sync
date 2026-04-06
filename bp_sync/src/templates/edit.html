@@ -251,8 +251,13 @@
                             <td><strong>{{ field_labels.get(item.field_name, item.field_name) }}</strong></td>
                             <td class="text-muted">{{ item.old_value or '-' }}</td>
                             <td>{{ item.new_value or '-' }}</td>
-                            <td>
-                                <span class="badge bg-info text-dark">{{ item.current_product_value or '-' }}</span>
+                            <td style="max-width: 250px; word-wrap: break-word; overflow-wrap: break-word;">
+                                <span
+                                    class="badge bg-info text-dark"
+                                    style="white-space: normal; display: inline-block; width: 100%; text-align: left;"
+                                >
+                                    {{ item.current_product_value or '-' }}
+                                </span>
                             </td>
                             <td>
 

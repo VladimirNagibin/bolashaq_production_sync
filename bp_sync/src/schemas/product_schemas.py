@@ -216,6 +216,16 @@ class FieldValue(BaseModel):  # type: ignore[misc]
 
     model_config = ConfigDict(populate_by_name=True)
 
+    @property
+    def text(self) -> str | None:
+        """
+        Возвращает текстовое значение вне зависимости от типа поля value.
+        """
+        content = self.value
+        if isinstance(content, str):
+            return content
+        return content.text_field
+
 
 class BaseProduct(CommonFieldMixin):
     """

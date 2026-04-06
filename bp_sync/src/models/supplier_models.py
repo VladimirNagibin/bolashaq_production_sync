@@ -79,7 +79,7 @@ class SupplierProduct(Base):  # type: ignore[misc]
     # Основные данные товара
     external_id: Mapped[int | None] = mapped_column(
         # unique=True,
-        comment="ID во внешней системе",
+        comment="ID во внешней системе поставщика",
     )
     name: Mapped[str | None] = mapped_column(
         String(500),
@@ -214,6 +214,10 @@ class SupplierProduct(Base):  # type: ignore[misc]
     )
     description_for_offer: Mapped[str | None] = mapped_column(
         Text, comment="Описание для предложения"
+    )
+
+    description_for_print: Mapped[str | None] = mapped_column(
+        Text, comment="Описание загруженное в Битрикс"
     )
 
     more_photo_process: Mapped[str | None] = mapped_column(
@@ -584,8 +588,12 @@ class SupplierProductChangeLog(Base):  # type: ignore[misc]
     new_value: Mapped[str | None] = mapped_column(
         Text, comment="Значение ПОСЛЕ изменения"
     )
+    # Загружаемое значение в CRM
     loaded_value: Mapped[str | None] = mapped_column(
         Text, comment="Загруженное значение"
+    )
+    crm_value_previous: Mapped[str | None] = mapped_column(
+        Text, comment="Предыдущее значение в CRM"
     )
     value_type: Mapped[str | None] = mapped_column(
         comment="Тип значения (int, float, str, bool)"

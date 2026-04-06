@@ -24,6 +24,7 @@ class ChangeLogBase(BaseModel):  # type: ignore[misc]
     )
     old_value: str | None = Field(None, description="Значение ДО изменения")
     new_value: str | None = Field(None, description="Значение ПОСЛЕ изменения")
+
     value_type: str | None = Field(
         None, description="Тип значения (int, float, str, bool)"
     )
@@ -42,6 +43,9 @@ class ChangeLogUpdate(ChangeLogBase):
     """Схема для обновления (ручная обработка)"""
 
     loaded_value: str | None = Field(None, description="Загруженное значение")
+    crm_value_previous: str | None = Field(
+        None, description="Предыдущее значение в CRM"
+    )
     is_processed: bool = Field(False, description="Обработано")
     force_import: bool = Field(
         False, description="Перегружено в CRM без проверки"

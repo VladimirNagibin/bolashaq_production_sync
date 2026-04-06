@@ -160,7 +160,7 @@ class ChangeLogRepository(BaseRepository[SuppChangeLog]):
             field_name=field_name,
         )
 
-        updated_count = int(result.rowcount)
+        updated_count = int(result.rowcount) if result else 0
 
         self.logger.info(
             "Marked change logs as processed",

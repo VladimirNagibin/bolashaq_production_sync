@@ -10,6 +10,7 @@ from core.exceptions.repo_exceptions import (
     DuplicateEntityError,
     EntityNotFoundError,
 )
+from models.product_models import Product
 from models.supplier_models import SupplierProduct, SupplierProductChangeLog
 from schemas.enums import SourceKeyField, SourcesProductEnum
 from schemas.supplier_schemas import (
@@ -1122,3 +1123,19 @@ class SupplierProductRepository(BaseRepository[SupplierProduct]):
             mapping[(category, subcategory)] = section_id
 
         return mapping
+
+    async def get_product_with_properties(
+        self, product_id: UUID
+    ) -> Product | None:
+        """Получает продукт со всеми свойствами"""
+        stmt = (
+            select(Product)
+            .options(
+                selectinload(Product.simple_properties),
+                selectinload(Product.properties),
+            )
+            .where(Product.id == product_id)
+        )
+
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()

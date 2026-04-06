@@ -13,6 +13,7 @@ from core.exceptions.supplier_exceptions import (
     FileProcessingError,
 )
 from core.logger import logger
+from models.product_models import Product as ProductDB
 from models.supplier_models import SupplierProduct
 from schemas.change_log_schemas import ChangeLogUpdate
 from schemas.enums import (
@@ -31,6 +32,7 @@ from schemas.supplier_schemas import (
 )
 from services.products.product_services import ProductClient
 
+from .helpers.data_transformer import DataTransformer
 from .repositories.supplier_product_repo import SupplierProductRepository
 
 
@@ -52,6 +54,7 @@ class FileImportService:
     ) -> None:
         self._repo = supplier_product_repo
         self._product_client = product_client
+        self._transformer = DataTransformer()
 
     async def import_file(
         self,
@@ -786,6 +789,7 @@ class FileImportService:
         processed_at: datetime | None = None,
         processed_by_user_id: int | None = None,
         comment: str | None = None,
+        crm_value_previous: Any | None = None,
     ) -> ChangeLogUpdate:
         """Создание объекта лога изменений."""
         return ChangeLogUpdate(
@@ -807,6 +811,11 @@ class FileImportService:
             processed_at=processed_at,
             processed_by_user_id=processed_by_user_id,
             comment=comment,
+            crm_value_previous=(
+                str(crm_value_previous)
+                if crm_value_previous is not None
+                else None
+            ),
         )
 
     async def _prepare_product_update(
@@ -830,7 +839,9 @@ class FileImportService:
             needs_bitrix_update = False
 
             # Подготовка модели Битрикса
-            bitrix_update = await self._prepare_bitrix_model(existing_product)
+            bitrix_update, bitrix_product = await self._prepare_bitrix_model(
+                existing_product
+            )
             if (
                 bitrix_update
                 and bitrix_update.external_id
@@ -875,6 +886,7 @@ class FileImportService:
                     config_name=config_name,
                     result=result,
                     loaded_by_user_id=token_data.user_bitrix_id,
+                    bitrix_product=bitrix_product,
                 )
 
                 if wrapper.get("force_import"):
@@ -903,21 +915,24 @@ class FileImportService:
 
     async def _prepare_bitrix_model(
         self, existing_product: SupplierProductCreate
-    ) -> ProductUpdate | None:
+    ) -> tuple[ProductUpdate | None, ProductDB | None]:
         """Подготовка модели для Битрикса."""
         try:
             if not existing_product.product_id:
-                return None
+                return None, None
             bitrix_product = (
                 await self._product_client.repo.get_product_with_properties(
                     existing_product.product_id
                 )
             )
             if not bitrix_product:
-                return None
-            return ProductUpdate(external_id=bitrix_product.external_id)
+                return None, None
+            return (
+                ProductUpdate(external_id=bitrix_product.external_id),
+                bitrix_product,
+            )
         except Exception:
-            return None
+            return None, None
 
     def _is_equal_or_none(self, old_value: Any, new_value: Any) -> bool:
         if new_value is None or old_value == new_value:
@@ -943,6 +958,7 @@ class FileImportService:
         config_name: str | None,
         result: UpdateResult,
         loaded_by_user_id: int,
+        bitrix_product: ProductDB | None,
     ) -> bool:
         """Обработка обновления для CRM."""
         force_import = wrapper.get("force_import")
@@ -951,6 +967,9 @@ class FileImportService:
         # Принудительный импорт в CRM
         if force_import and bitrix_update and hasattr(bitrix_update, field):
             setattr(bitrix_update, field, new_value)
+            current_bitrix_value = self._fetch_current_bitrix_value(
+                field, bitrix_product
+            )
             change_log = self._create_change_log(
                 supplier_product_id=existing_product.id,
                 source=source,
@@ -964,6 +983,7 @@ class FileImportService:
                 is_processed=True,
                 processed_at=datetime.now(timezone.utc),
                 processed_by_user_id=loaded_by_user_id,
+                crm_value_previous=current_bitrix_value,
             )
             result.change_logs.append(change_log)
         # Синхронизация через лог изменений
@@ -1119,6 +1139,7 @@ class FileImportService:
                     log.force_import = False
                     log.processed_at = None
                     log.processed_by_user_id = None
+                    log.crm_value_previous = None
 
             try:
                 supplier_product = await self._repo.get_with_relations(
@@ -1186,3 +1207,30 @@ class FileImportService:
                         )
         except Exception as e:
             logger.error(f"{e}")
+
+    def _fetch_current_bitrix_value(
+        self, field_name: str, bitrix_product: ProductDB | None
+    ) -> str | None:
+        if not bitrix_product:
+            return None
+
+        try:
+            if hasattr(bitrix_product, field_name):
+                if value := getattr(bitrix_product, field_name, None):
+                    if result := self._transformer.convert_simple_to_string(
+                        value
+                    ):
+                        return result
+                return None
+
+            for prop in bitrix_product.simple_properties:
+                if prop.property_code == field_name:
+                    return prop.value  # type: ignore[no-any-return]
+
+            for prop in bitrix_product.properties:
+                if prop.property_code == field_name:
+                    return prop.text_field  # type: ignore[no-any-return]
+
+            return None
+        except Exception:
+            return None

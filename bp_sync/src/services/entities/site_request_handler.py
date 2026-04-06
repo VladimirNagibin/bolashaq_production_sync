@@ -14,8 +14,18 @@ from api.v1.schemas.site_request import SiteRequestPayload
 from core.logger import logger
 from core.settings import settings
 from schemas.deal_schemas import DealUpdate
-from schemas.enums import EntityTypeAbbr, StageSemanticEnum, TypeEvent
-from schemas.product_schemas import ListProductEntity, ProductEntityCreate
+from schemas.enums import (
+    EntityTypeAbbr,
+    SourcesProductEnum,
+    StageSemanticEnum,
+    TypeEvent,
+)
+from schemas.product_schemas import (
+    ListProductEntity,
+    ProductEntityCreate,
+    ProductUpdate,
+)
+from schemas.supplier_schemas import SupplierProductCreate
 
 from ..exceptions import (  # ProductNotFoundError,
     BitrixApiError,
@@ -26,6 +36,8 @@ from ..exceptions import (  # ProductNotFoundError,
 )
 
 if TYPE_CHECKING:
+    from services.entities.entities_services import EntityClient
+
     from .entities_bitrix_services import EntitiesBitrixClient
 
 DEFAULT_DEAL_TITLE = "Запрос цены с сайта"
@@ -69,7 +81,9 @@ class SiteRequestHandler:
         self._managers = managers or settings.MANAGERS
 
     async def handle_request_price(
-        self, payload: SiteRequestPayload
+        self,
+        payload: SiteRequestPayload,
+        entity_client: "EntityClient",
     ) -> dict[str, Any]:
         """
         Обрабатывает запрос цены с сайта.
@@ -91,7 +105,9 @@ class SiteRequestHandler:
             deal_id = await self._create_deal_from_payload(payload)
 
             result = self._create_success_result(deal_id)
-            await self._process_deal_products(deal_id, payload, result)
+            await self._process_deal_products(
+                deal_id, payload, result, entity_client
+            )
             await self._add_timeline_comment(deal_id, payload)
 
             self._log_request_success(deal_id, result)
@@ -132,6 +148,7 @@ class SiteRequestHandler:
             phone=payload.phone,
             email=payload.email,
             name=payload.name,
+            type_event=payload.type_event,
         )
 
         if not entity_id or not manager_id:
@@ -260,6 +277,7 @@ class SiteRequestHandler:
         phone: str | None = None,
         email: str | None = None,
         name: str | None = None,
+        type_event: str | None = None,
     ) -> tuple[str, int, int]:
         """
         Находит существующую или создает новую сущность.
@@ -292,7 +310,7 @@ class SiteRequestHandler:
 
         # Создание нового контакта
         return await self._create_new_contact(
-            phone=phone, email=email, name=name
+            phone=phone, email=email, name=name, type_event=type_event
         )
 
     async def _search_entity_by_phone(
@@ -415,6 +433,7 @@ class SiteRequestHandler:
         phone: str | None = None,
         email: str | None = None,
         name: str | None = None,
+        type_event: str | None = None,
     ) -> tuple[str, int, int]:
         """
         Создает новый контакт в Bitrix24.
@@ -431,7 +450,10 @@ class SiteRequestHandler:
             ContactCreationError: При ошибке создания контакта
         """
         try:
-            manager_id = await self._get_available_manager()
+            if type_event and "labset" in type_event:
+                manager_id = settings.MANAGER_LABSET
+            else:
+                manager_id = await self._get_available_manager()
 
             contact_fields: dict[str, Any] = {
                 "NAME": name,
@@ -611,6 +633,7 @@ class SiteRequestHandler:
         deal_id: int,
         payload: SiteRequestPayload,
         result: dict[str, Any],
+        entity_client: "EntityClient",
     ) -> None:
         """
         Обрабатывает добавление товаров к сделке.
@@ -626,7 +649,9 @@ class SiteRequestHandler:
             TypeEvent.ORDER,
             TypeEvent.REQUEST_PRICE_LABSET,
         ):
-            await self._add_multiple_products(deal_id, payload, result)
+            await self._add_multiple_products(
+                deal_id, payload, result, entity_client
+            )
         else:
             logger.warning(
                 "Неизвестный тип события",
@@ -671,6 +696,7 @@ class SiteRequestHandler:
         deal_id: int,
         payload: SiteRequestPayload,
         result: dict[str, Any],
+        entity_client: "EntityClient",
     ) -> None:
         """Добавляет несколько товаров к сделке."""
         products = payload.products
@@ -683,6 +709,7 @@ class SiteRequestHandler:
             deal_id=deal_id,
             products=products,
             type_event=payload.type_event,
+            entity_client=entity_client,
         )
 
         if not product_entities:
@@ -702,6 +729,7 @@ class SiteRequestHandler:
         deal_id: int,
         products: list[Any],
         type_event: str,
+        entity_client: "EntityClient",
     ) -> list[ProductEntityCreate]:
         """Подготавливает список товарных позиций для добавления."""
         entities = []
@@ -713,9 +741,23 @@ class SiteRequestHandler:
                     str(product.product_id)
                 )
             elif type_event == TypeEvent.REQUEST_PRICE_LABSET:
-                bitrix_product = None
-                # TODO: реализовать поиск или создание товара при запросе
-                # с labset
+                source = SourcesProductEnum.LABSET
+                supplier_repo = (
+                    entity_client.supplier_client.supplier_product_repo
+                )
+                supplier_product = (
+                    await supplier_repo.get_by_source_external_id(
+                        source, product.product_id
+                    )
+                )
+                if supplier_product:
+                    bitrix_product = await self._find_or_create_product(
+                        supplier_product, entity_client
+                    )
+                else:
+                    ...
+                    # TODO: create new product
+
             if not bitrix_product:
                 logger.warning(
                     "Товар не найден, пропускаем",
@@ -871,6 +913,34 @@ class SiteRequestHandler:
             )
             return None
 
+    async def _find_or_create_product(
+        self,
+        supplier_product: SupplierProductCreate,
+        entity_client: "EntityClient",
+    ) -> dict[str, Any] | None:
+        result: dict[str, Any] = {}
+        if product_id := supplier_product.product_id:
+            supplier_repo = entity_client.supplier_client.supplier_product_repo
+            product = await supplier_repo.get_product_with_properties(
+                product_id
+            )
+            if not product:
+                return None
+            return {"ID": product.external_id, "NAME": product.name}
+        else:
+            if not supplier_product.name:
+                return None
+            product_create = ProductUpdate(name=supplier_product.name)
+            product_id = (
+                await self._bitrix_client.product_bitrix_client.create(
+                    product_create
+                )
+            )
+            # TODO: mapping bitrix_product and supplier_product
+            if product_id:
+                return {"ID": product_id, "NAME": supplier_product.name}
+        return result
+
     def _extract_products_list(
         self,
         products_data: dict[str, Any] | list[Any],
@@ -1022,7 +1092,8 @@ class SiteRequestHandler:
             bool: True если комментарий добавлен
         """
         message = self._format_timeline_message(payload)
-
+        if message is None:
+            return True
         try:
             bitrix_client = self._get_bitrix_client()
 
@@ -1060,7 +1131,9 @@ class SiteRequestHandler:
             )
             return False
 
-    def _format_timeline_message(self, payload: SiteRequestPayload) -> str:
+    def _format_timeline_message(
+        self, payload: SiteRequestPayload
+    ) -> str | None:
         """Формирует сообщение для временной шкалы."""
         parts = []
 
@@ -1072,8 +1145,9 @@ class SiteRequestHandler:
 
         if payload.product:
             parts.append(f"Товар: {payload.product}")
-
-        return "\n".join(parts)
+        if parts:
+            return "\n".join(parts)
+        return None
 
     # ============================================
     # Вспомогательные методы

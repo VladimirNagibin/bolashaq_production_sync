@@ -78,6 +78,7 @@ class Settings(BaseSettings):  # type: ignore
     TYPE_CHAT_SUPERVISOR: bool = False
 
     MANAGERS: set[int] = {33, 35}
+    MANAGER_LABSET: int = 31
 
     OPEN_AI_API_KEY: str = "sk-12345"
     OPEN_AI_BASE_URL: str = "https://api.com"

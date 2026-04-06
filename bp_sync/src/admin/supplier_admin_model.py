@@ -386,6 +386,8 @@ class SupplierProductChangeLogAdmin(
         "processed_at": "Дата обработки",
         "processed_by_user_id": "Обработано пользователем",
         "comment": "Комментарий",
+        "loaded_value": "Загруженное значение",
+        "crm_value_previous": "Предыдущее значение в CRM",
     }
     column_default_sort = [
         ("supplier_product_id", True)
