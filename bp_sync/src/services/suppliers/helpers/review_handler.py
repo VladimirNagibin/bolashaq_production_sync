@@ -1,4 +1,5 @@
 import base64
+import binascii
 import hashlib
 import mimetypes
 import re
@@ -34,9 +35,12 @@ class ReviewHandler:
     # Поля, которые всегда должны присутствовать
     REQUIRED_FIELDS = {"name"}
 
-    # Префиксы для полей формы
+    # Константы для имен полей формы
     FIELD_PREFIX = "field_"
     UPDATE_PREFIX = "update_"
+    VALUE_ON = "on"
+
+    # Маппинг сложных полей
     MAPPING_FIELDS: dict[str, str] = {
         "characteristics": "specifications",
         "complects": "configuration",
@@ -129,8 +133,11 @@ class ReviewHandler:
 
             field_data = transformed_logs[field_name]
             current = getattr(product, field_name, None)
-            current_val = current.value if current else None
-
+            current_val = (
+                current.value
+                if current and hasattr(current, "value")
+                else None
+            )
             review_data.append(
                 {
                     "field_name": field_name,
@@ -172,45 +179,57 @@ class ReviewHandler:
         product: ProductCreate | None,
         supplier_product: SupplierProductDetail,
     ) -> list[dict[str, Any]]:
-        if field_name == "brend":
-            return self._get_brand(
-                field_name, transformed_logs, product, supplier_product
-            )
-        elif field_name == "internal_section_id":
-            return self._get_section(
-                field_name,
-                transformed_logs,
-                preprocessed_data,
-                product,
-                supplier_product,
-            )
-        elif field_name in ["characteristics", "complects"]:
-            return self._get_list_items(field_name, preprocessed_data, product)
+        try:
+            if field_name == "brend":
+                return self._get_brand(
+                    field_name,
+                    transformed_logs,
+                    product,
+                    supplier_product,
+                )
+            elif field_name == "internal_section_id":
+                return self._get_section(
+                    field_name,
+                    transformed_logs,
+                    preprocessed_data,
+                    product,
+                    supplier_product,
+                )
+            elif field_name in ["characteristics", "complects"]:
+                return self._get_list_items(
+                    field_name, preprocessed_data, product
+                )
 
-        elif field_name == "description":
-            return self._get_description(
-                field_name,
-                transformed_logs,
-                preprocessed_data,
-                product,
+            elif field_name == "description":
+                return self._get_description(
+                    field_name,
+                    transformed_logs,
+                    preprocessed_data,
+                    product,
+                )
+            elif field_name == "detail_picture":
+                return await self._get_detail_picture(
+                    field_name,
+                    transformed_logs,
+                    preprocessed_data,
+                    product,
+                    supplier_product,
+                )
+            elif field_name == "more_photos":
+                return await self._get_more_photos(
+                    field_name,
+                    transformed_logs,
+                    preprocessed_data,
+                    product,
+                    supplier_product,
+                )
+            return []
+        except Exception as e:
+            logger.warning(
+                f"Error getting special field '{field_name}': {e}",
+                extra={"product_id": str(supplier_product.id)},
             )
-        elif field_name == "detail_picture":
-            return await self._get_detail_picture(
-                field_name,
-                transformed_logs,
-                preprocessed_data,
-                product,
-                supplier_product,
-            )
-        elif field_name == "more_photos":
-            return await self._get_more_photos(
-                field_name,
-                transformed_logs,
-                preprocessed_data,
-                product,
-                supplier_product,
-            )
-        return []
+            return []
 
     def _get_brand(
         self,
@@ -364,7 +383,6 @@ class ReviewHandler:
             if field_name == "complects":
                 # Преобразование SupplierComplectCreate и KitItem
                 # в строку для Битрикса
-                result = None
                 specifications = None
                 if field_type == "old":  # SupplierComplectCreate
                     specifications = item.specifications
@@ -390,10 +408,12 @@ class ReviewHandler:
         self, product: ProductCreate | None, field_name: str
     ) -> str | None:
         try:
+            if not product:
+                return None
             current_data = getattr(product, field_name, None)
-            if current_data:
+            if current_data and hasattr(current_data, "value"):
                 current_field = current_data.value
-                if current_field:
+                if current_field and hasattr(current_field, "text_field"):
                     return str(current_field.text_field)
             return None
         except Exception:
@@ -403,6 +423,8 @@ class ReviewHandler:
         self, product: ProductCreate | None, field_name: str
     ) -> list[str] | None:
         try:
+            if not product:
+                return None
             current_field_name = self.MAPPING_FIELDS.get(field_name)
             if not current_field_name:
                 return None
@@ -410,7 +432,9 @@ class ReviewHandler:
             data_list: list[str] = []
             if current_data:
                 for data in current_data:
-                    data_list.append(data.value)
+                    val = getattr(data, "value", None)
+                    if val:
+                        data_list.append(val)
                 if data_list:
                     return data_list
             return None
@@ -548,11 +572,13 @@ class ReviewHandler:
             field_data = preprocessed_data.get(field_name_process, {})
             if not field_data:
                 return result
-            old_value = (
-                supplier_product.more_photo_process.split(";")
-                if supplier_product.more_photo_process
-                else None
-            )
+
+            old_value = None
+            if supplier_product.more_photo_process:
+                try:
+                    old_value = supplier_product.more_photo_process.split(";")
+                except Exception:
+                    logger.warning("Failed to split more_photo_process")
 
             result.append(
                 {
@@ -610,9 +636,12 @@ class ReviewHandler:
                     словарь со старыми данными в Битрикс
         """
         try:
-            # Получаем существующий продукт или создаем новый
+            # Получаем существующий продукт или None
             product = await self._get_product_or_none(supplier_product)
-            section_id = getattr(product, "section_id", None)
+            section_id = (
+                getattr(product, "section_id", None) if product else None
+            )
+
             # Подготавливаем данные для обновления
             product_update = await self._prepare_product_update(
                 product, form_data
@@ -624,45 +653,20 @@ class ReviewHandler:
             old_bitrix_dict: dict[str, Any] = {}
             if product:
                 old_bitrix_dict = product.model_dump(exclude_none=True)
-                # for key in clean_dict:
-                #     if value := getattr(product, key, None):
-                #         old_bitrix_dict[key] = value
+
             new_section_id = getattr(product_update, "section_id", None)
+
             # Сохраняем в CRM
             db_product_id, bitrix_product_id = await self._save_to_crm(
                 product, product_update
             )
 
-            image_repo = self.product_client.image_client.repo
-            old_detail_picture = await image_repo.get_detail_by_product_id(
-                bitrix_product_id
+            # Получаем старые картинки для логов
+            old_bitrix_dict.update(
+                await self._fetch_old_image_data(bitrix_product_id)
             )
-            if old_detail_picture:
-                old_link_detail_picture = (
-                    old_detail_picture.supplier_image_url
-                    or old_detail_picture.detail_url
-                )
-                if old_link_detail_picture:
-                    old_bitrix_dict["detail_picture"] = old_link_detail_picture
 
-            old_more_pictures = await image_repo.get_images(
-                image_type=ImageType.MORE_PHOTO.name,
-                product_id=bitrix_product_id,
-            )
-            if old_more_pictures:
-                old_more_pictures_list: list[str] = []
-                for old_more_picture in old_more_pictures:
-                    old_link_more_picture = (
-                        old_more_picture.supplier_image_url
-                        or old_more_picture.detail_url
-                    )
-                    if old_link_more_picture:
-                        old_more_pictures_list.append(old_link_more_picture)
-
-                old_bitrix_dict["more_photo"] = "; ".join(
-                    old_more_pictures_list
-                )
-
+            # Обрабатываем новые картинки
             detail_picture, more_photo = await self._handle_image_fields(
                 supplier_product,
                 form_data,
@@ -706,8 +710,43 @@ class ReviewHandler:
             return await self.product_client.repo.get_by_id(
                 supplier_product.product_id
             )
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                f"Failed to fetch product {supplier_product.product_id}: {e}"
+            )
             return None
+
+    async def _fetch_old_image_data(
+        self, bitrix_product_id: int
+    ) -> dict[str, Any]:
+        """Вспомогательный метод для сбора старых данных изображений."""
+        old_data: dict[str, Any] = {}
+        try:
+            image_repo = self.product_client.image_client.repo
+
+            old_detail = await image_repo.get_detail_by_product_id(
+                bitrix_product_id
+            )
+            if old_detail:
+                link = old_detail.supplier_image_url or old_detail.detail_url
+                if link:
+                    old_data["detail_picture"] = link
+
+            old_more = await image_repo.get_images(
+                image_type=ImageType.MORE_PHOTO.name,
+                product_id=bitrix_product_id,
+            )
+            if old_more:
+                more_list = [
+                    img.supplier_image_url or img.detail_url
+                    for img in old_more
+                    if (img.supplier_image_url or img.detail_url)
+                ]
+                if more_list:
+                    old_data["more_photo"] = "; ".join(more_list)
+        except Exception as e:
+            logger.warning(f"Failed to fetch old image data for logs: {e}")
+        return old_data
 
     async def _prepare_product_update(
         self, product: ProductCreate | None, form_data: FormData
@@ -816,36 +855,29 @@ class ReviewHandler:
         """Проверяет, нужно ли обновлять поле."""
         try:
             if field_name == "detail_picture":
-                pic_upload_choice = form_data.get("pic_upload_choice")
-                if not pic_upload_choice:
-                    return False
-                return True
+                return bool(form_data.get("pic_upload_choice"))
             elif field_name == "more_photos":
-                if "gallery_block_active" in form_data:
-                    return True
-                return False
+                return bool("gallery_block_active" in form_data)
             elif field_name == "description":
                 field_key = f"{self.FIELD_PREFIX}{field_name}"
                 update_key = f"{self.UPDATE_PREFIX}{field_name}"
                 return (
                     (
                         field_key in form_data
-                        and form_data.get(update_key) == "on"
+                        and form_data.get(update_key) == self.VALUE_ON
                     )
-                    or ("upload_description" in form_data)
+                    or "upload_description" in form_data
                     or "upload_add_description" in form_data
                 )
             elif field_name in ["characteristics", "complects"]:
-                result = (
-                    form_data.get(f"{self.UPDATE_PREFIX}{field_name}") == "on"
-                )
-                return bool(result)
+                need_upd = form_data.get(f"{self.UPDATE_PREFIX}{field_name}")
+                return bool(need_upd == self.VALUE_ON)
             else:
                 field_key = f"{self.FIELD_PREFIX}{field_name}"
                 update_key = f"{self.UPDATE_PREFIX}{field_name}"
                 return (
                     field_key in form_data
-                    and form_data.get(update_key) == "on"
+                    and form_data.get(update_key) == self.VALUE_ON
                 )
         except Exception as e:
             logger.error(f"Exception should update field: {e}")
@@ -885,11 +917,13 @@ class ReviewHandler:
         form_value = form_data.get(f"{self.FIELD_PREFIX}{field_name}")
         typed_value = self.transformer.cast_value(form_value, value_type)
 
-        if typed_value is None or not typed_value:
+        if not typed_value:
             return False
 
         current = getattr(existing_product, field_name, None)
-        current_value = current.value if current else None
+        current_value = (
+            current.value if current and hasattr(current, "value") else None
+        )
 
         if current_value != typed_value:
             field_data = {"value": typed_value}
@@ -940,9 +974,14 @@ class ReviewHandler:
         current_value = None
         try:
             current = getattr(existing_product, field_name, None)
-            current_value = current.value if current else None
+            current_value = (
+                current.value
+                if current and hasattr(current, "value")
+                else None
+            )
         except Exception:
-            logger.warning("Exception getting current value")
+            logger.warning(f"Exception getting current value {field_name}")
+
         typed_value = self._determine_brand_value(form_value, current_value)
         if typed_value is not None:
             field_data = {"value": typed_value}
@@ -992,7 +1031,7 @@ class ReviewHandler:
     async def _handle_field_section(
         self,
         product_update: ProductUpdate,
-        existing_product: Any | None,
+        existing_product: ProductCreate | None,
         field_name: str,
         form_data: FormData,
     ) -> bool:
@@ -1001,24 +1040,27 @@ class ReviewHandler:
         if form_value is None:
             logger.debug("No value for section field in form")
             return False
+
         current_field_name = "section_id"
-        current_value = getattr(existing_product, current_field_name, None)
-        current_value = self._to_int_or_none(current_value)
-        form_value = str(form_value).strip()
-        if not form_value:
+        current_val = getattr(existing_product, current_field_name, None)
+        current_value = self._to_int_or_none(current_val)
+
+        form_value_str = str(form_value).strip()
+        if not form_value_str:
             if current_value:
                 # TODO: Если раздел заполнен - обнулить ?
                 return True
             return False
+
         section_value = form_data.get(f"{self.FIELD_PREFIX}supplier_category")
         subsection_value = form_data.get(
             f"{self.FIELD_PREFIX}supplier_subcategory"
         )
-        section_value = self._to_int_or_none(section_value)
-        subsection_value = self._to_int_or_none(subsection_value)
+        section_int = self._to_int_or_none(section_value)
+        subsection_int = self._to_int_or_none(subsection_value)
         section_new_id = (
             await self.product_section_client.handle_section_review(
-                form_value, current_value, section_value, subsection_value
+                form_value_str, current_value, section_int, subsection_int
             )
         )
         if section_new_id:
@@ -1048,16 +1090,15 @@ class ReviewHandler:
         current_field_name = self.MAPPING_FIELDS.get(field_name)
         if not current_field_name:
             return False
+
         current_values = self._get_list_complex_product_value(
             existing_product, field_name
         )
         new_value: list[Any] | None = None
+
         if not clean_values:
-            if current_values:
-                # Если значение заполнено - обнулить
-                new_value = []
-            else:
-                return False
+            # обнуляем если заполнено
+            new_value = [] if current_values else None
         else:
             if current_values != clean_values:
                 new_value = self._create_list_complex_product_value(
@@ -1094,18 +1135,16 @@ class ReviewHandler:
     ) -> bool:
         need_update = False
         # Обновляем description если проставлена галка
-        is_upload_description_checked = "upload_description" in form_data
-        if is_upload_description_checked:
+        if "upload_description" in form_data:
             new_description = form_data.get("new_description", "")
             if new_description:
-                old_description = getattr(existing_product, field_name)
+                old_description = getattr(existing_product, field_name, None)
                 if old_description != new_description:
                     setattr(product_update, field_name, new_description)
                     need_update = True
 
         # Обновляем additional_description если проставлена галка
-        is_upload_add_descr_checked = "upload_add_description" in form_data
-        if is_upload_add_descr_checked:
+        if "upload_add_description" in form_data:
             add_description_field = "additional_description"
             new_add_description = form_data.get("new_add_description", "")
             if new_add_description:
@@ -1122,9 +1161,14 @@ class ReviewHandler:
                     )
                     need_update = True
 
+        # Обновление описания для печати (description_for_print)
         field_key = f"{self.FIELD_PREFIX}{field_name}"
         update_key = f"{self.UPDATE_PREFIX}{field_name}"
-        if field_key not in form_data or form_data.get(update_key) != "on":
+
+        if not (
+            field_key in form_data
+            and form_data.get(update_key) == self.VALUE_ON
+        ):
             return need_update
 
         form_value = form_data.get(field_key)
@@ -1132,18 +1176,19 @@ class ReviewHandler:
         if form_value is None:
             logger.debug("No value for description field in form")
             return need_update
+
+        form_value = str(form_value).strip()
         current_field_name = "description_for_print"
         current_value = self._get_complex_product_value(
             existing_product, current_field_name
         )
-        form_value = str(form_value).strip()
         if not form_value:
             if current_value:
-                new_value = self._create_complex_product_value("", "")
-                setattr(product_update, current_field_name, new_value)
+                new_empty_value = self._create_complex_product_value("", "")
+                setattr(product_update, current_field_name, new_empty_value)
                 return True
             return need_update
-        new_value = None
+
         if current_value != form_value:
             type_form_field = form_data.get("editor_mode")
             if type_form_field and type_form_field == "text":
@@ -1153,9 +1198,10 @@ class ReviewHandler:
             new_value = self._create_complex_product_value(
                 form_value, type_field
             )
-        if new_value:
-            setattr(product_update, current_field_name, new_value)
-            return True
+            if new_value:
+                setattr(product_update, current_field_name, new_value)
+                return True
+
         return need_update
 
     async def _save_to_crm(
@@ -1165,6 +1211,7 @@ class ReviewHandler:
     ) -> tuple[UUID | None, int]:
         """Сохраняет продукт в CRM и возвращает локальный ID."""
         bitrix_client = self.product_client.bitrix_client
+        external_id = None
 
         try:
             if existing_product:
@@ -1183,7 +1230,6 @@ class ReviewHandler:
             imported, _ = await self.product_client.import_from_bitrix(
                 int(external_id)
             )
-
             return imported.id if imported else None, int(external_id)
 
         except Exception as e:
@@ -1241,6 +1287,7 @@ class ReviewHandler:
                     "Пропускаем обновление картинки."
                 )
                 return None
+
             if pic_upload_choice in ["old", "new"]:
                 # Переменная для хранения результата, который пойдет в Битрикс
                 image_to_update = None
@@ -1260,13 +1307,14 @@ class ReviewHandler:
                 elif pic_upload_choice == "new" and pic_new_value:
                     image_to_update = pic_new_value
 
-                if (
-                    image_to_update == pic_current_supplier_url
-                    and supplier_product.source.value == pic_current_source
-                ):
-                    return None
-
                 if image_to_update:
+                    # Проверяем, не совпадает ли с текущим
+                    if (
+                        image_to_update == pic_current_supplier_url
+                        and supplier_product.source.value == pic_current_source
+                    ):
+                        return None
+
                     image_client = self.product_client.image_client
                     supplier_picture_data: dict[str, Any] = {
                         "source": supplier_product.source,
@@ -1290,28 +1338,32 @@ class ReviewHandler:
 
                 if raw_base64 and filename:
                     logger.info(f"Подготовка файла к загрузке: {filename}")
+                    try:
+                        raw_base64 = str(raw_base64)
+                        filename = str(filename)
 
-                    raw_base64 = str(raw_base64)
-                    filename = str(filename)
+                        file_info = self.build_file_data(raw_base64, filename)
+                        if not file_info:
+                            return None
 
-                    file_info = self.build_file_data(raw_base64, filename)
-                    if not file_info:
-                        return None
-
-                    image_client = self.product_client.image_client
-                    await image_client.create_product_picture_from_dict(
-                        bitrix_product_id,
-                        file_info,
-                        ImageType.DETAIL_PICTURE,
-                    )
-                    await image_client.import_from_bitrix_by_product_id(
-                        bitrix_product_id
-                    )
-                    logger.info(
-                        "Base64 отправлен "
-                        f"(длина: {file_info.get('file_size', '-')})."
-                    )
-                    return filename  # type: ignore[no-any-return]
+                        image_client = self.product_client.image_client
+                        await image_client.create_product_picture_from_dict(
+                            bitrix_product_id,
+                            file_info,
+                            ImageType.DETAIL_PICTURE,
+                        )
+                        await image_client.import_from_bitrix_by_product_id(
+                            bitrix_product_id
+                        )
+                        logger.info(
+                            "Base64 отправлен "
+                            f"(длина: {file_info.get('file_size', '-')})."
+                        )
+                        return filename  # type: ignore[no-any-return]
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to upload custom detail image: {e}"
+                        )
         except Exception as e:
             logger.error(f"Error loading detail pictures: {e}")
             return None
@@ -1321,6 +1373,11 @@ class ReviewHandler:
         self, raw_base64: str, filename: str
     ) -> dict[str, Any]:
         try:
+            # Очистка строки от пробелов и переносов
+            raw_base64 = (
+                raw_base64.replace(" ", "").replace("\n", "").replace("\r", "")
+            )
+
             # 1. Извлекаем content_type из заголовка Data URI
             # (если он есть)
             # Формат строки: "data:image/png;base64,iVBORw0KGgo..."
@@ -1355,7 +1412,7 @@ class ReviewHandler:
                     f"File too large (header): {total_size} bytes,"
                     f" max allowed: {settings.MAX_FILE_SIZE} bytes"
                 )
-                raise Exception("Too lage file")
+                raise ValueError("File size exceeds limit")
 
             # 4. Вычисляем SHA256 хэш (file_hash)
             sha256_hash = hashlib.sha256()
@@ -1378,10 +1435,11 @@ class ReviewHandler:
             )
             return file_info
 
+        except (binascii.Error, ValueError) as e:
+            logger.error(f"Base64 decode error for {filename}: {e}")
+            return {}
         except Exception as e:
-            logger.error(
-                "Ошибка при декодировании Base64 или обработке " f"файла: {e}"
-            )
+            logger.error(f"Unexpected error processing file {filename}: {e}")
             return {}
 
     async def _handle_more_images(
@@ -1400,10 +1458,15 @@ class ReviewHandler:
         # (чтобы понять, что удалили)
         # Ключи в форме: curr_img_123_source, curr_img_456_source ...
         current_ids_on_screen: set[int] = set()
+        pattern = re.compile(r"curr_img_(\d+)_source")
         for key in form_data.keys():
-            match = re.match(r"curr_img_(\d+)_source", key)
+            # match = re.match(r"curr_img_(\d+)_source", key)
+            match = pattern.match(key)
             if match:
-                current_ids_on_screen.add(int(match.group(1)))
+                try:
+                    current_ids_on_screen.add(int(match.group(1)))
+                except ValueError:
+                    continue
 
         # Собираем ID, которые пользователь оставил отмеченными
         # (чекбоксы "Оставить")
@@ -1423,44 +1486,44 @@ class ReviewHandler:
                     await image_client.bitrix_client.delete_picture_by_id(
                         bitrix_product_id, img_id
                     )
-                    await image_client.import_from_bitrix_by_product_id(
-                        bitrix_product_id
-                    )
                 except Exception as e:
                     print(f"Error deleting image {img_id}: {e}")
+            await image_client.import_from_bitrix_by_product_id(
+                bitrix_product_id
+            )
 
         # --- ШАГ 2: Сбор ссылок для добавления (Столбцы 1 и 2) ---
         # с проверкой уникальности
-
         kept_urls: set[str] = set()
-        images = await image_client.repo.get_images(
-            product_id=bitrix_product_id
-        )
-        for image in images:
-            if image.supplier_image_url:
-                kept_urls.add(image.supplier_image_url)
+        try:
+            images = await image_client.repo.get_images(
+                product_id=bitrix_product_id,
+                source=supplier_product.source,
+            )
+            for image in images:
+                if image.supplier_image_url:
+                    kept_urls.add(image.supplier_image_url)
+        except Exception as e:
+            logger.warning(
+                f"Failed to fetch existing images for deduplication: {e}"
+            )
+
         urls_to_upload: list[str] = []
 
-        # Столбец 1: Старые значения (name="more_pics_old_urls")
-        old_urls = form_data.getlist("more_pics_old_urls")
-        for url in old_urls:
-            if url and url not in kept_urls:
-                url = str(url)
-                urls_to_upload.append(url)
-                kept_urls.add(url)
-
-        # Столбец 2: Новые значения (name="more_pics_new_urls")
-        new_urls = form_data.getlist("more_pics_new_urls")
-        for url in new_urls:
-            if url and url not in kept_urls:
-                url = str(url)
-                urls_to_upload.append(url)
-                kept_urls.add(url)
+        for url_key in ["more_pics_old_urls", "more_pics_new_urls"]:
+            # Столбец 1: Старые значения (name="more_pics_old_urls")
+            # Столбец 2: Новые значения (name="more_pics_new_urls")
+            for url in form_data.getlist(url_key):
+                if url and url not in kept_urls:
+                    url = str(url)
+                    urls_to_upload.append(url)
+                    kept_urls.add(url)
 
         # Убираем дубликаты внутри самих списков old/new
         # (если вдруг пришли дубли)
         urls_to_upload = list(set(urls_to_upload))
         more_pictures: list[str] = []
+
         # Загружаем по ссылкам
         if urls_to_upload:
             logger.info(f"Uploading {len(urls_to_upload)} images by URL...")
@@ -1470,6 +1533,7 @@ class ReviewHandler:
                         "source": supplier_product.source,
                         "supplier_image_url": url,
                     }
+
                     await image_client.create_product_picture_from_url(
                         bitrix_product_id,
                         url,
@@ -1486,8 +1550,7 @@ class ReviewHandler:
 
         # --- ШАГ 3: Загрузка пользовательского файла (Столбец 4) ---
 
-        custom_check = form_data.get("more_pics_custom_check")
-        if custom_check:
+        if form_data.get("more_pics_custom_check"):
             raw_base64 = form_data.get("more_pics_custom_base64")
             filename = form_data.get("more_pics_custom_name")
 
@@ -1516,6 +1579,5 @@ class ReviewHandler:
                     )
                 except Exception as e:
                     logger.error(f"Error loading castom more photo: {e}")
-        if more_pictures:
-            return "; ".join(more_pictures)
-        return None
+
+        return "; ".join(more_pictures) if more_pictures else None
