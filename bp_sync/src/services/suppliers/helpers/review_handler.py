@@ -444,7 +444,7 @@ class ReviewHandler:
     def _transform_data_list(self, data_list: list[str] | None) -> str | None:
         if not data_list:
             return None
-        return "\n---------\n".join(data_list)
+        return "\n----------\n".join(data_list)
 
     def _get_description(
         self,
