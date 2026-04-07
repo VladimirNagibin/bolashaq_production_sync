@@ -326,9 +326,10 @@ class SupplierClient:
 
         # 4. Обработка данных товара (если отмечена выгрузка в CRM)
         bitrix_dict: dict[str, Any] = {}
+        bitrix_old_dict: dict[str, Any] = {}
         if flags["should_export_to_crm"]:
             try:
-                product_id, section_id, bitrix_dict = (
+                product_id, section_id, bitrix_dict, bitrix_old_dict = (
                     await self._review_handler.handle_submission(
                         supplier_product, form_data, preprocessed_data
                     )
@@ -386,7 +387,8 @@ class SupplierClient:
             characteristics=characteristics,
             complects=complects,
             token_data=token_data,
-            bitrix_dict=bitrix_dict,
+            new_bitrix_dict=bitrix_dict,
+            old_bitrix_dict=bitrix_old_dict,
             source=supplier_product.source,
         )
 
@@ -452,21 +454,27 @@ class SupplierClient:
         characteristics: list[SupplierCharacteristicUpdate] | None,
         complects: list[SupplierComplectUpdate] | None,
         token_data: TokenData,
-        bitrix_dict: dict[str, Any],
+        new_bitrix_dict: dict[str, Any],
+        old_bitrix_dict: dict[str, Any],
         source: SourcesProductEnum,
     ) -> None:
         """Сохраняет изменения в базу данных и помечает логи обработанными."""
-        logger.info(f"{bitrix_dict}============================")
+        logger.info(f"{new_bitrix_dict}============================")
+        logger.info(f"{old_bitrix_dict}++++++++++++++++++++++++++++")
         # Помечаем логи как обработанные
         change_bitrix_logs: list[ChangeLogUpdate] = []
         change_log_repo = self.supplier_product_repo.change_log_repo
-        for field_name, loaded_value in bitrix_dict.items():
+        for field_name, loaded_value in new_bitrix_dict.items():
             if field_name == "external_id":
                 continue
+            old_value = old_bitrix_dict.get(field_name)
             updated = await change_log_repo.mark_change_logs_as_processed(
                 supplier_product_id,
                 user_id=token_data.user_bitrix_id,
                 loaded_value=self._transformer.convert_to_string(loaded_value),
+                crm_value_previous=self._transformer.convert_to_string(
+                    old_value
+                ),
                 field_name=field_name,
             )
             if updated == 0:
@@ -483,12 +491,14 @@ class SupplierClient:
                         loaded_value=self._transformer.convert_to_string(
                             loaded_value
                         ),
+                        crm_value_previous=self._transformer.convert_to_string(
+                            old_value
+                        ),
                         is_processed=True,
                         force_import=False,
                         processed_at=datetime.now(timezone.utc),
                         processed_by_user_id=token_data.user_bitrix_id,
                         comment=None,
-                        crm_value_previous=None,
                     )
                 )
         if change_bitrix_logs:

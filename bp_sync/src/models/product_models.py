@@ -265,6 +265,9 @@ class Product(IntIdEntity):
             data[property.property_code] = property.to_pydantic_()
         if spec := data.get("specifications"):
             data["specifications"] = [FieldValue(**data) for data in spec]
+        if config := data.get("configuration"):
+            data["configuration"] = [FieldValue(**data) for data in config]
+
         return schema_class(**data)
 
 

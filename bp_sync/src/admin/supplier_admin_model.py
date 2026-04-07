@@ -71,6 +71,8 @@ class SupplierProductAdmin(
         "change_logs": "История изменений",
         "brend": "Бренд",
         "more_photo_process": "Обработанные доп картинки",
+        "detail_picture_process": "Обработанная детальная картинка",
+        "description_for_print": "Описание загруженное в Битрикс",
     }
     column_default_sort = [("source", True)]  # Сортировка по умолчанию
     column_sortable_list = [  # Список полей по которым возможна сортировка
@@ -103,6 +105,7 @@ class SupplierProductAdmin(
         "detail_picture_description",
         "preview_picture",
         "preview_picture_description",
+        "detail_picture_process",
         "more_photo",
         "more_photo_process",
         "preview_text",
@@ -118,6 +121,7 @@ class SupplierProductAdmin(
         "product",
         "preview_for_offer",
         "description_for_offer",
+        "description_for_print",
         "characteristics",
         "complects",
     ]
@@ -144,6 +148,7 @@ class SupplierProductAdmin(
         "detail_picture_description",
         "preview_picture",
         "preview_picture_description",
+        "detail_picture_process",
         "more_photo",
         "more_photo_process",
         "preview_text",
@@ -159,6 +164,7 @@ class SupplierProductAdmin(
         "product",
         "preview_for_offer",
         "description_for_offer",
+        "description_for_print",
         "characteristics",
         "complects",
         "change_logs",

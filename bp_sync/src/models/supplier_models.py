@@ -76,6 +76,8 @@ class SupplierProduct(Base):  # type: ignore[misc]
             f"{self.code if self.code else 'no code'}"
         )
 
+    # === Поля загружаемые как есть для контроля изменения ===
+
     # Основные данные товара
     external_id: Mapped[int | None] = mapped_column(
         # unique=True,
@@ -169,7 +171,8 @@ class SupplierProduct(Base):  # type: ignore[misc]
         Numeric(10, 2), comment="Остаток"
     )
 
-    # Метаданные источника
+    # === Метаданные источника ===
+
     source: Mapped[SourcesProductEnum] = mapped_column(
         String(20), comment="Источник данных"
     )
@@ -191,9 +194,6 @@ class SupplierProduct(Base):  # type: ignore[misc]
         default=True,
         comment="Требует ручной обработки",
     )
-    internal_section_id: Mapped[int | None] = mapped_column(
-        Integer, comment="Раздел в CRM"
-    )
 
     # Связь с главной таблицей продуктов (Номенклатурой)
     product_id: Mapped[UUID | None] = mapped_column(
@@ -206,6 +206,12 @@ class SupplierProduct(Base):  # type: ignore[misc]
         "Product",
         foreign_keys=[product_id],
         back_populates="supplier_products",
+    )
+
+    # === Преобразованные и вычисленные значения ===
+
+    internal_section_id: Mapped[int | None] = mapped_column(
+        Integer, comment="Раздел в CRM"
     )
 
     # Данные для предложений (Offers)
@@ -222,6 +228,10 @@ class SupplierProduct(Base):  # type: ignore[misc]
 
     more_photo_process: Mapped[str | None] = mapped_column(
         Text, comment="Обработанные доп картинки"
+    )
+
+    detail_picture_process: Mapped[str | None] = mapped_column(
+        Text, comment="Обработанная детальная картинка"
     )
 
     # Связь с характеристиками

@@ -307,7 +307,7 @@ class BaseProduct(CommonFieldMixin):
     additional_description: FieldValue | None = Field(
         None,
         validation_alias=AliasChoices("PROPERTY_113", "property113"),
-    )  # Доп описание
+    )  # Доп описание (превью)
     original_name: FieldValue | None = Field(
         None,
         validation_alias=AliasChoices("PROPERTY_115", "property115"),

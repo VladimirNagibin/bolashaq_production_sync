@@ -29,4 +29,6 @@ class EntityClient:
     async def handle_request_price(
         self, payload: SiteRequestPayload
     ) -> dict[str, Any]:
-        return await self.bitrix_client.handle_request_price(payload, self)
+        # TODO: move the product processing process to this level
+        site_request_handler = self.bitrix_client.site_request_handler
+        return await site_request_handler.handle_request_price(payload, self)

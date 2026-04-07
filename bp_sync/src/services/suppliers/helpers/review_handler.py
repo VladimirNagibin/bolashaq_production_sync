@@ -51,6 +51,8 @@ class ReviewHandler:
         self.product_section_client = product_section_client
         self.transformer = DataTransformer()
 
+    # === Подготовка данных для отображения в шаблоне. ===
+
     async def prepare_review_context(
         self,
         supplier_product: SupplierProductDetail,
@@ -593,16 +595,19 @@ class ReviewHandler:
         except Exception:
             return None
 
+    # === Обработка отправленной формы. ===
+
     async def handle_submission(
         self,
         supplier_product: SupplierProductDetail,
         form_data: FormData,
         preprocessed_data: dict[str, dict[str, Any]],
-    ) -> tuple[UUID | None, int | None, dict[str, Any]]:
+    ) -> tuple[UUID | None, int | None, dict[str, Any], dict[str, Any]]:
         """
         Обрабатывает отправленную форму.
         Возвращает: product_id_or_None, section_id_or_None,
-                    словарь с данными обновления в Битрикс
+                    словарь с данными обновления в Битрикс,
+                    словарь со старыми данными в Битрикс
         """
         try:
             # Получаем существующий продукт или создаем новый
@@ -613,14 +618,50 @@ class ReviewHandler:
                 product, form_data
             )
             if not product_update:
-                return None, section_id, {}
+                return None, section_id, {}, {}
 
             clean_dict = product_update.model_dump(exclude_none=True)
+            old_bitrix_dict: dict[str, Any] = {}
+            if product:
+                old_bitrix_dict = product.model_dump(exclude_none=True)
+                # for key in clean_dict:
+                #     if value := getattr(product, key, None):
+                #         old_bitrix_dict[key] = value
             new_section_id = getattr(product_update, "section_id", None)
             # Сохраняем в CRM
             db_product_id, bitrix_product_id = await self._save_to_crm(
                 product, product_update
             )
+
+            image_repo = self.product_client.image_client.repo
+            old_detail_picture = await image_repo.get_detail_by_product_id(
+                bitrix_product_id
+            )
+            if old_detail_picture:
+                old_link_detail_picture = (
+                    old_detail_picture.supplier_image_url
+                    or old_detail_picture.detail_url
+                )
+                if old_link_detail_picture:
+                    old_bitrix_dict["detail_picture"] = old_link_detail_picture
+
+            old_more_pictures = await image_repo.get_images(
+                image_type=ImageType.MORE_PHOTO.name,
+                product_id=bitrix_product_id,
+            )
+            if old_more_pictures:
+                old_more_pictures_list: list[str] = []
+                for old_more_picture in old_more_pictures:
+                    old_link_more_picture = (
+                        old_more_picture.supplier_image_url
+                        or old_more_picture.detail_url
+                    )
+                    if old_link_more_picture:
+                        old_more_pictures_list.append(old_link_more_picture)
+
+                old_bitrix_dict["more_photo"] = "; ".join(
+                    old_more_pictures_list
+                )
 
             detail_picture, more_photo = await self._handle_image_fields(
                 supplier_product,
@@ -633,7 +674,12 @@ class ReviewHandler:
             if more_photo:
                 clean_dict["more_photo"] = more_photo
 
-            return db_product_id, new_section_id or section_id, clean_dict
+            return (
+                db_product_id,
+                new_section_id or section_id,
+                clean_dict,
+                old_bitrix_dict,
+            )
 
         except NameNotFoundError:
             raise
@@ -653,12 +699,15 @@ class ReviewHandler:
         supplier_product: SupplierProductDetail,
     ) -> ProductCreate | None:
         """Получает существующий продукт или возвращает None."""
-        if not supplier_product.product_id:
-            return None
+        try:
+            if not supplier_product.product_id:
+                return None
 
-        return await self.product_client.repo.get_by_id(
-            supplier_product.product_id
-        )
+            return await self.product_client.repo.get_by_id(
+                supplier_product.product_id
+            )
+        except Exception:
+            return None
 
     async def _prepare_product_update(
         self, product: ProductCreate | None, form_data: FormData
@@ -682,7 +731,7 @@ class ReviewHandler:
         has_changes = await self._update_product_fields(
             product_update, product, form_data
         )
-        # Fix common Bitrix validator
+        # Fix common Bitrix validator (crutch)
         if has_changes and not self._should_update_field(form_data, "active"):
             product_update.active = None
 
@@ -775,6 +824,17 @@ class ReviewHandler:
                 if "gallery_block_active" in form_data:
                     return True
                 return False
+            elif field_name == "description":
+                field_key = f"{self.FIELD_PREFIX}{field_name}"
+                update_key = f"{self.UPDATE_PREFIX}{field_name}"
+                return (
+                    (
+                        field_key in form_data
+                        and form_data.get(update_key) == "on"
+                    )
+                    or ("upload_description" in form_data)
+                    or "upload_add_description" in form_data
+                )
             elif field_name in ["characteristics", "complects"]:
                 result = (
                     form_data.get(f"{self.UPDATE_PREFIX}{field_name}") == "on"
@@ -1032,11 +1092,46 @@ class ReviewHandler:
         field_name: str,
         form_data: FormData,
     ) -> bool:
-        form_value = form_data.get(f"{self.FIELD_PREFIX}{field_name}")
+        need_update = False
+        # Обновляем description если проставлена галка
+        is_upload_description_checked = "upload_description" in form_data
+        if is_upload_description_checked:
+            new_description = form_data.get("new_description", "")
+            if new_description:
+                old_description = getattr(existing_product, field_name)
+                if old_description != new_description:
+                    setattr(product_update, field_name, new_description)
+                    need_update = True
+
+        # Обновляем additional_description если проставлена галка
+        is_upload_add_descr_checked = "upload_add_description" in form_data
+        if is_upload_add_descr_checked:
+            add_description_field = "additional_description"
+            new_add_description = form_data.get("new_add_description", "")
+            if new_add_description:
+                old_add_description = self._get_complex_product_value(
+                    existing_product, add_description_field
+                )
+                if old_add_description != new_add_description:
+                    setattr(
+                        product_update,
+                        add_description_field,
+                        self._create_complex_product_value(
+                            new_add_description
+                        ),
+                    )
+                    need_update = True
+
+        field_key = f"{self.FIELD_PREFIX}{field_name}"
+        update_key = f"{self.UPDATE_PREFIX}{field_name}"
+        if field_key not in form_data or form_data.get(update_key) != "on":
+            return need_update
+
+        form_value = form_data.get(field_key)
         # Если значение не передано в форме - ничего не делаем
         if form_value is None:
-            logger.debug("No value for brand field in form")
-            return False
+            logger.debug("No value for description field in form")
+            return need_update
         current_field_name = "description_for_print"
         current_value = self._get_complex_product_value(
             existing_product, current_field_name
@@ -1047,7 +1142,7 @@ class ReviewHandler:
                 new_value = self._create_complex_product_value("", "")
                 setattr(product_update, current_field_name, new_value)
                 return True
-            return False
+            return need_update
         new_value = None
         if current_value != form_value:
             type_form_field = form_data.get("editor_mode")
@@ -1061,7 +1156,7 @@ class ReviewHandler:
         if new_value:
             setattr(product_update, current_field_name, new_value)
             return True
-        return False
+        return need_update
 
     async def _save_to_crm(
         self,

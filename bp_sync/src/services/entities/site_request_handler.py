@@ -41,7 +41,6 @@ if TYPE_CHECKING:
     from .entities_bitrix_services import EntitiesBitrixClient
 
 DEFAULT_DEAL_TITLE = "Запрос цены с сайта"
-# DEFAULT_TAX_RATE = 16
 SITE_SOURCE = "WEB"
 EVENT_SOURCE_MAPPING = {
     "order": "matest",
