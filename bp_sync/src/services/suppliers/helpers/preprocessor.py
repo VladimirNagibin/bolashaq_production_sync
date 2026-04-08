@@ -194,7 +194,7 @@ class SupplierDataPreprocessor:
 
         try:
             ai_result: ProductSection = (
-                self._openai_service.parse_product_description(
+                await self._openai_service.parse_product_description(
                     description_text=new_description,
                     product_name=supplier_product.name,
                     article=supplier_product.article,

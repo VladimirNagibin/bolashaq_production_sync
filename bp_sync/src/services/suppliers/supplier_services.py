@@ -66,7 +66,7 @@ class SupplierClient:
         )
         self._transformer = DataTransformer()
         self._preprocessor = SupplierDataPreprocessor(
-            openai_service=OpenAIService(),
+            openai_service=OpenAIService(redis_client=redis_client),
             redis_client=redis_client,
             category_cache=self._category_cache,
         )

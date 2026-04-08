@@ -92,7 +92,6 @@ class ProductImageClient:
             await self._check_images_id(
                 source_images=bitrix_images,
                 target_images=db_images,
-                product_id=product_id,
             )
 
             # Синхронизируем изображения
@@ -194,11 +193,12 @@ class ProductImageClient:
         self,
         source_images: list[ProductImageCreate],
         target_images: list[ProductImageDB],
-        product_id: int,
     ) -> None:
         """
         Проверка кодов изображений товара между данными из внешнего источника
         и БД. При изменении в Битрикс меняем в БД.
+        При сохранении товара в Битрикс коды изображений из MORE_PHOTO
+        меняются. Поэтому нужна синхронизация ИД изображений.
 
         Args:
             source_images: Изображения из источника (Bitrix)
