@@ -791,6 +791,7 @@ class ReviewHandler:
             "vat_included": True,
             "measure": settings.DEFAULT_MEASURE,
             "active": True,
+            "xml_id": "0",
         }
         return ProductUpdate(**product_bitrix_data)
 
