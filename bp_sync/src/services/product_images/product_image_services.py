@@ -88,6 +88,13 @@ class ProductImageClient:
             # Получаем существующие изображения из БД
             db_images = await self._fetch_db_images(product_id)
 
+            # Проверяем на изменение ИД картинки в Битрикс
+            await self._check_images_id(
+                source_images=bitrix_images,
+                target_images=db_images,
+                product_id=product_id,
+            )
+
             # Синхронизируем изображения
             synchronized_images = await self._synchronize_images(
                 source_images=bitrix_images,
@@ -183,6 +190,45 @@ class ProductImageClient:
             )
             raise DatabaseException(f"Failed to fetch images from DB: {e}")
 
+    async def _check_images_id(
+        self,
+        source_images: list[ProductImageCreate],
+        target_images: list[ProductImageDB],
+        product_id: int,
+    ) -> None:
+        """
+        Проверка кодов изображений товара между данными из внешнего источника
+        и БД. При изменении в Битрикс меняем в БД.
+
+        Args:
+            source_images: Изображения из источника (Bitrix)
+            target_images: Существующие изображения в БД
+            product_id: ID товара
+        """
+        try:
+            need_update = False
+            for target_image in target_images:
+                name = target_image.name
+                detail_url = target_image.detail_url
+                image_type = target_image.image_type
+                external_id = int(target_image.external_id)
+                for source_image in source_images:
+                    if (
+                        source_image.name == name
+                        and source_image.detail_url == detail_url
+                        and source_image.image_type == image_type
+                        and source_image.external_id
+                        and int(source_image.external_id) != external_id
+                    ):
+                        target_image.external_id = int(
+                            source_image.external_id
+                        )
+                        need_update = True
+            if need_update:
+                await self.repo.session.commit()
+        except Exception as e:
+            logger.error(f"{str(e)}")
+
     async def _synchronize_images(
         self,
         source_images: list[ProductImageCreate],
@@ -253,8 +299,6 @@ class ProductImageClient:
             list[ProductImageDB]: Список обновленных изображений
         """
         updated_images: list[ProductImageDB] = []
-        logger.info(f"{target_images}---target_images---")
-        logger.info(f"{source_index}---source_index---")
         for existing_image in target_images:
             if existing_image.external_id not in source_index:
                 # Изображение отсутствует в источнике - помечаем как удаленное
