@@ -151,7 +151,6 @@ async def review_product(
                 review_complex_data
             )
         )
-
         # Обработка ошибок
         error_message = None
         if request.query_params.get("error") == "name_required":
