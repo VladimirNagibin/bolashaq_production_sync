@@ -258,16 +258,18 @@ class BrandEnum(IntEnum):
     ZORN = 97
     INMARKON = 99
     TVT = 101
+    BIOBASE = 103
 
     @classmethod
     def display_names(cls) -> dict[int, str]:
-        # Маппинг ID на оригинальные русские названия для отображения
+        # Маппинг ID на оригинальные названия для отображения
         return {
             93: "Matest",
             95: "Стройприбор",
             97: "Zorn",
             99: "Инмаркон",
             101: "ТВТ",
+            103: "Biobase",
         }
 
     @classmethod
