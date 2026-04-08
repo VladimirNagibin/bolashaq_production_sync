@@ -85,8 +85,25 @@ async def check(
 
         # r = ProductUpdate(name="name")
         logger.info(f"{r}++++++++++++++++++++++++++++++++++++++++++")
+        product_id = 2350
+        success_field = (
+            await product_client.bitrix_client.transform_product_fields(
+                product_id
+            )
+        )
+        await product_client.import_from_bitrix(product_id)
 
-        # await product_image_client.import_from_bitrix_by_product_id(2350)
+        detail_picture = (
+            await product_image_client.repo.get_detail_by_product_id(2350)
+        )
+        await product_image_client.import_from_bitrix_by_product_id(2350)
+        success_picture = (
+            await product_image_client.transform_product_picture_fields(
+                2350, detail_picture
+            )
+        )
+        await product_image_client.import_from_bitrix_by_product_id(2350)
+        logger.info(f"{success_field}+{success_picture}")
         # from schemas.enums import SourcesProductEnum
         # from schemas.product_image_schemas import ProductImageCreate
         # product_image_create = ProductImageCreate(

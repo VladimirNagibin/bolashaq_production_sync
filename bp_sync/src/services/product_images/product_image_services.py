@@ -253,7 +253,8 @@ class ProductImageClient:
             list[ProductImageDB]: Список обновленных изображений
         """
         updated_images: list[ProductImageDB] = []
-
+        logger.info(f"{target_images}---target_images---")
+        logger.info(f"{source_index}---source_index---")
         for existing_image in target_images:
             if existing_image.external_id not in source_index:
                 # Изображение отсутствует в источнике - помечаем как удаленное
@@ -351,7 +352,6 @@ class ProductImageClient:
             list[ProductImageDB]: Список созданных изображений
         """
         created_images: list[ProductImageDB] = []
-
         for source_image in source_images:
             if source_image.external_id not in target_index:
                 try:
