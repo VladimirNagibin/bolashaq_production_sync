@@ -521,7 +521,7 @@ class FileImportService:
                 )
         return value
 
-    def _transform_price(self, value: Any) -> float | None:
+    def _transform_price_labset(self, value: Any) -> float | None:
         """Пример пользовательской трансформации для цены."""
         if isinstance(value, (int, float)):
             return float(value)
@@ -530,6 +530,21 @@ class FileImportService:
             cleaned = re.sub(r"[^\d,.]", "", value).replace(",", ".")
             try:
                 return float(cleaned)
+            except ValueError:
+                pass
+        return None
+
+    def _transform_price_sup(self, value: Any) -> float | None:
+        """Трансформация цены Русприбор."""
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            # Удаляем валюту и пробелы
+            cleaned = re.sub(r"[^\d,.]", "", value).replace(",", ".")
+            try:
+                exchange_rate = 6
+                # TODO get exchange rate and calculate new price
+                return float(cleaned) * exchange_rate
             except ValueError:
                 pass
         return None

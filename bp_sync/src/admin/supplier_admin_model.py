@@ -1,3 +1,5 @@
+from sqladmin.filters import OperationColumnFilter
+
 from models.supplier_models import (
     SourceColumnMapping,
     SourceImportConfig,
@@ -8,6 +10,8 @@ from models.supplier_models import (
 )
 
 from .base_admin import BaseAdmin
+
+# BooleanFilter, AllUniqueStringValuesFilter, ForeignKeyFilter,
 
 
 class SupplierProductAdmin(
@@ -24,7 +28,9 @@ class SupplierProductAdmin(
         "name",
         "source",
         "code",
-        "active",
+        "is_validated",
+        "should_export_to_crm",
+        "needs_review",
         "price",
         "original_name",
         "article",
@@ -273,6 +279,21 @@ class ColumnMappingAdmin(
         "transformation_rule": "Правило трансформации",
         "display_order": "Для UI и порядка обработки",
     }
+    column_filters = [
+        # BooleanFilter(User.is_admin),
+        # AllUniqueStringValuesFilter(User.name),
+        # ForeignKeyFilter(
+        #     SourceColumnMapping.config,
+        #     SourceImportConfig.source, title="Config"
+        # ),
+        # OperationColumnFilter provides dropdown UI with multiple operations
+        OperationColumnFilter(SourceColumnMapping.config_id),
+        # String operations: Contains, Equals, Starts with, Ends with
+        # OperationColumnFilter(User.age),
+        # # Numeric operations: Equals, Greater than, Less than
+        # OperationColumnFilter(User.created_at),
+        # # DateTime operations: Equals, Greater than, Less than
+    ]
     column_default_sort = [("config_id", True)]  # Сортировка по умолчанию
     column_sortable_list = [  # Список полей по которым возможна сортировка
         "config_id",
