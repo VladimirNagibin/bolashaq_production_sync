@@ -1,5 +1,5 @@
 from enum import IntEnum, StrEnum, auto
-from typing import Any
+from typing import Any, Self
 
 CURRENCY = "KZT"
 SYSTEM_USER_ID = 37
@@ -188,10 +188,52 @@ class DealStagesEnum(IntEnum):
 class SourcesProductEnum(StrEnum):
     """Источники данных о товарах."""
 
-    MATEST = "matest.kz"
-    RUP = "rup-su.ru"
-    C1 = "1c"
-    LABSET = "labset.su"
+    MATEST = "matest.kz"  # 107
+    RUP = "rup-su.ru"  # 115
+    C1 = "1c"  # 117
+    LABSET = "labset.su"  # 109
+    EQUALIZER = "equalizer.kz"  # 111
+    BOLASHAQTRADE = "bolashaqtrade.kz"  # 113
+
+    @classmethod
+    def mapping_bitrix_id(cls) -> dict[int, str]:
+        """Возвращает маппинг Bitrix ID на значения источников."""
+        return {
+            107: cls.MATEST.value,
+            115: cls.RUP.value,
+            117: cls.C1.value,
+            109: cls.LABSET.value,
+            111: cls.EQUALIZER.value,
+            113: cls.BOLASHAQTRADE.value,
+        }
+
+    @classmethod
+    def get_bitrix_id(cls, source: str | Self) -> int:
+        """
+        Возвращает Bitrix ID по значению источника или объекту перечисления.
+        Пример: SourcesProductEnum.get_bitrix_id("matest.kz") -> 107
+        """
+        if isinstance(source, cls):
+            source = source.value
+        # Инвертированный маппинг (значение -> ID)
+        reverse_mapping = {v: k for k, v in cls.mapping_bitrix_id().items()}
+        return reverse_mapping[source]
+
+    @classmethod
+    def get_source_by_bitrix_id(cls, bitrix_id: int) -> str:
+        """Возвращает строковое значение источника по Bitrix ID."""
+        return cls.mapping_bitrix_id()[bitrix_id]
+
+    @classmethod
+    def get_enum_by_bitrix_id(cls, bitrix_id: int) -> Self:
+        """Возвращает элемент перечисления по Bitrix ID."""
+        source_value = cls.get_source_by_bitrix_id(bitrix_id)
+        return cls(source_value)
+
+    @classmethod
+    def get_all_bitrix_ids(cls) -> list[int]:
+        """Возвращает список всех Bitrix ID."""
+        return list(cls.mapping_bitrix_id().keys())
 
 
 class SourceKeyField(StrEnum):
@@ -258,16 +300,20 @@ class BrandEnum(IntEnum):
     ZORN = 97
     INMARKON = 99
     TVT = 101
+    BIOBASE = 103
+    TESTO = 105
 
     @classmethod
     def display_names(cls) -> dict[int, str]:
-        # Маппинг ID на оригинальные русские названия для отображения
+        # Маппинг ID на оригинальные названия для отображения
         return {
             93: "Matest",
             95: "Стройприбор",
             97: "Zorn",
             99: "Инмаркон",
             101: "ТВТ",
+            103: "Biobase",
+            105: "Testo",
         }
 
     @classmethod

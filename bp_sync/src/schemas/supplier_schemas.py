@@ -120,7 +120,7 @@ class SupplierProductBase(BaseFields):
     # Для предложений
     preview_for_offer: str | None = None
     description_for_offer: str | None = None
-
+    description_for_print: str | None = None
     more_photo_process: str | None = None
 
 

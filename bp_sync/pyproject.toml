@@ -15,7 +15,7 @@ pydantic-settings = "^2.6.1"
 uvicorn = "^0.34.0"
 SQLAlchemy = {version = "^2.0.37", extras = ["asyncio"]}
 Alembic = "^1.14.0"
-sqladmin = "^0.20.1"
+sqladmin = "^0.24.0"
 pandas = "^2.2.3"
 redis = "^6.2.0"
 cryptography = "^45.0.4"

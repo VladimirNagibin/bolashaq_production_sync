@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
 
 from db.redis import get_redis_session
+from schemas.product_schemas import ProductUpdate
 
 # from services.companies.company_services import CompanyClient
 from services.contacts.contact_bitrix_services import ContactBitrixClient
@@ -32,9 +33,6 @@ from services.product_images.product_image_services import ProductImageClient
 from services.products.product_bitrix_services import ProductBitrixClient
 from services.products.product_services import ProductClient
 from services.users.user_services import UserClient
-
-# from schemas.product_schemas import FieldValue, ProductUpdate
-
 
 # from services.users.user_bitrix_services import UserBitrixClient
 
@@ -79,10 +77,33 @@ async def check(
 
         # result = await product_client.import_from_bitrix(2350)
 
-        r = await product_client.bitrix_client.transform_product_fields(2350)
-        logger.info(f"{r}++++++++++++++++++++++++++++++++++++++++++")
+        # r = await product_client.bitrix_client.transform_product_fields(2350)
+        from typing import Any
 
-        # await product_image_client.import_from_bitrix_by_product_id(2350)
+        product_bitrix_data: dict[str, Any] = {"external_id": 2350}
+        r = ProductUpdate(**product_bitrix_data)
+
+        # r = ProductUpdate(name="name")
+        logger.info(f"{r}++++++++++++++++++++++++++++++++++++++++++")
+        product_id = 2350
+        success_field = (
+            await product_client.bitrix_client.transform_product_fields(
+                product_id
+            )
+        )
+        await product_client.import_from_bitrix(product_id)
+
+        detail_picture = (
+            await product_image_client.repo.get_detail_by_product_id(2350)
+        )
+        await product_image_client.import_from_bitrix_by_product_id(2350)
+        success_picture = (
+            await product_image_client.transform_product_picture_fields(
+                2350, detail_picture
+            )
+        )
+        await product_image_client.import_from_bitrix_by_product_id(2350)
+        logger.info(f"{success_field}+{success_picture}")
         # from schemas.enums import SourcesProductEnum
         # from schemas.product_image_schemas import ProductImageCreate
         # product_image_create = ProductImageCreate(

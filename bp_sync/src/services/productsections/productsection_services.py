@@ -239,7 +239,7 @@ class ProductsectionClient(
             selected_root_id = None
             selected_child_id = None
             selected_child_name = None
-
+            selected_root_name = None
             # Пытаемся найти ID текущего раздела
             current_section_id = None
             for item in section_data:
@@ -295,7 +295,8 @@ class ProductsectionClient(
                 "selected_child_name": selected_child_name,
                 "selected_root_name": selected_root_name,
             }
-        except Exception:
+        except Exception as e:
+            logger.error(f"{e}")
             return {}
 
     def _update_id_to_name(

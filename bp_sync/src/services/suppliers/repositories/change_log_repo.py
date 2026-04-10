@@ -114,6 +114,7 @@ class ChangeLogRepository(BaseRepository[SuppChangeLog]):
         field_name: str | None = None,
         user_id: int | None = None,
         loaded_value: str | None = None,
+        crm_value_previous: str | None = None,
         force_import: bool = False,
     ) -> int:
         """
@@ -151,6 +152,7 @@ class ChangeLogRepository(BaseRepository[SuppChangeLog]):
             processed_at=func.now(),
             processed_by_user_id=user_id,
             loaded_value=loaded_value,
+            crm_value_previous=crm_value_previous,
         )
 
         result = await self._execute_query(
@@ -160,7 +162,7 @@ class ChangeLogRepository(BaseRepository[SuppChangeLog]):
             field_name=field_name,
         )
 
-        updated_count = int(result.rowcount)
+        updated_count = int(result.rowcount) if result else 0
 
         self.logger.info(
             "Marked change logs as processed",

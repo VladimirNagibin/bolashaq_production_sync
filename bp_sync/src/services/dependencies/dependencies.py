@@ -14,6 +14,8 @@ from services.deals.deal_lock_service import LockService
 from services.deals.deal_repository import DealRepository
 from services.deals.deal_services import DealClient
 from services.departments.department_services import DepartmentClient
+from services.entities.entities_bitrix_services import EntitiesBitrixClient
+from services.entities.entities_services import EntityClient
 from services.leads.lead_bitrix_services import LeadBitrixClient
 from services.leads.lead_repository import LeadRepository
 from services.leads.lead_services import LeadClient
@@ -31,6 +33,7 @@ from services.products.product_services import ProductClient
 from services.productsections.productsection_services import (
     ProductsectionClient,
 )
+from services.suppliers.supplier_services import SupplierClient
 from services.timeline_comments.timeline_comment_bitrix_services import (
     TimeLineCommentBitrixClient,
 )
@@ -49,6 +52,7 @@ from .dependencies_bitrix_entity import (
     get_company_bitrix_client,
     get_contact_bitrix_client,
     get_deal_bitrix_client,
+    get_entity_bitrix_client,
     get_lead_bitrix_client,
     get_product_bitrix_client,
     get_timeline_comment_bitrix_client,
@@ -65,6 +69,7 @@ from .dependencies_repo_entity import (
     get_timeline_comment_repo,
     get_user_repo,
 )
+from .dependencies_suppliers import get_supplier_service
 
 
 async def get_product_raw_data_service(
@@ -218,4 +223,13 @@ async def get_deal_service(
         lead_client=lead_service,
         timeline_comment_client=timeline_comment_service,
         product_client=product_service,
+    )
+
+
+async def get_entity_service(
+    bitrix_client: EntitiesBitrixClient = Depends(get_entity_bitrix_client),
+    supplier_client: SupplierClient = Depends(get_supplier_service),
+) -> EntityClient:
+    return EntityClient(
+        bitrix_client=bitrix_client, supplier_client=supplier_client
     )

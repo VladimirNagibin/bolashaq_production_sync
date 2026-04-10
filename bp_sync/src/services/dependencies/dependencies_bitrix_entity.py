@@ -9,11 +9,17 @@ from ..deals.deal_bitrix_services import DealBitrixClient
 from ..entities.entities_bitrix_services import EntitiesBitrixClient
 from ..leads.lead_bitrix_services import LeadBitrixClient
 from ..products.product_bitrix_services import ProductBitrixClient
+
+# from ..suppliers.repositories.supplier_product_repo import (
+#     SupplierProductRepository
+# )
 from ..timeline_comments.timeline_comment_bitrix_services import (
     TimeLineCommentBitrixClient,
 )
 from ..users.user_bitrix_services import UserBitrixClient
 from .dependencies_bitrix import dependency_container, get_api_client
+
+# from .dependencies_suppliers import get_supplier_product_repo
 
 
 async def get_deal_bitrix_client() -> AsyncGenerator[DealBitrixClient, None]:
@@ -70,6 +76,10 @@ async def get_entity_bitrix_client(
     contact_client: ContactBitrixClient = Depends(get_contact_bitrix_client),
     company_client: CompanyBitrixClient = Depends(get_company_bitrix_client),
     user_client: UserBitrixClient = Depends(get_user_bitrix_client),
+    product_client: ProductBitrixClient = Depends(get_product_bitrix_client),
+    # supplier_repo: SupplierProductRepository = Depends(
+    #     get_supplier_product_repo
+    # ),
 ) -> AsyncGenerator[EntitiesBitrixClient, None]:
     """Зависимость для агрегированного клиента сущностей"""
     entity_client = EntitiesBitrixClient(
@@ -77,6 +87,8 @@ async def get_entity_bitrix_client(
         company_bitrix_client=company_client,
         deal_bitrix_client=deal_client,
         user_bitrix_client=user_client,
+        product_bitrix_client=product_client,
+        # supplier_repo=supplier_repo,
     )
     yield entity_client
 

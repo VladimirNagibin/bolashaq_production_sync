@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -12,6 +13,7 @@ from core.exceptions.supplier_exceptions import (
     SupplierProductNotFoundError,
 )
 from core.logger import logger
+from schemas.change_log_schemas import ChangeLogUpdate
 from schemas.enums import SourcesProductEnum
 from schemas.product_schemas import ProductCreate
 from schemas.supplier_schemas import (
@@ -64,7 +66,7 @@ class SupplierClient:
         )
         self._transformer = DataTransformer()
         self._preprocessor = SupplierDataPreprocessor(
-            openai_service=OpenAIService(),
+            openai_service=OpenAIService(redis_client=redis_client),
             redis_client=redis_client,
             category_cache=self._category_cache,
         )
@@ -226,9 +228,14 @@ class SupplierClient:
             extra={"supplier_product_id": str(supplier_product_id)},
         )
         # 1. Базовые данные
-        supplier_product = await self.supplier_product_repo.get_with_relations(
-            supplier_product_id
-        )
+        try:
+            supplier_product = (
+                await self.supplier_product_repo.get_with_relations(
+                    supplier_product_id
+                )
+            )
+        except Exception:
+            supplier_product = None
         if not supplier_product:
             error_msg = f"SupplierProduct {supplier_product_id} not found"
             logger.error(error_msg)
@@ -284,6 +291,7 @@ class SupplierClient:
         self,
         supplier_product_id: UUID,
         form_data: FormData,
+        token_data: TokenData,
     ) -> SourcesProductEnum:
         """
         Обрабатывает отправку формы ревью.
@@ -308,12 +316,15 @@ class SupplierClient:
         update_data = SupplierProductUpdate()
         has_changes = False
         is_unlinked = False
+        crm_field_updates: dict[str, Any] = {}
+        old_crm_values: dict[str, Any] = {}
 
         # Логика открепления/изменения статуса выгрузки
         if not flags["should_export_to_crm"] and supplier_product.product_id:
             is_unlinked = True
             has_changes = True
 
+        # Обновление флага выгрузки, если он изменился
         if (
             flags["should_export_to_crm"]
             != supplier_product.should_export_to_crm
@@ -324,7 +335,7 @@ class SupplierClient:
         # 4. Обработка данных товара (если отмечена выгрузка в CRM)
         if flags["should_export_to_crm"]:
             try:
-                product_id, section_id = (
+                (product_id, section_id, crm_field_updates, old_crm_values) = (
                     await self._review_handler.handle_submission(
                         supplier_product, form_data, preprocessed_data
                     )
@@ -381,6 +392,10 @@ class SupplierClient:
             is_unlinked=is_unlinked,
             characteristics=characteristics,
             complects=complects,
+            token_data=token_data,
+            new_bitrix_dict=crm_field_updates,
+            old_bitrix_dict=old_crm_values,
+            source=supplier_product.source,
         )
 
         return supplier_product.source
@@ -444,31 +459,85 @@ class SupplierClient:
         is_unlinked: bool,
         characteristics: list[SupplierCharacteristicUpdate] | None,
         complects: list[SupplierComplectUpdate] | None,
+        token_data: TokenData,
+        new_bitrix_dict: dict[str, Any],
+        old_bitrix_dict: dict[str, Any],
+        source: SourcesProductEnum,
     ) -> None:
         """Сохраняет изменения в базу данных и помечает логи обработанными."""
+        try:
+            if has_changes or characteristics or complects:
+                await self.supplier_product_repo.update(
+                    product_id=supplier_product_id,
+                    product_data=update_data,
+                    characteristics=characteristics,
+                    complects=complects,
+                    is_unlinked=is_unlinked,
+                )
+                logger.info(
+                    "Supplier product updated",
+                    extra={
+                        "supplier_product_id": str(supplier_product_id),
+                        "is_unlinked": is_unlinked,
+                    },
+                )
 
-        # Помечаем логи как обработанные в любом случае
-        change_log_repo = self.supplier_product_repo.change_log_repo
-        await change_log_repo.mark_change_logs_as_processed(
-            supplier_product_id,
-            user_id=1,
-            loaded_value="",  # ============================
-        )
+            # Помечаем логи как обработанные
+            change_log_repo = self.supplier_product_repo.change_log_repo
+            change_bitrix_logs: list[ChangeLogUpdate] = []
 
-        if has_changes or characteristics or complects:
-            await self.supplier_product_repo.update(
-                product_id=supplier_product_id,
-                product_data=update_data,
-                characteristics=characteristics,
-                complects=complects,
-                is_unlinked=is_unlinked,
+            for field_name, loaded_value in new_bitrix_dict.items():
+                if field_name == "external_id":
+                    continue
+                old_value = old_bitrix_dict.get(field_name)
+                updated = await change_log_repo.mark_change_logs_as_processed(
+                    supplier_product_id,
+                    user_id=token_data.user_bitrix_id,
+                    loaded_value=self._transformer.convert_to_string(
+                        loaded_value
+                    ),
+                    crm_value_previous=self._transformer.convert_to_string(
+                        old_value
+                    ),
+                    field_name=field_name,
+                )
+                if updated == 0:
+                    change_bitrix_logs.append(
+                        ChangeLogUpdate(
+                            supplier_product_id=supplier_product_id,
+                            source=source,
+                            config_name=None,
+                            field_name=field_name,
+                            old_value=None,
+                            new_value=None,
+                            value_type=None,
+                            loaded_by_user_id=token_data.user_bitrix_id,
+                            loaded_value=self._transformer.convert_to_string(
+                                loaded_value
+                            ),
+                            crm_value_previous=(
+                                self._transformer.convert_to_string(old_value)
+                            ),
+                            is_processed=True,
+                            force_import=False,
+                            processed_at=datetime.now(timezone.utc),
+                            processed_by_user_id=token_data.user_bitrix_id,
+                            comment=None,
+                        )
+                    )
+            if change_bitrix_logs:
+                await change_log_repo.bulk_create_change_logs(
+                    change_bitrix_logs
+                )
+            # Помечаем не найденные логи
+            await change_log_repo.mark_change_logs_as_processed(
+                supplier_product_id,
+                user_id=token_data.user_bitrix_id,
             )
-            logger.info(
-                "Supplier product updated",
-                extra={
-                    "supplier_product_id": str(supplier_product_id),
-                    "is_unlinked": is_unlinked,
-                },
+        except Exception as e:
+            logger.error(
+                "Failed to save supplier product "
+                f"(id: {supplier_product_id}): {type(e).__name__}: {e}"
             )
 
     async def _update_category_cache(

@@ -15,6 +15,7 @@ class ProductImageAdmin(
     column_list = [  # Поля в списке
         "name",
         "product",
+        "external_id",
         "image_type",
         "is_deleted_in_bitrix",
         "source",

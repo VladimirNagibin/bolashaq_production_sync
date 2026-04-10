@@ -1,5 +1,7 @@
 import json
+from datetime import datetime
 from typing import Any, Callable
+from uuid import UUID
 
 from core.logger import logger
 from schemas.supplier_schemas import (
@@ -272,4 +274,55 @@ class DataTransformer:
         """Безопасно получает значение поля из данных."""
         if key in data:
             return data[key].get("new_value")
+        return None
+
+    def convert_to_string(self, value: Any) -> str | None:
+        """
+        Преобразует все значения в строки.
+        """
+        if value is None:
+            return None
+
+        if isinstance(value, (str, int, float, UUID, bool, datetime)):
+            return self.convert_simple_to_string(value)
+
+        # Списки обрабатываем
+        if isinstance(value, dict):
+            return self._convert_field_value_to_srting(value)
+        # Словари обрабатываем
+        if isinstance(value, list):
+            values: list[str] = []
+            for v in value:
+                if current_value := self._convert_field_value_to_srting(v):
+                    values.append(current_value)
+            return "; ".join(values)
+        # Для любых других объектов используем str()
+        return str(value)
+
+    def convert_simple_to_string(self, value: Any) -> str | None:
+        """
+        Преобразует все значения в строки.
+        """
+        if value is None:
+            return None
+        # Если это строка, оставляем как есть
+        if isinstance(value, str):
+            return value
+        # Числа и булевы значения превращаем в строки
+        if isinstance(value, (int, float, UUID, bool)):
+            return str(value)
+        # if isinstance(value, bool):
+        #     return "True" if value else "False"
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return None
+
+    def _convert_field_value_to_srting(
+        self, field_value: dict[str, Any]
+    ) -> str | None:
+        value = field_value.get("value")
+        if isinstance(value, str):
+            return value
+        if isinstance(value, dict):
+            return value.get("text_field")
         return None

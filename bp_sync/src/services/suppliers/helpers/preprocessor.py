@@ -20,6 +20,7 @@ class SupplierDataPreprocessor:
     # Константы для специальной обработки
     SOURCE_SPECIFIC_FIELDS = {
         SourcesProductEnum.LABSET: ["more_photo"],
+        SourcesProductEnum.RUP: ["more_photo"],
     }
 
     # Маппинг полей AI на поля товара
@@ -194,7 +195,7 @@ class SupplierDataPreprocessor:
 
         try:
             ai_result: ProductSection = (
-                self._openai_service.parse_product_description(
+                await self._openai_service.parse_product_description(
                     description_text=new_description,
                     product_name=supplier_product.name,
                     article=supplier_product.article,
@@ -329,6 +330,12 @@ class SupplierDataPreprocessor:
                     result["detail_picture_process"] = urls[0]
                     if len(urls) > 1:
                         result["more_photo_process"] = urls[1:]
+            return result
+        if source == SourcesProductEnum.RUP and field_name == "more_photo":
+            if isinstance(value, str):
+                urls = [url.strip() for url in value.split(";") if url.strip()]
+                if urls:
+                    result["more_photo_process"] = urls
         return result
 
     async def _get_category_cache(

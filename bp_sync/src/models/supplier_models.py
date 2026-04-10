@@ -76,10 +76,12 @@ class SupplierProduct(Base):  # type: ignore[misc]
             f"{self.code if self.code else 'no code'}"
         )
 
+    # === Поля загружаемые как есть для контроля изменения ===
+
     # Основные данные товара
     external_id: Mapped[int | None] = mapped_column(
         # unique=True,
-        comment="ID во внешней системе",
+        comment="ID во внешней системе поставщика",
     )
     name: Mapped[str | None] = mapped_column(
         String(500),
@@ -169,7 +171,8 @@ class SupplierProduct(Base):  # type: ignore[misc]
         Numeric(10, 2), comment="Остаток"
     )
 
-    # Метаданные источника
+    # === Метаданные источника ===
+
     source: Mapped[SourcesProductEnum] = mapped_column(
         String(20), comment="Источник данных"
     )
@@ -191,9 +194,6 @@ class SupplierProduct(Base):  # type: ignore[misc]
         default=True,
         comment="Требует ручной обработки",
     )
-    internal_section_id: Mapped[int | None] = mapped_column(
-        Integer, comment="Раздел в CRM"
-    )
 
     # Связь с главной таблицей продуктов (Номенклатурой)
     product_id: Mapped[UUID | None] = mapped_column(
@@ -208,6 +208,12 @@ class SupplierProduct(Base):  # type: ignore[misc]
         back_populates="supplier_products",
     )
 
+    # === Преобразованные и вычисленные значения ===
+
+    internal_section_id: Mapped[int | None] = mapped_column(
+        Integer, comment="Раздел в CRM"
+    )
+
     # Данные для предложений (Offers)
     preview_for_offer: Mapped[str | None] = mapped_column(
         Text, comment="Анонс для предложенияя"
@@ -216,8 +222,16 @@ class SupplierProduct(Base):  # type: ignore[misc]
         Text, comment="Описание для предложения"
     )
 
+    description_for_print: Mapped[str | None] = mapped_column(
+        Text, comment="Описание загруженное в Битрикс"
+    )
+
     more_photo_process: Mapped[str | None] = mapped_column(
         Text, comment="Обработанные доп картинки"
+    )
+
+    detail_picture_process: Mapped[str | None] = mapped_column(
+        Text, comment="Обработанная детальная картинка"
     )
 
     # Связь с характеристиками
@@ -584,8 +598,12 @@ class SupplierProductChangeLog(Base):  # type: ignore[misc]
     new_value: Mapped[str | None] = mapped_column(
         Text, comment="Значение ПОСЛЕ изменения"
     )
+    # Загружаемое значение в CRM
     loaded_value: Mapped[str | None] = mapped_column(
         Text, comment="Загруженное значение"
+    )
+    crm_value_previous: Mapped[str | None] = mapped_column(
+        Text, comment="Предыдущее значение в CRM"
     )
     value_type: Mapped[str | None] = mapped_column(
         comment="Тип значения (int, float, str, bool)"

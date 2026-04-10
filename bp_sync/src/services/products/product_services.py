@@ -370,6 +370,7 @@ class ProductClient(
                 image_repo = self.image_client.repo
                 await image_repo.mark_all_deleted_by_product_id(product_id)
                 return self._success_response("Product is deleted in Bitrix")
+
             success_field = await self.bitrix_client.transform_product_fields(
                 product_id
             )

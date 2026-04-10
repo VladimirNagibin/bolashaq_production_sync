@@ -2,15 +2,18 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 
 from core.logger import logger
-from services.dependencies.dependencies_bitrix_entity import (
-    get_entity_bitrix_client,
+from services.dependencies.dependencies import (
+    get_entity_service,
 )
-from services.entities.entities_bitrix_services import EntitiesBitrixClient
+from services.dependencies.dependencies_repo import request_context
+from services.entities.entities_services import EntityClient
 
 from ..deps import verify_api_key
 from ..schemas.site_request import SiteRequestPayload
 
-site_requests_router = APIRouter(prefix="/site_request")
+site_requests_router = APIRouter(
+    prefix="/site_request", dependencies=[Depends(request_context)]
+)
 
 
 @site_requests_router.post(
@@ -22,7 +25,7 @@ site_requests_router = APIRouter(prefix="/site_request")
 )  # type: ignore
 async def site_request(
     payload: SiteRequestPayload,  # Данные из JSON-тела запроса
-    entity_client: EntitiesBitrixClient = Depends(get_entity_bitrix_client),
+    entity_client: EntityClient = Depends(get_entity_service),
     verify_api_key: str = Depends(verify_api_key),
 ) -> JSONResponse:
     logger.info(

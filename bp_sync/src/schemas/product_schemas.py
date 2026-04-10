@@ -216,6 +216,16 @@ class FieldValue(BaseModel):  # type: ignore[misc]
 
     model_config = ConfigDict(populate_by_name=True)
 
+    @property
+    def text(self) -> str | None:
+        """
+        Возвращает текстовое значение вне зависимости от типа поля value.
+        """
+        content = self.value
+        if isinstance(content, str):
+            return content
+        return content.text_field
+
 
 class BaseProduct(CommonFieldMixin):
     """
@@ -297,7 +307,7 @@ class BaseProduct(CommonFieldMixin):
     additional_description: FieldValue | None = Field(
         None,
         validation_alias=AliasChoices("PROPERTY_113", "property113"),
-    )  # Доп описание
+    )  # Доп описание (превью)
     original_name: FieldValue | None = Field(
         None,
         validation_alias=AliasChoices("PROPERTY_115", "property115"),
@@ -349,6 +359,11 @@ class BaseProduct(CommonFieldMixin):
         None,
         validation_alias=AliasChoices("PROPERTY_133", "property133"),
     )  # Бренд
+
+    source: FieldValue | None = Field(
+        None,
+        validation_alias=AliasChoices("PROPERTY_141", "property141"),
+    )  # Источник (matest.kz, rup-su.ru, 1c и тд)
 
     @field_validator("price", mode="before")  # type: ignore[misc]
     @classmethod
