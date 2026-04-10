@@ -27,7 +27,9 @@ class FileDownloadService:
         wait=wait_exponential(multiplier=1, min=2, max=10),
         reraise=True,
     )  # type: ignore[misc]
-    async def download_file(self, file_url: str) -> dict[str, Any] | None:
+    async def download_file(
+        self, file_url: str, extra_headers: dict[str, Any] | None = None
+    ) -> dict[str, Any] | None:
         """
         Скачивает файл по URL и возвращает данные для загрузки
 
@@ -48,9 +50,20 @@ class FileDownloadService:
         try:
             logger.debug(f"Starting async file download from URL: {file_url}")
 
+            parsed_url = urlparse(file_url)
+            referer_url = f"{parsed_url.scheme}://{parsed_url.netloc}/"
+            headers = {
+                "User-Agent": "Mozilla/5.0 ...",
+                "Referer": referer_url,
+            }
+            if extra_headers:
+                headers.update(extra_headers)
+
             # Используем stream=True, чтобы скачивать частями и
             # контролировать размер
-            async with self.client.stream("GET", file_url) as response:
+            async with self.client.stream(
+                "GET", file_url, headers=headers
+            ) as response:
                 response.raise_for_status()
 
                 # 1. Проверяем Content-Length, если он есть
