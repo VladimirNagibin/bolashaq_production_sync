@@ -454,6 +454,8 @@ FIELDS_PRODUCT: dict[str, Any] = {
         "property119",
         "PROPERTY_133",
         "property133",
+        "PROPERTY_141",
+        "property141",
     ],
     "dict_none_dict": [
         "PROPERTY_113",
@@ -512,6 +514,7 @@ FIELDS_PRODUCT_ALT: dict[str, Any] = {
         "standards",
         "article",
         "brend",
+        "source",
     ],
     "dict_none_dict": [
         "additional_description",

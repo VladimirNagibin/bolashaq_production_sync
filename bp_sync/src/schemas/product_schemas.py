@@ -360,6 +360,11 @@ class BaseProduct(CommonFieldMixin):
         validation_alias=AliasChoices("PROPERTY_133", "property133"),
     )  # Бренд
 
+    source: FieldValue | None = Field(
+        None,
+        validation_alias=AliasChoices("PROPERTY_141", "property141"),
+    )  # Источник (matest.kz, rup-su.ru, 1c и тд)
+
     @field_validator("price", mode="before")  # type: ignore[misc]
     @classmethod
     def clean_numeric_fields(cls, v: Any) -> float | None:
