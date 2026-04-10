@@ -259,6 +259,7 @@ class BrandEnum(IntEnum):
     INMARKON = 99
     TVT = 101
     BIOBASE = 103
+    TESTO = 105
 
     @classmethod
     def display_names(cls) -> dict[int, str]:
@@ -270,6 +271,7 @@ class BrandEnum(IntEnum):
             99: "Инмаркон",
             101: "ТВТ",
             103: "Biobase",
+            105: "Testo",
         }
 
     @classmethod
