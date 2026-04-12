@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Битрикс24 + Jivo (рабочий перехват)</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            background-color: #fff;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            max-width: 500px;
+            text-align: center;
+        }
+        h1 { color: #2c3e50; }
+        p { line-height: 1.6; color: #666; }
+        .btn {
+            display: inline-block;
+            padding: 10px 25px;
+            background-color: #3498db;
+            color: white;
+            text-decoration: none;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .btn:hover { background-color: #2980b9; }
+
+        /* Скрываем плавающую кнопку Jivo */
+        #jvLabelWrap {
+            display: none !important;
+            visibility: hidden !important;
+        }
+        /* НЕ трогаем #jcont – он нужен для отображения окна чата */
+    </style>
+
+    <!-- JIVO (кнопка скрыта, но чат работает) -->
+    <script src="//code.jivo.ru/widget/indvitRw5Z" async></script>
+
+    <!-- БИТРИКС24 (виджет видим) -->
+    <script>
+        (function(w,d,u){
+            var s=d.createElement('script'); s.async=true; s.src=u+'?'+(Date.now()/60000|0);
+            var h=d.getElementsByTagName('script')[0]; h.parentNode.insertBefore(s,h);
+        })(window,document,'https://cdn-ru.bitrix24.kz/b34684098/crm/site_button/loader_2_4k3a1v.js');
+    </script>
+</head>
+<body>
+
+<div class="container">
+    <h1>Тест</h1>
+    <p>Виджет Битрикс24 виден, кнопка Jivo скрыта.</p>
+    <p>Нажмите на иконку <strong>«Jivo»</strong> – откроется Jivo-чат.</p>
+    <p>Нажмите на <strong>«Обратную связь»</strong> – откроется форма Битрикс (штатно).</p>
+    <!-- <button class="btn" onclick="alert('Тест')">Тест</button> -->
+</div>
+
+<script>
+    (function() {
+        const CHAT_SELECTOR = '.b24-widget-button-social-item[data-b24-crm-button-widget="openline_livechat"]';
+
+        function openJivo() {
+            if (typeof jivo_api !== 'undefined' && jivo_api.open) {
+                console.log('Вызов jivo_api.open()');
+                jivo_api.open();
+            } else {
+                console.warn('Jivo API не загружен');
+                alert('Jivo чат временно недоступен.');
+            }
+        }
+
+        function interceptChatEvent(event) {
+            const chatButton = event.target.closest(CHAT_SELECTOR);
+            if (!chatButton) return;
+
+            console.log('Перехвачен клик по чату, открываем Jivo');
+            event.stopImmediatePropagation();
+            event.preventDefault();
+
+            openJivo();
+            return false;
+        }
+
+        // Перехват в фазе захвата
+        document.body.addEventListener('click', interceptChatEvent, true);
+        document.body.addEventListener('mousedown', interceptChatEvent, true);
+        document.body.addEventListener('touchstart', interceptChatEvent, true);
+        document.body.addEventListener('pointerdown', interceptChatEvent, true);
+
+        console.log('Перехватчики событий установлены для селектора:', CHAT_SELECTOR);
+
+        // Ждём загрузку Jivo API
+        if (typeof jivo_api === 'undefined') {
+            const jivoWait = setInterval(() => {
+                if (typeof jivo_api !== 'undefined') {
+                    clearInterval(jivoWait);
+                    console.log('Jivo API загружен');
+                }
+            }, 200);
+        }
+    })();
+</script>
+
+</body>
+</html>
