@@ -87,7 +87,7 @@ async def check(
         r = ProductUpdate(**product_bitrix_data)
 
         # r = ProductUpdate(name="name")
-        logger.info(f"{r}++++++++++++++++++++++++++++++++++++++++++")
+        logger.info(f"{r}++++++++++++++++++++++++++++++++++++++")
         product_id = 2350
         success_field = (
             await product_client.bitrix_client.transform_product_fields(
