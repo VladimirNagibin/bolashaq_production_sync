@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Depends, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Request, status
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.templating import Jinja2Templates
 from redis.asyncio import Redis
 
+from core.settings import settings
 from db.redis import get_redis_session
 from schemas.product_schemas import ProductUpdate
 
@@ -38,6 +40,7 @@ from services.users.user_services import UserClient
 
 
 test_router = APIRouter(dependencies=[Depends(request_context)])
+templates = Jinja2Templates(directory=f"{settings.BASE_DIR}/templates")
 
 
 @test_router.get(
@@ -164,3 +167,14 @@ async def check(
             "errors": "; ".join([]),
         },
     )
+
+
+@test_router.get(
+    "/jivo",
+    summary="check livo",
+    description="Information about.",
+)  # type: ignore
+async def check_jivo(
+    request: Request,
+) -> HTMLResponse:
+    return templates.TemplateResponse("test.html", {"request": request})
