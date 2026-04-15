@@ -13,9 +13,8 @@ fi
 
 # Переменные
 FILENAME="dump-$(date +"%Y-%m-%d").sql.gz"
-FILEPATH="/home/user_bolashaq/bolashaq_sync/$FILENAME"
+FILEPATH="/home/$USERNAME_YANDEX_DISK/bolashaq_sync/$FILENAME"
 TMP_DIR="/dev/shm"  # или другой быстрый временный каталог (tmpfs)
-# EMAIL=bitrix.bob@yandex.ru
 
 # 1. Создаём сжатый дамп без промежуточного SQL-файла
 echo "Creating compressed dump..."
@@ -66,5 +65,5 @@ echo "All done."
 
 # crontab -e - Откройте crontab для редактирования
 # Запланировать выполнение скрипта каждый день в 22:00
-# 0 22 * * *  /home/user_bolashaq/bolashaq_sync/dump.sh  >> /home/user_bolashaq/bolashaq_sync/dump.log 2>&1
+# 0 22 * * *  /home/$USERNAME_YANDEX_DISK/bolashaq_sync/dump.sh  >> /home/$USERNAME_YANDEX_DISK/bolashaq_sync/dump.log 2>&1
 # crontab -l - Проверьте, что задание добавилось
