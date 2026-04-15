@@ -101,13 +101,13 @@ class SiteRequestHandler:
         """
         self._log_request_start(payload)
         try:
-            deal_id = await self._create_deal_from_payload(payload)
+            deal_id = await self.create_deal_from_payload(payload)
 
             result = self._create_success_result(deal_id)
             await self._process_deal_products(
                 deal_id, payload, result, entity_client
             )
-            await self._add_timeline_comment(deal_id, payload)
+            await self.add_timeline_comment(deal_id, payload)
 
             self._log_request_success(deal_id, result)
             return result
@@ -125,7 +125,7 @@ class SiteRequestHandler:
     # Создание сделки
     # ============================================
 
-    async def _create_deal_from_payload(
+    async def create_deal_from_payload(
         self,
         payload: SiteRequestPayload,
     ) -> int:
@@ -294,7 +294,6 @@ class SiteRequestHandler:
         """
         # TODO: Если сущность найдена по телефону, а почта есть и не прописана,
         # тогда добавить. Аналогично наоборот.
-
         # Поиск по телефону
         if phone:
             result = await self._search_entity_by_phone(phone)
@@ -347,14 +346,13 @@ class SiteRequestHandler:
         """
         try:
             bitrix_client = self._get_bitrix_client()
-            params = {"type": comm_type, "values": [value.split()]}
+            params = {"type": comm_type, "values": value.split()}
 
             response = await bitrix_client.call_api(
                 "crm.duplicate.findbycomm",
                 params,
             )
             entities = response.get("result", {})
-
             if not isinstance(entities, dict):
                 return None
 
@@ -1075,7 +1073,7 @@ class SiteRequestHandler:
 
         return "\n".join(parts)
 
-    async def _add_timeline_comment(
+    async def add_timeline_comment(
         self,
         deal_id: int,
         payload: SiteRequestPayload,
