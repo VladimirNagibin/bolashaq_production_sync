@@ -45,7 +45,7 @@ class SiteRequestPayload(BaseModel):  # type: ignore[misc]
 
     @field_validator("products")  # type: ignore[misc]
     @classmethod
-    def ensure_products_list(cls, v: Any) -> list[Any]:
+    def ensure_products_list(cls, v: Any) -> list[ProductItem]:
         if v is None:
             return []
         return v if isinstance(v, list) else [v]

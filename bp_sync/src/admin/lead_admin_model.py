@@ -102,8 +102,8 @@ class LeadAdmin(
         "shipping_company": "Фирма отгрузки",
         "shipping_company_id": "ID фирмы отгрузки",
         "banking_details": "Банковские реквизиты",
-        "address_legal": "Юридический адрес",
-        "address_company": "Адрес компании",
+        # "address_legal": "Юридический адрес",
+        # "address_company": "Адрес компании",
         "province_company": "Область/Край",
         "is_shipment_approved": "Разрешение на отгрузку",
         "date_last_shipment": "Дата последней отгрузки",
@@ -140,8 +140,8 @@ class LeadAdmin(
     column_searchable_list = [
         "external_id",
         "title",
-        "address_legal",
-        "address_company",
+        "address",
+        # "address_company",
     ]
 
     form_columns = [  # Поля на форме редактирования
@@ -161,8 +161,8 @@ class LeadAdmin(
         # addsess
         "city",  # from BusinessEntityCore
         "address",  # from AddressMixin
-        "address_legal",
-        "address_company",
+        # "address_legal",
+        # "address_company",
         "province_company",
         # Группа пользователей
         "assigned_user",  # from UserRelationsMixin

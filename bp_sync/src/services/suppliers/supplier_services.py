@@ -57,6 +57,7 @@ class SupplierClient:
         self.import_config_repo = import_config_repo
         self.supplier_product_repo = supplier_product_repo
         self.file_import_service = file_import_service
+        self.product_client = product_client
         self.product_section_client = product_section_client
 
         # Инициализация помощников
