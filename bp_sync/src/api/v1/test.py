@@ -87,14 +87,16 @@ async def check(
         r = ProductUpdate(**product_bitrix_data)
 
         # r = ProductUpdate(name="name")
-        logger.info(f"{r}++++++++++++++++++++++++++++++++++++++")
-        product_id = 2429
+        logger.info(
+            f"{settings.MANAGERS}++++{r}++++++++++++++++++++++++++++++++++"
+        )
+        # product_id = 2429
         # success_field = (
         #     await product_client.bitrix_client.transform_product_fields(
         #         product_id
         #     )
         # )
-        await product_client.import_from_bitrix(product_id)
+        # await product_client.import_from_bitrix(product_id)
 
         # detail_picture = (
         #     await product_image_client.repo.get_detail_by_product_id(2350)
@@ -164,7 +166,7 @@ async def check(
         status_code=status.HTTP_200_OK,
         content={
             "loaded": "count",
-            "errors": "; ".join([]),
+            "managers": "; ".join([str(man) for man in settings.MANAGERS]),
         },
     )
 
