@@ -1,8 +1,10 @@
+import uuid
 from typing import Any
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
+from starlette.requests import Request
 
 from models.communications import CommunicationChannel
 from models.contact_models import Contact
@@ -19,7 +21,14 @@ class ContactAdmin(
     category = "Сущности"
     icon = "fa-solid fa-building"
 
-    async def get_object_for_details(self, pk: Any) -> Any:
+    async def get_object_for_details(self, request: Request) -> Any:
+        pk = request.path_params.get("pk")
+        if not pk:
+            raise HTTPException(status_code=404, detail="ID не предоставлен")
+        try:
+            contact_uuid = uuid.UUID(pk)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="Неверный формат UUID")
         stmt = (
             select(Contact)
             .options(
@@ -33,7 +42,7 @@ class ContactAdmin(
                 selectinload(Contact.modify_user),
                 selectinload(Contact.last_activity_user),
             )
-            .where(Contact.id == pk)
+            .where(Contact.id == contact_uuid)
         )
         async with self.session_maker(expire_on_commit=False) as session:
             result = await session.execute(stmt)

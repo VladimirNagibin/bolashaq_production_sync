@@ -77,7 +77,7 @@ class Settings(BaseSettings):  # type: ignore
     CHAT_SUPERVISOR: int = 115
     TYPE_CHAT_SUPERVISOR: bool = False
 
-    MANAGERS: set[int] = {33, 35}
+    MANAGERS: set[int] = {33, 35, 37}
     MANAGER_LABSET: int = 31
 
     OPEN_AI_API_KEY: str = "sk-12345"
