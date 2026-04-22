@@ -79,6 +79,7 @@ class SupplierProductAdmin(
         "more_photo_process": "Обработанные доп картинки",
         "detail_picture_process": "Обработанная детальная картинка",
         "description_for_print": "Описание загруженное в Битрикс",
+        "measure": "Единица измерения",
     }
     column_default_sort = [("source", True)]  # Сортировка по умолчанию
     column_sortable_list = [  # Список полей по которым возможна сортировка
@@ -107,6 +108,7 @@ class SupplierProductAdmin(
         "supplier_category",
         "supplier_subcategory",
         "brend",
+        "measure",
         "detail_picture",
         "detail_picture_description",
         "preview_picture",
@@ -150,6 +152,7 @@ class SupplierProductAdmin(
         "supplier_category",
         "supplier_subcategory",
         "brend",
+        "measure",
         "detail_picture",
         "detail_picture_description",
         "preview_picture",

@@ -114,7 +114,7 @@ class Product(IntIdEntity):
     # Единица измерения
     measure: Mapped[int | None] = mapped_column(
         comment="Единица измерения"
-    )  # MEASURE : Единица измерения
+    )  # MEASURE : Единица измерения (9 - шт)
 
     # Описание
     description: Mapped[str | None] = mapped_column(

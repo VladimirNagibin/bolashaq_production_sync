@@ -377,3 +377,14 @@ class BrandEnum(IntEnum):
             return True
         except ValueError:
             return False
+
+
+class MeasureEnum(IntEnum):
+    """Единицы измерения"""
+
+    METER = 1  # метр
+    LITER = 3  # литр
+    GRAM = 5  # грамм
+    KILOGRAM = 7  # килограмм
+    PIECE = 9  # штука
+    PACKAGE = 11  # упаковка

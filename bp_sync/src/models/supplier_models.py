@@ -109,6 +109,10 @@ class SupplierProduct(Base):  # type: ignore[misc]
         comment="Валюта",
     )
 
+    measure: Mapped[int | None] = mapped_column(
+        Integer, comment="Единица измерения"
+    )
+
     # Описание
     description: Mapped[str | None] = mapped_column(Text, comment="Описание")
     description_type: Mapped[str | None] = mapped_column(

@@ -63,6 +63,9 @@ class SupplierProductBase(BaseFields):
     price: float | None = None
     currency_id: Annotated[str, StringConstraints(max_length=10)] | None = None
 
+    # Единица измерения
+    measure: int | None = None
+
     # Описание
     description: str | None = None
     description_type: (
