@@ -146,6 +146,10 @@ async def review_product(
                 product,
             )
         )
+
+        ai_data = await supplier_service.get_ai_context(
+            preprocessed_data,
+        )
         sections_review_data = (
             await product_section_service.get_sections_review_data(
                 review_complex_data
@@ -188,6 +192,7 @@ async def review_product(
                     sections_review_data.get("selected_root_name")
                 ),
                 "field_labels": FIELD_LABELS_RU,
+                "ai_data": ai_data,
             },
         )
 

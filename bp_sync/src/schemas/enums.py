@@ -378,6 +378,32 @@ class BrandEnum(IntEnum):
         except ValueError:
             return False
 
+    @classmethod
+    def get_allowed_brands_prompt(cls) -> str:
+        """
+        Генерирует строку с перечнем всех брендов (Display Names)
+        для вставки в системный промпт AI.
+
+        Returns:
+            Строка типа: "Matest, Стройприбор, Zorn, ..."
+        """
+        # Собираем все русские названия (display names)
+        brands_list = [cls.get_display_name(b.value) for b in cls]
+        return ", ".join(brands_list)
+
+    @classmethod
+    def get_allowed_brands_json(cls) -> str:
+        """
+        Генерирует JSON-строку со списком брендов для вставки в промпт.
+        """
+        # Используем list comprehension для создания списка словарей
+        brands_data: list[dict[str, Any]] = [
+            {"id": b.value, "name": cls.get_display_name(b.value)} for b in cls
+        ]
+        import json
+
+        return json.dumps(brands_data, ensure_ascii=False)
+
 
 class MeasureEnum(IntEnum):
     """Единицы измерения"""

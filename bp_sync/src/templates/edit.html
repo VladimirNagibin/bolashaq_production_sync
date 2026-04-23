@@ -403,6 +403,12 @@
                                             </option>
                                         {% endfor %}
                                     </select>
+                                    {% if ai_data.brand_ai %}
+                                        <div class="form-text text-info mt-1">
+                                            AI предлагает: <strong>{{ ai_data.brand_ai }}</strong>
+                                            <!-- <button type="button" class="btn btn-sm btn-link p-0 ms-2" onclick="fillBrand('{{ ai_data.brand_ai }}')">Принять</button> -->
+                                        </div>
+                                    {% endif %}
                                 {% elif item.field_name == 'supplier_category' %}
                                     <!-- КОРНЕВАЯ КАТЕГОРИЯ -->
                                     <select
@@ -432,6 +438,12 @@
                                             + Создать раздел
                                         </button>
                                     </div>
+                                    {% if ai_data.group_ai %}
+                                        <div class="form-text text-info mt-2">
+                                            AI предлагает: <strong>{{ ai_data.group_ai }}</strong>
+                                            <!-- <button type="button" class="btn btn-sm btn-link p-0 ms-2" onclick="fillGroup('{{ ai_data.group_ai }}')">Принять</button> -->
+                                        </div>
+                                    {% endif %}
 
                                 {% elif item.field_name == 'supplier_subcategory' %}
                                     <!-- ДОЧЕРНЯЯ КАТЕГОРИЯ -->
@@ -445,7 +457,12 @@
                                         <!-- Опции будут заполнены через JS -->
                                     </select>
                                     <small class="text-muted d-block mt-1">Выберите подраздел или заполните поле ниже для заведения нового</small>
-
+                                    {% if ai_data.subgroup_ai %}
+                                        <div class="form-text text-info mt-2">
+                                            AI предлагает: <strong>{{ ai_data.subgroup_ai }}</strong>
+                                            <!-- <button type="button" class="btn btn-sm btn-link p-0 ms-2" onclick="fillSubgroup('{{ ai_data.subgroup_ai }}')">Принять</button> -->
+                                        </div>
+                                    {% endif %}
                                 {% elif item.field_name == 'internal_section_id' %}
                                     <!-- ID РАЗДЕЛА (автозаполнение) -->
                                     <div class="input-group">

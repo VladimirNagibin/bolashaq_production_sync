@@ -621,6 +621,65 @@ class ReviewHandler:
         except Exception:
             return None
 
+    async def prepare_ai_context(
+        self,
+        preprocessed_data: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        """
+        Подготавливает данные из обработки AI для отображения формы ревью.
+        """
+        result: dict[str, Any] = {}
+        if brand := self._get_new_value("brand_ai", preprocessed_data):
+            result["brand_ai"] = brand
+        group = self._get_complex_new_value(
+            "group_ai", "group_suggestion_ai", preprocessed_data
+        )
+        if group:
+            result["group_ai"] = group
+        subgroup = self._get_complex_new_value(
+            "subgroup_ai", "subgroup_suggestion_ai", preprocessed_data
+        )
+        if subgroup:
+            result["subgroup_ai"] = subgroup
+        return result
+
+    def _get_new_value(
+        self, field_name: str, preprocessed_data: dict[str, dict[str, Any]]
+    ) -> str | None:
+        data = preprocessed_data.get(field_name, {})
+        return data.get("new_value")
+
+    def _get_complex_new_value(
+        self,
+        primary_field: str,
+        secondary_field: str,
+        preprocessed_data: dict[str, dict[str, Any]],
+    ) -> str | None:
+        """
+        Возвращает объединённое значение из двух полей.
+
+        Если оба поля пусты — возвращает None.
+        Если оба непусты — возвращает строку "primary/secondary".
+        Если только одно непусто — возвращает его.
+
+        Args:
+            primary_field: Имя основного поля (например, "group_ai")
+            secondary_field: Имя дополнительного поля
+            (например, "group_suggestion_ai")
+            preprocessed_data: Словарь с данными
+
+        Returns:
+            Объединённая строка или None
+        """
+        primary = self._get_new_value(primary_field, preprocessed_data)
+        secondary = self._get_new_value(secondary_field, preprocessed_data)
+
+        if not primary and not secondary:
+            return None
+        if primary and secondary:
+            return f"{primary}/{secondary}"
+        return primary or secondary
+
     # === Обработка отправленной формы. ===
 
     async def handle_submission(

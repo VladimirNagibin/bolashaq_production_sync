@@ -30,6 +30,11 @@ class SupplierDataPreprocessor:
         "description": "description_for_offer",
         "characteristics": "characteristics",
         "kit": "complects",
+        "brand": "brand_ai",
+        "group": "group_ai",
+        "subgroup": "subgroup_ai",
+        "group_suggestion": "group_suggestion_ai",
+        "subgroup_suggestion": "subgroup_suggestion_ai",
     }
 
     # Время жизни кэша в секундах
@@ -49,6 +54,7 @@ class SupplierDataPreprocessor:
         self,
         supplier_product: SupplierProductDetail,
         field_data: dict[str, dict[str, Any]],
+        catalog_hierarchy: str | None = None,
     ) -> dict[str, dict[str, Any]]:
         """
         Предобрабатывает данные товара: AI парсинг, определение категорий
@@ -70,7 +76,9 @@ class SupplierDataPreprocessor:
 
             # Выполняем обработку
             result = await self._run_processing_pipeline(
-                supplier_product, field_data
+                supplier_product,
+                field_data,
+                catalog_hierarchy,
             )
 
             # Сохраняем в кэш
@@ -133,6 +141,7 @@ class SupplierDataPreprocessor:
         self,
         supplier_product: SupplierProductDetail,
         field_data: dict[str, dict[str, Any]],
+        catalog_hierarchy: str | None = None,
     ) -> dict[str, dict[str, Any]]:
         """Запускает все этапы обработки."""
         result: dict[str, dict[str, Any]] = {}
@@ -141,7 +150,9 @@ class SupplierDataPreprocessor:
         if description_data := field_data.get("description"):
             result.update(
                 await self._process_description_with_ai(
-                    description_data, supplier_product
+                    description_data,
+                    supplier_product,
+                    catalog_hierarchy,
                 )
             )
 
@@ -174,6 +185,7 @@ class SupplierDataPreprocessor:
         self,
         description_data: dict[str, Any],
         supplier_product: SupplierProductDetail,
+        catalog_hierarchy: str | None = None,
     ) -> dict[str, dict[str, Any]]:
         """
         Обрабатывает описание товара через AI.
@@ -201,6 +213,7 @@ class SupplierDataPreprocessor:
                     product_name=supplier_product.name,
                     article=supplier_product.article,
                     brand=supplier_product.brend,
+                    catalog_hierarchy=catalog_hierarchy,
                 )
             )
 
