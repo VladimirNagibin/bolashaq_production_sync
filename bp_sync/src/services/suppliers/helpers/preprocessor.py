@@ -21,6 +21,7 @@ class SupplierDataPreprocessor:
     SOURCE_SPECIFIC_FIELDS = {
         SourcesProductEnum.LABSET: ["more_photo"],
         SourcesProductEnum.RUP: ["more_photo"],
+        SourcesProductEnum.EQUALIZER: ["more_photo"],
     }
 
     # Маппинг полей AI на поля товара
@@ -336,6 +337,17 @@ class SupplierDataPreprocessor:
                 urls = [url.strip() for url in value.split(";") if url.strip()]
                 if urls:
                     result["more_photo_process"] = urls
+        if (
+            source == SourcesProductEnum.EQUALIZER
+            and field_name == "more_photo"
+        ):
+            if isinstance(value, str):
+                urls = [url.strip() for url in value.split(",") if url.strip()]
+                if urls:
+                    result["detail_picture_process"] = urls[0]
+                    if len(urls) > 1:
+                        result["more_photo_process"] = urls[1:]
+            return result
         return result
 
     async def _get_category_cache(
