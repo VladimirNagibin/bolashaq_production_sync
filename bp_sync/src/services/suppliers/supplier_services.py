@@ -262,7 +262,9 @@ class SupplierClient:
 
         # 4. Предобработка/AI (через Preprocessor с кэшированием)
         preprocessed_data = await self._preprocessor.process(
-            supplier_product, transformed_logs
+            supplier_product,
+            transformed_logs,
+            await self.product_section_client.get_catalog_hierarchy_text(),
         )
         logger.info(
             "Review data prepared",
@@ -285,6 +287,15 @@ class SupplierClient:
         return await self._review_handler.prepare_review_context(
             supplier_product, transformed_logs, preprocessed_data, product
         )
+
+    async def get_ai_context(
+        self,
+        preprocessed_data: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        """
+        Подготавливает данные из обработки AI для отображения формы ревью.
+        """
+        return await self._review_handler.prepare_ai_context(preprocessed_data)
 
     # === Методы обработки ревью (Запись) ===
 

@@ -17,6 +17,7 @@ from models.product_models import Product as ProductDB
 from models.supplier_models import SupplierProduct
 from schemas.change_log_schemas import ChangeLogUpdate
 from schemas.enums import (
+    MeasureEnum,
     SourceKeyField,
     SourcesProductEnum,
     TransformationRule,
@@ -547,6 +548,15 @@ class FileImportService:
                 return float(cleaned) * exchange_rate
             except ValueError:
                 pass
+        return None
+
+    def _transform_measure_eqw(self, value: Any) -> int | None:
+        """Трансформация единицы измерения Эквалайзера."""
+        if isinstance(value, str):
+            if "шт" in value:
+                return int(MeasureEnum.PIECE.value)
+            if "упак" in value:
+                return int(MeasureEnum.PACKAGE.value)
         return None
 
     # --- Fetching & Processing ---

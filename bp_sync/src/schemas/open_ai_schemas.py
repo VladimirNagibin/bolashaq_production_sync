@@ -27,3 +27,9 @@ class ProductSection(BaseModel):  # type: ignore[misc]
     description: str  # подробное описание
     characteristics: list[ProductCharacteristic] = []  # характеристики
     kit: list[KitItem] = []  # комплектация
+
+    brand: str = ""
+    group: str = ""
+    subgroup: str = ""
+    group_suggestion: str | None = None  # если AI предлагает новую группу
+    subgroup_suggestion: str | None = None  # если AI предлагает нов подгруппу

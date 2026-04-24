@@ -317,6 +317,21 @@ class ProductsectionClient(
             pass
         return
 
+    async def get_catalog_hierarchy_text(self) -> str:
+        data = await self.get_sections_review_data([])
+        roots = data.get("category_roots", [])
+        children_map = data.get("category_children_map", {})
+
+        lines: list[str] = []
+        for root in roots:
+            root_id = root["id"]
+            root_name = root["name"]
+            lines.append(f"- {root_name} (ID: {root_id})")
+            children = children_map.get(root_id, [])
+            for child in children:
+                lines.append(f"  - {child['name']} (ID: {child['id']})")
+        return "\n".join(lines)
+
     async def handle_section_review(
         self,
         form_value: str,

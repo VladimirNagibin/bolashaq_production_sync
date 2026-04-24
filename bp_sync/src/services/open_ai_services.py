@@ -8,6 +8,7 @@ from redis.asyncio import Redis
 
 from core.logger import logger
 from core.settings import settings
+from schemas.enums import BrandEnum
 from schemas.open_ai_schemas import (
     KitItem,
     ProductCharacteristic,
@@ -99,6 +100,7 @@ class OpenAIService:
         product_name: str,
         article: str | None = None,
         brand: str | None = None,
+        catalog_hierarchy: str | None = None,
     ) -> ProductSection:
         """
         Парсит описание товара с помощью AI API.
@@ -154,6 +156,7 @@ class OpenAIService:
             product_name,
             article,
             brand,
+            catalog_hierarchy,
         )
 
         # 3. Сохраняем результат в кэш
@@ -182,6 +185,7 @@ class OpenAIService:
         product_name: str,
         article: str | None,
         brand: str | None,
+        catalog_hierarchy: str | None = None,
     ) -> ProductSection:
         """
         Внутренний метод, содержащий логику вызова API.
@@ -224,7 +228,11 @@ class OpenAIService:
 
         try:
             user_prompt = self._build_user_prompt(
-                description_text, product_name, article, brand
+                description_text,
+                product_name,
+                article,
+                brand,
+                catalog_hierarchy,
             )
 
             # Вызов API
@@ -275,15 +283,34 @@ class OpenAIService:
     def _get_system_prompt(self) -> str:
         """Возвращает системный промпт с инструкциями для роли."""
         return (
-            "Ты эксперт по парсингу технических описаний товаров. "
+            "Ты эксперт по парсингу технических описаний товаров, "
+            "каталогизации и анализу данных товаров.\n"
             "Твоя задача - разбить описание товара на структурированные "
-            "части: "
+            "части и добавить значения: "
             "1. Анонс/назначение "
             "(краткое описание для чего используется товар). "
             "2. Подробное описание (технические детали и особенности). "
             "3. Характеристики товара (технические параметры). "
             "4. Комплектация (что входит в набор, дополнительные элементы). "
-            "Характеристики заполни отдельными строками. "
+            "5. Определить Бренд: Если бренд не указан явно, используй свои "
+            "знания (аналог поиска в интернете), чтобы определить "
+            "производителя по названию, артикулу и характеристикам товара."
+            "6. Определить Группу и Подгруппу:"
+            "   - Изучи список СУЩЕСТВУЮЩИХ категорий (передан в запросе)."
+            "   - Постарайся найти в этом списке самую подходящую по смыслу "
+            "     категорию."
+            "   - ЕСЛИ найдена подходящая группа и подгруппа в списке:"
+            "     * запиши их точные названия в поля 'group' и 'subgroup'."
+            "     * поля 'group_suggestion' и 'subgroup_suggestion' оставь "
+            "пустыми (null)."
+            "   - ЕСЛИ подходящей категории НЕТ в списке "
+            "(товар новый для этого каталога):"
+            "     * опираясь на свои знания, придумай логичные названия новой "
+            "группы и подгруппы."
+            "     * запиши их в поля 'group_suggestion' и "
+            "'subgroup_suggestion'."
+            "     * поля 'group' и 'subgroup' оставь пустыми ''."
+            # "Характеристики заполни отдельными строками. "
             # "Выдели числовые значения и единицы измерений. "
             # "Для комплектации извлеки артикулы (например S245-01)."
         )
@@ -294,6 +321,7 @@ class OpenAIService:
         product_name: str,
         article: str | None,
         brand: str | None,
+        catalog_hierarchy: str | None = None,
     ) -> str:
         """
         Формирует пользовательский промпт для API.
@@ -307,20 +335,66 @@ class OpenAIService:
         Returns:
             Сформированный промпт
         """
+        # Получаем список брендов из Enum
+        allowed_brands_json = BrandEnum.get_allowed_brands_json()
 
-        # Формируем строку контекста
-        context_parts = [f"наименованию: {product_name}"]
+        # Формируем контекст
+        context_parts = [f"Наименование товара: {product_name}"]
+
+        # Если бренд передали явно, даем подсказку, но просим перепроверить
         if brand:
-            context_parts.append(f"производителю: {brand}")
+            context_parts.append(f"Бренд : {brand}")
+
         if article:
-            context_parts.append(f"артикулу: {article}")
+            context_parts.append(f"Артикул: {article}")
 
         context_str = ", ".join(context_parts)
 
-        return f"""
-        Разбери следующее описание товара на структурированные части:
+        # Блок с брендами
+        brands_instruction = f"""
+        СПИСОК ДОПУСТИМЫХ БРЕНДОВ (ПРОВЕРЬ ПЕРВЫМ):
+        {allowed_brands_json}
+        """
 
+        # Блок с категориями
+        if catalog_hierarchy:
+            catalog_instruction = f"""
+            СПИСОК СУЩЕСТВУЮЩИХ КАТЕГОРИЙ:
+            Обязательно попытайся найти подходящую категорию в этом списке:
+            {catalog_hierarchy}
+            """
+        else:
+            catalog_instruction = (
+                "СПИСОК КАТЕГОРИЙ НЕ ПРЕДОСТАВЛЕН. Используй свои знания, "
+                "чтобы предложить новую."
+            )
+
+        return f"""
+        Проанализируй товар и определи его параметры.
+
+        {brands_instruction}
+        {catalog_instruction}
+
+        ДАННЫЕ ТОВАРА:
+        {context_str}
+
+        ОПИСАНИЕ:
         {description_text}
+
+        ИНСТРУКЦИЯ ПО БРЕНДАМ:
+        1. Проанализируй название, артикул и описание товара.
+        2. СРАВНИ с предоставленным списком допустимых брендов.
+        - ЕСЛИ бренд найден в списке -> Верни ТОЧНОЕ название ('name')
+          из этого списка.
+        - ЕСЛИ бренд НЕ найден в списке -> Используй свои знания
+          (аналог поиска в интернете), чтобы определить производителя,
+          и запиши его название. Не ставь 'Unknown', если есть уверенность.
+
+        ИНСТРУКЦИЯ ПО КАТЕГОРИЯМ:
+        1. Изучи структуру каталога.
+        2. Постарайся найти подходящую категорию (группа + подгруппа).
+        - ЕСЛИ найдена -> Верни их имена.
+        - ЕСЛИ не найдена -> Предложи новые названия.
 
         Верни ответ строго в формате JSON со следующей структурой:
         {{
@@ -341,10 +415,20 @@ class OpenAIService:
                     "specifications": {{}}
                 }}
             ]
+            "brand": "название бренда, если найден, иначе пустая строка",
+            "group": "название существующей корневой группы, если подходит",
+            "subgroup": "название существующей подгруппы, если подходит",
+            "group_suggestion": (
+                "предлагаемое название новой группы
+                (если ни одна из существующих не подходит) или null"
+            ),
+            "subgroup_suggestion": (
+                "предлагаемое название новой подгруппы
+                (если ни одна из существующих не подходит) или null"
+            )
         }}
-
-        Проверь правильность заполнения по {context_str}.
         """
+        # Проверь правильность заполнения по {context_str}.
 
     def _parse_api_response(self, response_content: str) -> ProductSection:
         """
@@ -393,6 +477,11 @@ class OpenAIService:
             description=result_json.get("description", ""),
             characteristics=characteristics,
             kit=kit_items,
+            brand=result_json.get("brand", ""),
+            group=result_json.get("group", ""),
+            subgroup=result_json.get("subgroup", ""),
+            group_suggestion=result_json.get("group"),
+            subgroup_suggestion=result_json.get("subgroup_suggestion", ""),
         )
 
     def _validate_response_data(self, data: dict[str, Any]) -> None:
