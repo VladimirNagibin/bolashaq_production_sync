@@ -69,6 +69,7 @@ async def test(
         # p, d, di = await supp_client.get_supplier_product_review_data(
         #     uuid.UUID("b8025b0b-b7e6-4616-a377-c989872a101e")
         # )
+        await supp_client._category_cache.invalidate(SourcesProductEnum.LABSET)
         cats = await supp_client._category_cache.get(SourcesProductEnum.LABSET)
         logger.info(f"{cats}========================================")
         # logger.info(dik1)
