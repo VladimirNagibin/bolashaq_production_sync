@@ -128,10 +128,12 @@ class ReviewHandler:
         complex_fields = FIELDS_SUPPLIER_PRODUCT.get("complex_fields", [])
 
         for field_name, value_type in complex_fields:
-            if field_name not in transformed_logs:
+            if field_name not in transformed_logs and field_name not in [
+                "article"
+            ]:
                 continue
 
-            field_data = transformed_logs[field_name]
+            field_data = transformed_logs.get(field_name, {})
             current = getattr(product, field_name, None)
             current_val = (
                 current.value
