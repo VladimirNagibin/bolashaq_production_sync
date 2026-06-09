@@ -67,6 +67,9 @@ class LeadClient(BaseEntityClient[LeadDB, LeadRepository, LeadBitrixClient]):
         """
         try:
             overdue_leads = await self.repo.get_overdue_leads()
+            logger.info("overdue leads:")
+            for lead, delta in overdue_leads:
+                logger.info(f"lead_id: {lead.external_id}, timedelta:{delta}")
             notifications = await self._prepare_overdue_leads_notifications(
                 overdue_leads
             )
