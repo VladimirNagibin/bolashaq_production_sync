@@ -5,7 +5,6 @@ from redis.asyncio import Redis
 
 from core.settings import settings
 from db.redis import get_redis_session
-from schemas.product_schemas import ProductUpdate
 
 # from services.companies.company_services import CompanyClient
 from services.contacts.contact_bitrix_services import ContactBitrixClient
@@ -35,6 +34,9 @@ from services.product_images.product_image_services import ProductImageClient
 from services.products.product_bitrix_services import ProductBitrixClient
 from services.products.product_services import ProductClient
 from services.users.user_services import UserClient
+
+# from schemas.product_schemas import ProductUpdate
+
 
 # from services.users.user_bitrix_services import UserBitrixClient
 
@@ -81,15 +83,15 @@ async def check(
         # result = await product_client.import_from_bitrix(2350)
 
         # r = await product_client.bitrix_client.transform_product_fields(2350)
-        from typing import Any
+        # from typing import Any
 
-        product_bitrix_data: dict[str, Any] = {"external_id": 2350}
-        r = ProductUpdate(**product_bitrix_data)
+        # product_bitrix_data: dict[str, Any] = {"external_id": 2350}
+        # r = ProductUpdate(**product_bitrix_data)
 
         # r = ProductUpdate(name="name")
-        logger.info(
-            f"{settings.MANAGERS}++++{r}++++++++++++++++++++++++++++++++++"
-        )
+        # logger.info(
+        #     f"{settings.MANAGERS}++++{r}++++++++++++++++++++++++++++++++++"
+        # )
         # product_id = 2429
         # success_field = (
         #     await product_client.bitrix_client.transform_product_fields(
@@ -126,9 +128,17 @@ async def check(
         # lead_ids = await lead_client.bitrix_client.get_lead_ids_for_period(
         #     date(2025, 10, 20), date(2026, 3, 4)
         # )
+        # lead_ids = [1209, 1587]
         # for lead_id in lead_ids:
         #     # logger.info(f"lead_id: {lead_id}")
         #     await lead_client.import_from_bitrix(entity_id=lead_id)
+        overdue_leads = await lead_client.repo.get_overdue_leads()
+        for lead, delta in overdue_leads:
+            logger.info(f"{lead.external_id}=={delta}=")
+        notific = await lead_client._prepare_overdue_leads_notifications(
+            overdue_leads
+        )
+        logger.info(f"niotific: {notific}")
         # await lead_client.send_overdue_leads_notifications()
         # leads = await lead_client.repo.get_overdue_leads()
         # for lead, idle_time in leads:
